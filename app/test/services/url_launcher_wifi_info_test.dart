@@ -3,7 +3,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/screens/custom_rule_edit/sections/wifi_section.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/services/url_launcher.dart';
 
 const _fine = 'android.permission.ACCESS_FINE_LOCATION';

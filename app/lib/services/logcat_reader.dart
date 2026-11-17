@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 
 /// §038 — обёртка над `logcat -d -t N *:<level>` через native
 /// `ProcessBuilder`. Lazy, только из `DumpBuilder.build()`.

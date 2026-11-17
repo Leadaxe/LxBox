@@ -59,4 +59,11 @@ class PlatformChannels {
   static const ccOpenConnect = 'lxbox/cc/openconnect';
   /// §707 — входящие Taildrop узла (`SubscribeTaildropInbox`).
   static const ccTaildropInbox = 'lxbox/cc/taildrop_inbox';
+
+  /// Редактор Sora (`widgets/lx_code_editor.dart`): viewType PlatformView.
+  static const soraEditorViewType = 'lxbox/sora_editor';
+
+  /// Редактор Sora: префикс MethodChannel экземпляра, к нему дописывается
+  /// `viewId` (`${soraEditorChannelPrefix}$viewId`).
+  static const soraEditorChannelPrefix = 'com.leadaxe.lxbox/sora_editor_';
 }

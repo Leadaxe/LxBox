@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/diagnostics/node_diagnostics_runner.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 
 import '../parser/engine_test_setup.dart';
 

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/vpn/cc_channel.dart';
 
 /// §731 (4PDA #2001) — таймаут замера держит ядро; если его RPC не вернулся

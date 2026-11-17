@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../controllers/home_controller.dart';
 import '../models/parser_config.dart' show SpeedTestServer;
 import '../services/app_log.dart';
-import '../services/platform_channels.dart' show PlatformChannels;
+import '../vpn/platform_channels.dart' show PlatformChannels;
 import '../vpn/cc_channel.dart';
 import '../services/error_format.dart';
 import '../services/format_utils.dart' show formatTimeHm;

@@ -10,7 +10,7 @@ import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/models/config_node.dart';
 import 'package:lxbox/screens/outbound_view_screen.dart';
 import 'package:lxbox/services/diagnostics/diagnostic_check.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/widgets/node_diagnostics_tab.dart';

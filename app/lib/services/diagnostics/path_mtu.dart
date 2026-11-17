@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import '../platform_channels.dart';
+import '../../vpn/platform_channels.dart';
 
 /// §725 — замер Path MTU: наибольший IP-пакет, который доходит до цели без
 /// фрагментации, мимо туннеля и без ядра.

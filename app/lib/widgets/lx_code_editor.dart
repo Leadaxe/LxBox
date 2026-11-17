@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../config/config_parse.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/settings_storage.dart';
+import '../vpn/platform_channels.dart';
 
 /// §624 — JSON-поля приложения на нативном редакторе sora-editor (Android
 /// View через platform view, hybrid composition). Kotlin-сторона —
@@ -83,7 +84,7 @@ LxCodeLanguage? detectCodeLanguage(String text) {
 /// `flutter test` он возвращает `android`, и тесты полезли бы в platform view.
 bool get _nativeEditor => !kIsWeb && Platform.isAndroid;
 
-const _viewType = 'lxbox/sora_editor';
+const _viewType = PlatformChannels.soraEditorViewType;
 const double _pad = 6;
 
 /// Как поле занимает место по вертикали.
@@ -235,7 +236,7 @@ class _LxBusyIcon extends StatelessWidget {
 /// финальный `changed` должен лечь в контроллер, а не потеряться.
 class _SoraLink {
   _SoraLink(int viewId, this.controller)
-    : channel = MethodChannel('com.leadaxe.lxbox/sora_editor_$viewId') {
+    : channel = MethodChannel('${PlatformChannels.soraEditorChannelPrefix}$viewId') {
     channel.setMethodCallHandler(_handle);
   }
 

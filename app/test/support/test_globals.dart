@@ -40,7 +40,7 @@ import 'package:lxbox/services/l10n/locale_controller.dart';
 import 'package:lxbox/services/lx_backup_slice.dart'
     show overrideBackupFieldsForTesting;
 import 'package:lxbox/services/parser/engine/section_loader.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/services/rule_set_downloader.dart';
 import 'package:lxbox/services/selector_info.dart';
 import 'package:lxbox/services/settings_storage.dart';

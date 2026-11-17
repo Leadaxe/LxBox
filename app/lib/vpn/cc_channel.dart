@@ -4,12 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_log.dart';
-import '../services/platform_channels.dart';
+import 'platform_channels.dart';
 import '../services/selector_info.dart'; // §251 — fold «селектор (выбор)»
 import '../services/diagnostics/connection_test.dart';
 import 'cc_openconnect.dart';
 
 export 'cc_openconnect.dart';
+
+part 'cc_channel/method_names.dart';
+part 'cc_channel/models_tailscale.dart';
+part 'cc_channel/models_status.dart';
+part 'cc_channel/models_traffic.dart';
+part 'cc_channel/models_probe.dart';
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -238,12 +244,12 @@ class CcChannel {
   /// осиротевшие screen/profiler-клиенты ПЕРЕД connectScreen — иначе протухший
   /// refcount не даст переподнять screenClient на свежий движок (пустой UI).
   /// Идемпотентно: на штатном старте (refs уже 0) — no-op.
-  Future<void> resyncForReopen() => _invoke('ccResyncForReopen');
+  Future<void> resyncForReopen() => _invoke(_CcMethods.ccResyncForReopen);
 
-  Future<void> connectScreen() => _invoke('ccConnectScreen');
-  Future<void> disconnectScreen() => _invoke('ccDisconnectScreen');
-  Future<void> connectProfiler() => _invoke('ccConnectProfiler');
-  Future<void> disconnectProfiler() => _invoke('ccDisconnectProfiler');
+  Future<void> connectScreen() => _invoke(_CcMethods.ccConnectScreen);
+  Future<void> disconnectScreen() => _invoke(_CcMethods.ccDisconnectScreen);
+  Future<void> connectProfiler() => _invoke(_CcMethods.ccConnectProfiler);
+  Future<void> disconnectProfiler() => _invoke(_CcMethods.ccDisconnectProfiler);
 
   // §259 — refcount поверх profilerClient. У profiler-стрима (в т.ч.
   // DNS-журнала §180) теперь ДВА потенциальных держателя: traffic_profiler
@@ -275,7 +281,7 @@ class CcChannel {
   /// §175 — отмена масс-пинга: disconnect отдельного pingClient → ядро рвёт
   /// per-call ctx in-flight URLTest'ов (не дожидаясь TCPTimeout), не задевая
   /// status/screen/profiler-стримы. Следующий urlTestOutbound поднимет свежий.
-  Future<void> cancelPing() => _invoke('ccCancelPing');
+  Future<void> cancelPing() => _invoke(_CcMethods.ccCancelPing);
 
   // ─────────────────────── §654 C — OpenConnect ───────────────────────
   // Подписку в ядре держит натив (старт VPN / reload по составу конфига);
@@ -294,7 +300,7 @@ class CcChannel {
   /// `null` — канала нет (VPN выключен, натив недоступен).
   Future<CcOpenConnectSnapshot?> getOpenConnectStatus() async {
     try {
-      final r = await _methods.invokeMethod<Object?>('ccGetOpenConnectStatus');
+      final r = await _methods.invokeMethod<Object?>(_CcMethods.ccGetOpenConnectStatus);
       return r == null ? null : CcOpenConnectSnapshot.fromObject(r);
     } on PlatformException {
       return null;
@@ -307,7 +313,7 @@ class CcChannel {
   /// один раз.
   Future<String?> takeOpenConnectOpenRequest() async {
     try {
-      return await _methods.invokeMethod<String>('ccTakeOpenConnectOpenRequest');
+      return await _methods.invokeMethod<String>(_CcMethods.ccTakeOpenConnectOpenRequest);
     } on PlatformException {
       return null;
     } on MissingPluginException {
@@ -322,7 +328,7 @@ class CcChannel {
     String challengeId,
     List<MapEntry<String, String>> values,
   ) =>
-      _invokeError('ccSubmitOpenConnectForm', {
+      _invokeError(_CcMethods.ccSubmitOpenConnectForm, {
         'tag': tag,
         'challenge_id': challengeId,
         'values': [
@@ -332,7 +338,7 @@ class CcChannel {
 
   /// §654 C — отмена челленджа: ядро логинится заново (новый код).
   Future<String?> cancelOpenConnectChallenge(String tag, String challengeId) =>
-      _invokeError('ccCancelOpenConnectChallenge', {
+      _invokeError(_CcMethods.ccCancelOpenConnectChallenge, {
         'tag': tag,
         'challenge_id': challengeId,
       });
@@ -345,18 +351,18 @@ class CcChannel {
     int port,
     List<String> prefixes,
   ) =>
-      _invokeError('ccStartOpenConnectCallback', {
+      _invokeError(_CcMethods.ccStartOpenConnectCallback, {
         'tag': tag,
         'challenge_id': challengeId,
         'port': port,
         'prefixes': prefixes,
       });
 
-  Future<void> stopOpenConnectCallback() => _invoke('ccStopOpenConnectCallback');
+  Future<void> stopOpenConnectCallback() => _invoke(_CcMethods.ccStopOpenConnectCallback);
 
   /// §579 — поднять / снять подписку ядра на состояние узлов Tailscale.
-  Future<void> startTailscaleStatus() => _invoke('ccStartTailscaleStatus');
-  Future<void> stopTailscaleStatus() => _invoke('ccStopTailscaleStatus');
+  Future<void> startTailscaleStatus() => _invoke(_CcMethods.ccStartTailscaleStatus);
+  Future<void> stopTailscaleStatus() => _invoke(_CcMethods.ccStopTailscaleStatus);
 
   /// §581 — подписку ядра держат несколько потребителей (главный экран для
   /// NETWORKS, вкладка Network узла): поднимается на 0→1, снимается на 1→0.
@@ -380,7 +386,7 @@ class CcChannel {
   /// §581 — выбор exit node на ходу (`stableId`; пусто — снять). Тело узла
   /// не меняется. `null` — успех, иначе текст ошибки ядра.
   Future<String?> setTailscaleExitNode(String tag, String stableId) =>
-      _invokeError('ccSetTailscaleExitNode', {
+      _invokeError(_CcMethods.ccSetTailscaleExitNode, {
         'tag': tag,
         'stable_id': stableId,
       });
@@ -392,7 +398,7 @@ class CcChannel {
   /// [CcTailscaleStatusPoll.notSupported].
   Future<CcTailscaleStatusPoll> getTailscaleStatus(String tag) async {
     try {
-      final r = await _methods.invokeMethod<Object?>('ccGetTailscaleStatus', {
+      final r = await _methods.invokeMethod<Object?>(_CcMethods.ccGetTailscaleStatus, {
         'tag': tag,
       });
       if (r is! Map) return CcTailscaleStatusPoll.skip;
@@ -410,7 +416,7 @@ class CcChannel {
 
   /// §581 — выход узла из аккаунта. `null` — успех, иначе текст ошибки.
   Future<String?> tailscaleLogout(String tag) =>
-      _invokeError('ccTailscaleLogout', {'tag': tag});
+      _invokeError(_CcMethods.ccTailscaleLogout, {'tag': tag});
 
   /// §706 (ядро SPEC 149, lx.30) — вход узла [tag] с новым auth-ключом без
   /// перезапуска VPN. Успех — ядро приняло вызов; отказ ключа виден позже в
@@ -418,7 +424,7 @@ class CcChannel {
   /// `failed_precondition` (сервис или узел не запущен, узел выключен, уже
   /// вошёл) / `not_found` / `invalid_argument` / `unavailable` / `error`.
   Future<void> tailscaleLogin(String tag, String authKey) =>
-      _methods.invokeMethod<void>('ccTailscaleLogin', {
+      _methods.invokeMethod<void>(_CcMethods.ccTailscaleLogin, {
         'tag': tag,
         'auth_key': authKey,
       });
@@ -426,7 +432,7 @@ class CcChannel {
   /// §581 — проверка устройства: ответы идут в [tailscalePing].
   Future<void> startTailscalePing(String tag, String peerIp) async {
     try {
-      await _methods.invokeMethod<void>('ccStartTailscalePing', {
+      await _methods.invokeMethod<void>(_CcMethods.ccStartTailscalePing, {
         'tag': tag,
         'peer_ip': peerIp,
       });
@@ -437,12 +443,12 @@ class CcChannel {
     }
   }
 
-  Future<void> stopTailscalePing() => _invoke('ccStopTailscalePing');
+  Future<void> stopTailscalePing() => _invoke(_CcMethods.ccStopTailscalePing);
 
   /// §707 — подписка на входящие Taildrop узла [tag] (одна на приложение).
   Future<void> startTaildropInbox(String tag) async {
     try {
-      await _methods.invokeMethod<void>('ccStartTaildropInbox', {'tag': tag});
+      await _methods.invokeMethod<void>(_CcMethods.ccStartTaildropInbox, {'tag': tag});
     } on PlatformException {
       // сервис не поднят — снапшотов не будет
     } on MissingPluginException {
@@ -450,11 +456,11 @@ class CcChannel {
     }
   }
 
-  Future<void> stopTaildropInbox() => _invoke('ccStopTaildropInbox');
+  Future<void> stopTaildropInbox() => _invoke(_CcMethods.ccStopTaildropInbox);
 
   /// §707 — удалить принятый файл. `null` — успех, иначе текст ошибки.
   Future<String?> taildropDelete(String tag, String name) =>
-      _invokeError('ccTaildropDelete', {'tag': tag, 'name': name});
+      _invokeError(_CcMethods.ccTaildropDelete, {'tag': tag, 'name': name});
 
   /// §707 — прервать приём файла.
   Future<String?> taildropCancelReceiving(
@@ -462,7 +468,7 @@ class CcChannel {
     String senderId,
     String name,
   ) =>
-      _invokeError('ccTaildropCancelReceiving', {
+      _invokeError(_CcMethods.ccTaildropCancelReceiving, {
         'tag': tag,
         'sender_id': senderId,
         'name': name,
@@ -470,7 +476,7 @@ class CcChannel {
 
   /// §707 — входящие узла просмотрены (счётчик непрочитанных ядра).
   Future<String?> taildropMarkRead(String tag) =>
-      _invokeError('ccTaildropMarkRead', {'tag': tag});
+      _invokeError(_CcMethods.ccTaildropMarkRead, {'tag': tag});
 
   /// §707 — сохранить принятый файл: API 29+ — в Downloads, ниже —
   /// системным «Сохранить как». Сохранённый уходит из входящих.
@@ -478,7 +484,7 @@ class CcChannel {
   /// системного диалога.
   Future<CcTaildropResult> taildropSave(String tag, String name,
           {bool downloadsOnly = false}) =>
-      _taildropCall('ccTaildropSave', {
+      _taildropCall(_CcMethods.ccTaildropSave, {
         'tag': tag,
         'name': name,
         if (downloadsOnly) 'downloads_only': true,
@@ -498,7 +504,7 @@ class CcChannel {
     String? text,
     Duration wait = const Duration(seconds: 60),
   }) =>
-      _taildropCall('ccTaildropSendBytes', {
+      _taildropCall(_CcMethods.ccTaildropSendBytes, {
         'tag': tag,
         'peer_id': peerId,
         'peer_name': peerName,
@@ -514,7 +520,7 @@ class CcChannel {
   Future<CcTaildropInbox?> taildropInboxSnapshot(String tag) async {
     try {
       final r = await _methods
-          .invokeMethod<Object?>('ccTaildropInboxSnapshot', {'tag': tag});
+          .invokeMethod<Object?>(_CcMethods.ccTaildropInboxSnapshot, {'tag': tag});
       if (r is! Map) return null;
       return CcTaildropInbox.fromMap(_asMap(r));
     } on PlatformException {
@@ -528,7 +534,7 @@ class CcChannel {
   /// (натив, только в памяти). `null` — канала нет.
   Future<Map<String, dynamic>?> taildropServiceStats() async {
     try {
-      final r = await _methods.invokeMethod<Object?>('taildropServiceStats');
+      final r = await _methods.invokeMethod<Object?>(_CcMethods.taildropServiceStats);
       return r is Map ? _asMap(r) : null;
     } on PlatformException {
       return null;
@@ -544,7 +550,7 @@ class CcChannel {
       List<Object?> commands) async {
     try {
       final r = await _methods.invokeMethod<Object?>(
-          'taildropBuildServiceFile', {'commands': commands});
+          _CcMethods.taildropBuildServiceFile, {'commands': commands});
       return r is Map ? CcServiceFile.fromMap(_asMap(r)) : null;
     } on PlatformException {
       return null;
@@ -558,7 +564,7 @@ class CcChannel {
   /// `null` — канала нет.
   Future<Map<String, dynamic>?> taildropClipState() async {
     try {
-      final r = await _methods.invokeMethod<Object?>('taildropClipState');
+      final r = await _methods.invokeMethod<Object?>(_CcMethods.taildropClipState);
       return r is Map ? _asMap(r) : null;
     } on PlatformException {
       return null;
@@ -573,7 +579,7 @@ class CcChannel {
     String peerId,
     String peerName,
   ) =>
-      _taildropCall('ccTaildropPickAndSend', {
+      _taildropCall(_CcMethods.ccTaildropPickAndSend, {
         'tag': tag,
         'peer_id': peerId,
         'peer_name': peerName,
@@ -596,7 +602,7 @@ class CcChannel {
   /// §707 — тег узла из тапа по уведомлению Taildrop; забирается один раз.
   Future<String?> takeTaildropOpenRequest() async {
     try {
-      return await _methods.invokeMethod<String>('ccTakeTaildropOpenRequest');
+      return await _methods.invokeMethod<String>(_CcMethods.ccTakeTaildropOpenRequest);
     } on PlatformException {
       return null;
     } on MissingPluginException {
@@ -613,7 +619,7 @@ class CcChannel {
     bool fresh = false,
   }) async {
     try {
-      final ok = await _methods.invokeMethod<bool>('ccStartConnectionTest', {
+      final ok = await _methods.invokeMethod<bool>(_CcMethods.ccStartConnectionTest, {
         'link': link,
         'package_name': packageName,
         'depth': depth.wire,
@@ -627,7 +633,7 @@ class CcChannel {
     }
   }
 
-  Future<void> stopConnectionTest() => _invoke('ccStopConnectionTest');
+  Future<void> stopConnectionTest() => _invoke(_CcMethods.ccStopConnectionTest);
 
   Future<String?> _invokeError(String method, Map<String, Object> args) async {
     try {
@@ -644,7 +650,7 @@ class CcChannel {
   /// Пересоздаёт statusClient с новым интервалом (см. feature 123 §3).
   Future<void> setStatusFast(bool fast) async {
     try {
-      await _methods.invokeMethod<void>('ccSetStatusFast', {'fast': fast});
+      await _methods.invokeMethod<void>(_CcMethods.ccSetStatusFast, {'fast': fast});
     } catch (_) {
       /* native не готов — игнор, не критично */
     }
@@ -653,10 +659,10 @@ class CcChannel {
   /// Фон (onAppPaused): гасим status+screen клиенты (0 тиков/0 drain).
   /// profilerClient НЕ трогаем — recording живёт в фоне. Выключение VPN ловит
   /// нативный broadcast, не CC (feature 123 §1.1/§4).
-  Future<void> pauseClients() => _invoke('ccPauseClients');
+  Future<void> pauseClients() => _invoke(_CcMethods.ccPauseClients);
 
   /// Возврат из фона (onAppResumed): поднимаем status(NORMAL)+screen(если refs>0).
-  Future<void> resumeClients() => _invoke('ccResumeClients');
+  Future<void> resumeClients() => _invoke(_CcMethods.ccResumeClients);
 
   // ─────────────────────────── Imperatives ───────────────────────────
 
@@ -680,7 +686,7 @@ class CcChannel {
         urlTestReplyGrace;
     try {
       final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-        'ccUrlTestOutbound',
+        _CcMethods.ccUrlTestOutbound,
         {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
       ).timeout(budget);
       return CcDelayResult.fromMap(_asMap(r ?? const {}));
@@ -708,7 +714,7 @@ class CcChannel {
   /// переселект на живой узел. Fire-and-forget: `true` = команда принята;
   /// результаты приедут стримами (groups → selected, history → делеи).
   Future<bool> urlTestGroup(String tag) async =>
-      await _methods.invokeMethod<bool>('ccUrlTestGroup', {'tag': tag}) ??
+      await _methods.invokeMethod<bool>(_CcMethods.ccUrlTestGroup, {'tag': tag}) ??
       false;
 
   // ─── §236 — headless probe-сессия (Test servers при выключенном VPN) ───
@@ -722,7 +728,7 @@ class CcChannel {
   /// Новый старт поверх живой сессии её закрывает — старый прогон уже не
   /// может закрыть новую.
   Future<CcProbeStart> probeStart(String config) async {
-    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>('probeStart', {
+    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(_CcMethods.probeStart, {
       'config': config,
     });
     return CcProbeStart.fromMap(_asMap(r ?? const {}));
@@ -737,7 +743,7 @@ class CcChannel {
     int timeoutMs = 0,
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-      'probeUrlTest',
+      _CcMethods.probeUrlTest,
       {'runId': runId, 'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
     );
     return CcDelayResult.fromMap(_asMap(r ?? const {}));
@@ -747,7 +753,7 @@ class CcChannel {
   /// disconnect клиента сессии → ядро отменяет контексты dial'ов). Сессия
   /// остаётся до [probeStop]. Чужой id — no-op.
   Future<void> probeCancel(int runId) =>
-      _methods.invokeMethod<void>('probeCancel', {'runId': runId});
+      _methods.invokeMethod<void>(_CcMethods.probeCancel, {'runId': runId});
 
   /// §392 — диагностический GET через узел в probe-сессии (VPN выключен).
   /// Семантика результата — см. [getUrlViaOutbound].
@@ -760,7 +766,7 @@ class CcChannel {
     String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-      'probeGetUrl',
+      _CcMethods.probeGetUrl,
       {
         'runId': runId,
         'tag': tag,
@@ -776,7 +782,7 @@ class CcChannel {
   /// Гасит probe-сессию прогона [runId] (идемпотентно; чужой/устаревший id —
   /// no-op, §669). Kotlin закрывает сервер под потолком 3 с.
   Future<void> probeStop(int runId) =>
-      _methods.invokeMethod<void>('probeStop', {'runId': runId});
+      _methods.invokeMethod<void>(_CcMethods.probeStop, {'runId': runId});
 
   /// §392 — диагностический HTTP GET через узел боевого ядра, адресуемый тегом
   /// (kernel SPEC 058). В отличие от [urlTestOutbound] возвращает ТЕЛО ответа:
@@ -796,7 +802,7 @@ class CcChannel {
     String userAgent = '',
   }) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-      'ccGetUrlViaOutbound',
+      _CcMethods.ccGetUrlViaOutbound,
       {
         'tag': tag,
         'link': link,
@@ -810,7 +816,7 @@ class CcChannel {
 
   /// §4.7 — снапшот route+DNS правил (диагностика).
   Future<List<CcRule>> getRules() async {
-    final r = await _methods.invokeMethod<List<dynamic>>('ccGetRules');
+    final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetRules);
     return (r ?? const []).map((m) => CcRule.fromMap(_asMap(m))).toList();
   }
 
@@ -821,7 +827,7 @@ class CcChannel {
   /// нет): на null caller НЕ трогает state, на [] — тоже (пустых при connected
   /// не бывает, см. _onCcGroups). Формат Map идентичен groups-стриму → CcGroup.fromMap.
   Future<List<CcGroup>?> getGroups() async {
-    final r = await _methods.invokeMethod<List<dynamic>>('ccGetGroups');
+    final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetGroups);
     if (r == null) return null;
     return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
   }
@@ -832,7 +838,7 @@ class CcChannel {
   /// дерево `groups` их не несут. `null` = не смогли прочитать (не-STARTED /
   /// нет клиента), `[]` = список пуст — caller различает, как в [getGroups].
   Future<List<CcOutbound>?> getOutbounds() async {
-    final r = await _methods.invokeMethod<List<dynamic>>('ccGetOutbounds');
+    final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetOutbounds);
     if (r == null) return null;
     return r.map((m) => CcOutbound.fromMap(_asMap(m))).toList();
   }
@@ -848,7 +854,7 @@ class CcChannel {
   /// Пустую строку native не отдаёт (SPEC 036: Unavailable вместо "").
   Future<String?> getRunningConfig() async {
     try {
-      final r = await _methods.invokeMethod<String>('ccGetRunningConfig');
+      final r = await _methods.invokeMethod<String>(_CcMethods.ccGetRunningConfig);
       return (r == null || r.isEmpty) ? null : r;
     } on PlatformException {
       return null; // ядро не STARTED / RPC-ошибка — не фатально
@@ -866,7 +872,7 @@ class CcChannel {
   /// round_robin / нет данных). Идёт через незасыпающий pingClient (native), так
   /// что в фоне отдаёт данные, а не молчит.
   Future<List<CcPoolSlot>?> getPool(String tag) async {
-    final r = await _methods.invokeMethod<List<dynamic>>('ccGetPool', {
+    final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetPool, {
       'tag': tag,
     });
     if (r == null) return null; // клиент недоступен (§209)
@@ -881,7 +887,7 @@ class CcChannel {
   /// конфиге отсутствуют. Через незасыпающий pingClient — отдаёт и в фоне.
   Future<List<CcDnsGroup>?> getDnsGroups() async {
     try {
-      final r = await _methods.invokeMethod<List<dynamic>>('ccGetDnsGroups');
+      final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetDnsGroups);
       if (r == null) return null;
       return [
         for (final e in r)
@@ -895,7 +901,7 @@ class CcChannel {
   }
 
   Future<bool> selectOutbound(String group, String tag) async =>
-      await _methods.invokeMethod<bool>('ccSelectOutbound', {
+      await _methods.invokeMethod<bool>(_CcMethods.ccSelectOutbound, {
         'group': group,
         'tag': tag,
       }) ??
@@ -907,7 +913,7 @@ class CcChannel {
   /// `failed_precondition` / `unavailable` / `error`. Ядро выключатель не
   /// сохраняет: reload стартует все узлы включёнными.
   Future<String> setEndpointEnabled(String tag, bool enabled) async =>
-      await _methods.invokeMethod<String>('ccSetEndpointEnabled', {
+      await _methods.invokeMethod<String>(_CcMethods.ccSetEndpointEnabled, {
         'tag': tag,
         'enabled': enabled,
       }) ??
@@ -918,16 +924,16 @@ class CcChannel {
   /// Отказ ядра — [PlatformException] с кодом из [CcStatusError].
   Future<CcWireGuardStatus> getWireGuardStatus(String tag) async {
     final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-        'ccGetWireGuardStatus', {'tag': tag});
+        _CcMethods.ccGetWireGuardStatus, {'tag': tag});
     return CcWireGuardStatus.fromMap(_asMap(r));
   }
 
   Future<bool> closeConnection(String id) async =>
-      await _methods.invokeMethod<bool>('ccCloseConnection', {'id': id}) ??
+      await _methods.invokeMethod<bool>(_CcMethods.ccCloseConnection, {'id': id}) ??
       false;
 
   Future<bool> closeConnections() async =>
-      await _methods.invokeMethod<bool>('ccCloseConnections') ?? false;
+      await _methods.invokeMethod<bool>(_CcMethods.ccCloseConnections) ?? false;
 
   Future<void> _invoke(String method) async {
     try {
@@ -950,1243 +956,3 @@ class CcChannel {
 }
 
 // ═══════════════════════════ Models ═══════════════════════════
-
-/// §579/§581 — запись `TailscaleEndpointStatus` ядра: тег endpoint'а,
-/// `BackendState` (`Running`, `NeedsLogin`, `Stopped`, …), `StateText` и
-/// (§581) полное состояние для вкладки Network.
-///
-/// Имена устройств, адреса, имя сети и ссылка входа — данные пользователя: в
-/// журнал, дамп поддержки и Debug API не попадают (§581 раздел 9).
-class CcTailscaleStatus {
-  const CcTailscaleStatus({
-    required this.tag,
-    required this.backendState,
-    required this.stateText,
-    this.authUrl = '',
-    this.networkName = '',
-    this.magicDnsSuffix = '',
-    this.keyAuth = false,
-    this.self,
-    this.exitNode,
-    this.userGroups = const [],
-    this.health = const [],
-    this.canShareFiles = true,
-    this.unreadFileCount = 0,
-  });
-
-  final String tag;
-  final String backendState;
-  final String stateText;
-  final String authUrl;
-  final String networkName;
-  final String magicDnsSuffix;
-  final bool keyAuth;
-
-  /// Свой узел.
-  final CcTailscalePeer? self;
-
-  /// Действующий exit node; `null` — выхода нет.
-  final CcTailscalePeer? exitNode;
-
-  /// Устройства сети по владельцам (свой узел сюда не входит).
-  final List<CcTailscaleUserGroup> userGroups;
-
-  /// §613 (ядро SPEC 115) — предупреждения бэкенда (нет DERP, exit node
-  /// офлайн и т.п.), текст ядра; пусто — предупреждать не о чем.
-  final List<String> health;
-
-  /// §707 — у узла есть право Taildrop (file sharing включён в админке
-  /// tailnet). Нет поля в записи — считается, что есть.
-  final bool canShareFiles;
-
-  /// §707 — принятые, но не просмотренные файлы.
-  final int unreadFileCount;
-
-  /// Все устройства сети без своего узла.
-  List<CcTailscalePeer> get peers => [
-        for (final g in userGroups) ...g.peers,
-      ];
-
-  factory CcTailscaleStatus.fromMap(Map<String, dynamic> m) {
-    final self = m['self'];
-    final exit = m['exit_node'];
-    return CcTailscaleStatus(
-      tag: '${m['tag'] ?? ''}',
-      backendState: '${m['backend_state'] ?? ''}',
-      stateText: '${m['state_text'] ?? ''}',
-      authUrl: '${m['auth_url'] ?? ''}',
-      networkName: '${m['network_name'] ?? ''}',
-      magicDnsSuffix: '${m['magic_dns_suffix'] ?? ''}',
-      keyAuth: m['key_auth'] == true,
-      self: self is Map ? CcTailscalePeer.fromMap(CcChannel._asMap(self)) : null,
-      exitNode:
-          exit is Map ? CcTailscalePeer.fromMap(CcChannel._asMap(exit)) : null,
-      userGroups: [
-        for (final g in CcChannel._asList(m['user_groups']))
-          if (g is Map) CcTailscaleUserGroup.fromMap(CcChannel._asMap(g)),
-      ],
-      health: [
-        for (final h in CcChannel._asList(m['health']))
-          if (h != null && '$h'.isNotEmpty) '$h',
-      ],
-      canShareFiles: m['can_share_files'] != false,
-      unreadFileCount: CcTailscalePeer._int(m['unread_file_count']),
-    );
-  }
-
-  /// Сообщение канала — список map'ов; всё прочее и записи без тега
-  /// отбрасываются.
-  static List<CcTailscaleStatus> listFrom(Object? e) => [
-        for (final m in CcChannel._asList(e))
-          if (m is Map)
-            CcTailscaleStatus.fromMap(CcChannel._asMap(m)),
-      ].where((s) => s.tag.isNotEmpty).toList();
-}
-
-/// §645 — ответ [CcChannel.getTailscaleStatus]: запись endpoint'а; без неё —
-/// пропуск тика ([skip]) или метод не поддержан ([notSupported]).
-class CcTailscaleStatusPoll {
-  const CcTailscaleStatusPoll({this.status, this.unsupported = false});
-
-  final CcTailscaleStatus? status;
-
-  /// Ядро или native без `GetTailscaleStatus`: опрашивать дальше незачем.
-  final bool unsupported;
-
-  static const skip = CcTailscaleStatusPoll();
-  static const notSupported = CcTailscaleStatusPoll(unsupported: true);
-}
-
-/// §581 — устройство сети Tailscale (`TailscalePeer` ядра). Времена —
-/// Unix-секунды ядра, 0 — значения нет.
-class CcTailscalePeer {
-  const CcTailscalePeer({
-    this.stableId = '',
-    this.hostName = '',
-    this.dnsName = '',
-    this.os = '',
-    this.online = false,
-    this.exitNode = false,
-    this.exitNodeOption = false,
-    this.shareeNode = false,
-    this.expired = false,
-    this.keyExpiry = 0,
-    this.lastSeen = 0,
-    this.ips = const [],
-    this.path = '',
-    this.endpoint = '',
-    this.peerRelay = '',
-    this.derpRegionCode = '',
-    this.lastHandshake = 0,
-    this.canReceiveFiles = false,
-  });
-
-  final String stableId;
-  final String hostName;
-  final String dnsName;
-  final String os;
-  final bool online;
-
-  /// Устройство — действующий exit node этого узла.
-  final bool exitNode;
-
-  /// Устройство предлагает себя как exit node.
-  final bool exitNodeOption;
-  final bool shareeNode;
-  final bool expired;
-  final int keyExpiry;
-  final int lastSeen;
-  final List<String> ips;
-
-  /// §613 (ядро SPEC 115) — путь до устройства: [CcTailscalePath]; пусто —
-  /// ядро старше lx.12.
-  final String path;
-
-  /// Адрес `ip:port` прямого пути.
-  final String endpoint;
-
-  /// Устройство-ретранслятор пути `PEER_RELAY`.
-  final String peerRelay;
-
-  /// Регион DERP (`fra`): путь `DERP` или домашний регион.
-  final String derpRegionCode;
-
-  /// Unix-секунды последнего хендшейка, 0 — не было.
-  final int lastHandshake;
-
-  /// §707 — устройство принимает файлы Taildrop (своё и с правом).
-  final bool canReceiveFiles;
-
-  /// §707 — цель отправки файлов: в сети, принимает файлы, не расшарено
-  /// извне (то же правило у экрана «Поделиться»).
-  bool get isTaildropTarget => online && canReceiveFiles && !shareeNode;
-
-  /// MagicDNS-имя без точки в конце.
-  String get dnsNameClean =>
-      dnsName.endsWith('.') ? dnsName.substring(0, dnsName.length - 1) : dnsName;
-
-  /// Первый адрес (IPv4 идёт первым у ядра); пусто — адресов нет.
-  String get firstIp => ips.isEmpty ? '' : ips.first;
-
-  static int _int(Object? v) => v is num ? v.toInt() : 0;
-
-  factory CcTailscalePeer.fromMap(Map<String, dynamic> m) => CcTailscalePeer(
-        stableId: '${m['stable_id'] ?? ''}',
-        hostName: '${m['host_name'] ?? ''}',
-        dnsName: '${m['dns_name'] ?? ''}',
-        os: '${m['os'] ?? ''}',
-        online: m['online'] == true,
-        exitNode: m['exit_node'] == true,
-        exitNodeOption: m['exit_node_option'] == true,
-        shareeNode: m['sharee_node'] == true,
-        expired: m['expired'] == true,
-        keyExpiry: _int(m['key_expiry']),
-        lastSeen: _int(m['last_seen']),
-        ips: [
-          for (final ip in CcChannel._asList(m['ips']))
-            if (ip != null && '$ip'.isNotEmpty) '$ip',
-        ],
-        path: '${m['path'] ?? ''}'.toLowerCase(),
-        endpoint: '${m['endpoint'] ?? ''}',
-        peerRelay: '${m['peer_relay'] ?? ''}',
-        derpRegionCode: '${m['derp_region_code'] ?? ''}',
-        lastHandshake: _int(m['last_handshake']),
-        canReceiveFiles: m['can_receive_files'] == true,
-      );
-}
-
-/// §707 — входящие Taildrop узла (`TaildropInbox` ядра).
-class CcTaildropInbox {
-  const CcTaildropInbox({
-    required this.tag,
-    this.files = const [],
-    this.receiving = const [],
-  });
-
-  final String tag;
-
-  /// Принятые файлы.
-  final List<CcTaildropFile> files;
-
-  /// Файлы, которые принимаются сейчас.
-  final List<CcTaildropReceiving> receiving;
-
-  bool get isEmpty => files.isEmpty && receiving.isEmpty;
-
-  factory CcTaildropInbox.fromMap(Map<String, dynamic> m) => CcTaildropInbox(
-        tag: '${m['tag'] ?? ''}',
-        files: [
-          for (final f in CcChannel._asList(m['files']))
-            if (f is Map) CcTaildropFile.fromMap(CcChannel._asMap(f)),
-        ],
-        receiving: [
-          for (final f in CcChannel._asList(m['receiving']))
-            if (f is Map) CcTaildropReceiving.fromMap(CcChannel._asMap(f)),
-        ],
-      );
-}
-
-/// §707 — принятый файл. [modifiedAt] — Unix-секунды ядра.
-class CcTaildropFile {
-  const CcTaildropFile({
-    required this.name,
-    this.size = 0,
-    this.senderId = '',
-    this.senderName = '',
-    this.modifiedAt = 0,
-    this.sha256 = '',
-  });
-
-  final String name;
-  final int size;
-
-  /// Stable ID отправителя (ядро lx.30-rc.2+, пусто после перезапуска ядра).
-  final String senderId;
-  final String senderName;
-  final int modifiedAt;
-
-  /// §707 итер. 5 — sha256 файла на диске, только у
-  /// [CcChannel.taildropInboxSnapshot]; пусто — не считался.
-  final String sha256;
-
-  factory CcTaildropFile.fromMap(Map<String, dynamic> m) => CcTaildropFile(
-        name: '${m['name'] ?? ''}',
-        size: CcTailscalePeer._int(m['size']),
-        senderId: '${m['sender_id'] ?? ''}',
-        senderName: '${m['sender_name'] ?? ''}',
-        modifiedAt: CcTailscalePeer._int(m['modified_at']),
-        sha256: '${m['sha256'] ?? ''}',
-      );
-}
-
-/// §707 — файл в приёме. [size] ≤ 0 — размер неизвестен.
-class CcTaildropReceiving {
-  const CcTaildropReceiving({
-    required this.name,
-    this.size = 0,
-    this.receivedBytes = 0,
-    this.senderId = '',
-    this.senderName = '',
-  });
-
-  final String name;
-  final int size;
-  final int receivedBytes;
-  final String senderId;
-  final String senderName;
-
-  /// Доля принятого 0…1; `null` — размер неизвестен.
-  double? get progress =>
-      size > 0 ? (receivedBytes / size).clamp(0.0, 1.0).toDouble() : null;
-
-  factory CcTaildropReceiving.fromMap(Map<String, dynamic> m) =>
-      CcTaildropReceiving(
-        name: '${m['name'] ?? ''}',
-        size: CcTailscalePeer._int(m['size']),
-        receivedBytes: CcTailscalePeer._int(m['received_bytes']),
-        senderId: '${m['sender_id'] ?? ''}',
-        senderName: '${m['sender_name'] ?? ''}',
-      );
-}
-
-/// §707 — ответ сохранения / выбора файлов: `status` — `saved`, `started`,
-/// `cancelled` или `error`; [where] у сохранения — `downloads` | `document`.
-class CcTaildropResult {
-  const CcTaildropResult({
-    required this.status,
-    this.where = '',
-    this.error = '',
-    this.name = '',
-  });
-
-  final String status;
-  final String where;
-  final String error;
-
-  /// §707 итер. 5 — имя файла: у сохранения в Downloads — имя записи
-  /// (занятое получает суффикс), у отправки из байтов — отправленное.
-  final String name;
-
-  factory CcTaildropResult.fromMap(Map<String, dynamic> m) => CcTaildropResult(
-        status: '${m['status'] ?? 'error'}',
-        where: '${m['where'] ?? ''}',
-        error: '${m['error'] ?? ''}',
-        name: '${m['name'] ?? ''}',
-      );
-}
-
-/// §707 итер. 7 — служебный файл от натива: [name] и [bytes], либо
-/// [error] (`too_large` — тело [size] байт больше [maxBytes]).
-class CcServiceFile {
-  const CcServiceFile({
-    this.name = '',
-    this.bytes,
-    this.error = '',
-    this.size = 0,
-    this.maxBytes = 0,
-  });
-
-  final String name;
-  final Uint8List? bytes;
-  final String error;
-  final int size;
-  final int maxBytes;
-
-  factory CcServiceFile.fromMap(Map<String, dynamic> m) {
-    final b = m['bytes'];
-    int n(Object? v) => v is int ? v : 0;
-    return CcServiceFile(
-      name: '${m['name'] ?? ''}',
-      bytes: b is Uint8List
-          ? b
-          : (b is List ? Uint8List.fromList(b.cast<int>()) : null),
-      error: '${m['error'] ?? ''}',
-      size: n(m['size']),
-      maxBytes: n(m['max_bytes']),
-    );
-  }
-}
-
-/// §613 (ядро SPEC 115) — значения `TailscalePeer.path`. Строки ядра
-/// (`command_types_tailscale.go`): строчные, «никогда не слал» — пустая
-/// строка; разбор приводит к нижнему регистру (§645).
-abstract final class CcTailscalePath {
-  static const direct = 'direct';
-  static const peerRelay = 'peer_relay';
-  static const derp = 'derp';
-
-  /// Узел ни разу не слал устройству.
-  static const none = '';
-}
-
-/// §581 — владелец устройств сети (`TailscaleUserGroup` ядра).
-class CcTailscaleUserGroup {
-  const CcTailscaleUserGroup({
-    this.userId = 0,
-    this.loginName = '',
-    this.displayName = '',
-    this.peers = const [],
-  });
-
-  final int userId;
-  final String loginName;
-  final String displayName;
-  final List<CcTailscalePeer> peers;
-
-  /// Заголовок группы: `DisplayName`, при пустом — `LoginName`.
-  String get title => displayName.isNotEmpty ? displayName : loginName;
-
-  factory CcTailscaleUserGroup.fromMap(Map<String, dynamic> m) =>
-      CcTailscaleUserGroup(
-        userId: CcTailscalePeer._int(m['user_id']),
-        loginName: '${m['login_name'] ?? ''}',
-        displayName: '${m['display_name'] ?? ''}',
-        peers: [
-          for (final p in CcChannel._asList(m['peers']))
-            if (p is Map) CcTailscalePeer.fromMap(CcChannel._asMap(p)),
-        ],
-      );
-}
-
-/// §581 — ответ проверки устройства (`TailscalePingResult` ядра). Непустой
-/// [error] — ответа нет.
-class CcTailscalePingResult {
-  const CcTailscalePingResult({
-    this.latencyMs = 0,
-    this.isDirect = false,
-    this.endpoint = '',
-    this.derpRegionCode = '',
-    this.error = '',
-  });
-
-  final double latencyMs;
-  final bool isDirect;
-  final String endpoint;
-  final String derpRegionCode;
-  final String error;
-
-  factory CcTailscalePingResult.fromMap(Map<String, dynamic> m) =>
-      CcTailscalePingResult(
-        latencyMs: m['latency_ms'] is num
-            ? (m['latency_ms'] as num).toDouble()
-            : 0,
-        isDirect: m['is_direct'] == true,
-        endpoint: '${m['endpoint'] ?? ''}',
-        derpRegionCode: '${m['derp_region_code'] ?? ''}',
-        error: '${m['error'] ?? ''}',
-      );
-}
-
-/// §3.1 — статус от `writeStatus`. `uplink`/`downlink` — байтовая дельта за
-/// интервал (B/s при interval=1s); `*Total` — накопленный объём.
-class CcStatus {
-  const CcStatus({
-    this.uplink = 0,
-    this.downlink = 0,
-    this.uplinkTotal = 0,
-    this.downlinkTotal = 0,
-    this.memory = 0,
-    this.memoryRuntime = 0,
-    this.goroutines = 0,
-    this.connectionsIn = 0,
-    this.connectionsOut = 0,
-  });
-
-  final int uplink;
-  final int downlink;
-  final int uplinkTotal;
-  final int downlinkTotal;
-  final int memory;
-
-  /// §705 (ядро lx.29, SPEC 148) — память Go-рантайма ядра в байтах: то, с
-  /// чем ядро сравнивает порог Memory limit. [memory] — RSS всего процесса.
-  /// 0 — старое ядро без поля.
-  final int memoryRuntime;
-  final int goroutines;
-  final int connectionsIn;
-  final int connectionsOut;
-
-  /// §3.1 — НЕ сумма in+out вслепую (могут двоить); для бейджа активных
-  /// предпочтительнее длина connections-снапшота. Здесь — справочно.
-  int get connectionsTotal => connectionsIn + connectionsOut;
-
-  factory CcStatus.fromMap(Map<String, dynamic> m) => CcStatus(
-    uplink: _int(m['uplink']),
-    downlink: _int(m['downlink']),
-    uplinkTotal: _int(m['uplinkTotal']),
-    downlinkTotal: _int(m['downlinkTotal']),
-    memory: _int(m['memory']),
-    memoryRuntime: _int(m['memoryRuntime']),
-    goroutines: _int(m['goroutines']),
-    connectionsIn: _int(m['connectionsIn']),
-    connectionsOut: _int(m['connectionsOut']),
-  );
-}
-
-/// §2.4 — плоский узел из `writeOutbounds` (outbound ИЛИ endpoint).
-class CcOutbound {
-  const CcOutbound({
-    required this.tag,
-    required this.type,
-    required this.urlTestDelay,
-    required this.urlTestTime,
-    this.endpointState = '',
-    this.idleSinceSeconds = 0,
-  });
-
-  final String tag;
-  final String type;
-
-  /// Задержка в мс. 0 = не тестирован / не ответил — различать по `urlTestTime`.
-  final int urlTestDelay;
-
-  /// Unix-время последнего теста (0 = не тестирован).
-  final int urlTestTime;
-
-  /// §535 (ядро SPEC 097) — состояние WG/AWG-endpoint'а:
-  /// `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`.
-  ///
-  /// Пусто у всего остального И на любом пути, кроме `getOutbounds()`: поток
-  /// `writeOutbounds` и дерево групп поле не несут (ядро заполняет его только
-  /// в ответе `GetOutbounds`). Пусто = «состояние неизвестно», не ошибка.
-  final String endpointState;
-
-  /// §535 — секунд с последнего дайла через endpoint (0 вне `getOutbounds()`).
-  final int idleSinceSeconds;
-
-  factory CcOutbound.fromMap(Map<String, dynamic> m) => CcOutbound(
-    tag: m['tag']?.toString() ?? '',
-    type: m['type']?.toString() ?? '',
-    urlTestDelay: _int(m['urlTestDelay']),
-    urlTestTime: _int(m['urlTestTime']),
-    // no-throw: старое ядро/поток без ключей → '' и 0 (состояние неизвестно).
-    endpointState: m['endpointState']?.toString() ?? '',
-    idleSinceSeconds: _int(m['idleSinceSeconds']),
-  );
-}
-
-/// §535 — состояния WG/AWG-endpoint'а из `CcOutbound.endpointState`
-/// (ядро SPEC 097). Строки ядра, не переводятся и в UI не показываются.
-abstract final class CcEndpointState {
-  /// Ленивый endpoint, дайлов ещё не было.
-  static const neverBuilt = 'never_built';
-
-  /// Идёт сборка (включая ожидание бюджета).
-  static const building = 'building';
-
-  /// Устройство собрано и бодрствует.
-  static const up = 'up';
-
-  /// Устройство собрано, уведено в Down.
-  static const asleep = 'asleep';
-
-  /// Устройство освобождено (разборка по idle_teardown или бюджетом).
-  static const tornDown = 'torn_down';
-
-  /// Ещё не стартовал или закрыт.
-  static const down = 'down';
-
-  /// §557 (SPEC 106) — выключен вручную: дайлы отвергаются, ничто его не
-  /// будит до включения. Не «соберётся при дайле», поэтому не [isNotBuilt].
-  static const disabled = 'disabled';
-
-  /// Узел не поднят: ядро соберёт его при первом дайле (0,5–1 с).
-  /// Это состояние, а не сбой, — UI не показывает тут таймаут.
-  static bool isNotBuilt(String s) => s == neverBuilt || s == tornDown;
-}
-
-/// §613 — коды отказа `getWireGuardStatus` ([PlatformException.code]).
-abstract final class CcStatusError {
-  /// Тега нет в работающем конфиге.
-  static const notFound = 'not_found';
-
-  /// Узел не WG/AWG.
-  static const invalidArgument = 'invalid_argument';
-
-  /// Сервис или узел не запущен.
-  static const failedPrecondition = 'failed_precondition';
-
-  static const unavailable = 'unavailable';
-
-  /// Ядро без `with_lx_command` или старше lx.12: статуса пиров нет.
-  static const unimplemented = 'unimplemented';
-
-  /// Прочее: нет клиента, транспорт.
-  static const error = 'error';
-}
-
-/// §613 (ядро SPEC 114) — ответ `GetWireGuardStatus`: состояние узла
-/// (строки [CcEndpointState]), простой и пиры в порядке конфига.
-class CcWireGuardStatus {
-  const CcWireGuardStatus({
-    this.endpointState = '',
-    this.idleSinceSeconds = 0,
-    this.peers = const [],
-  });
-
-  final String endpointState;
-  final int idleSinceSeconds;
-  final List<CcWireGuardPeer> peers;
-
-  factory CcWireGuardStatus.fromMap(Map<String, dynamic> m) =>
-      CcWireGuardStatus(
-        endpointState: '${m['endpoint_state'] ?? ''}',
-        idleSinceSeconds: CcTailscalePeer._int(m['idle_since_seconds']),
-        peers: [
-          for (final p in CcChannel._asList(m['peers']))
-            if (p is Map) CcWireGuardPeer.fromMap(CcChannel._asMap(p)),
-        ],
-      );
-}
-
-/// §613 — пир WG/AWG-узла (`PeerStatus` ядра). `lastHandshakeUnix` —
-/// Unix-секунды, 0 — в текущей сессии хендшейка не было; `rx`/`tx` —
-/// накопленные байты устройства, обнуляются при пересборке; `session*` — с
-/// начала сессии (ядро SPEC 145, lx.27): обнуляются ещё и при включении или
-/// пробуждении узла.
-class CcWireGuardPeer {
-  const CcWireGuardPeer({
-    required this.publicKey,
-    this.endpoint = '',
-    this.lastHandshakeUnix = 0,
-    this.rxBytes = 0,
-    this.txBytes = 0,
-    this.sessionRxBytes = 0,
-    this.sessionTxBytes = 0,
-  });
-
-  final String publicKey;
-  final String endpoint;
-  final int lastHandshakeUnix;
-  final int rxBytes;
-  final int txBytes;
-  final int sessionRxBytes;
-  final int sessionTxBytes;
-
-  /// Ключ сокращённо, как в логе ядра: символы 0–3 и 39–42 base64.
-  String get shortKey => publicKey.length < 43
-      ? publicKey
-      : '${publicKey.substring(0, 4)}…${publicKey.substring(39, 43)}';
-
-  factory CcWireGuardPeer.fromMap(Map<String, dynamic> m) => CcWireGuardPeer(
-        publicKey: '${m['public_key'] ?? ''}',
-        endpoint: '${m['endpoint'] ?? ''}',
-        lastHandshakeUnix: CcTailscalePeer._int(m['last_handshake_unix']),
-        rxBytes: CcTailscalePeer._int(m['rx_bytes']),
-        txBytes: CcTailscalePeer._int(m['tx_bytes']),
-        sessionRxBytes: CcTailscalePeer._int(m['session_rx_bytes']),
-        sessionTxBytes: CcTailscalePeer._int(m['session_tx_bytes']),
-      );
-}
-
-/// §2.4 — группа из `writeGroups` (дерево). `selectable` заменяет `type=='Selector'`,
-/// `selected` заменяет clash-поле `now`.
-class CcGroup {
-  const CcGroup({
-    required this.tag,
-    required this.type,
-    required this.selectable,
-    required this.selected,
-    required this.isExpand,
-    required this.items,
-  });
-
-  final String tag;
-  final String type;
-  final bool selectable;
-  final String selected;
-  final bool isExpand;
-  final List<CcOutbound> items;
-
-  factory CcGroup.fromMap(Map<String, dynamic> m) => CcGroup(
-    tag: m['tag']?.toString() ?? '',
-    type: m['type']?.toString() ?? '',
-    selectable: m['selectable'] == true,
-    selected: m['selected']?.toString() ?? '',
-    isExpand: m['isExpand'] == true,
-    items: (m['items'] is List ? m['items'] as List : const [])
-        .map((e) => CcOutbound.fromMap(CcChannel._asMap(e)))
-        .toList(),
-  );
-}
-
-/// §3.1/§3.2 — соединение из аккумулятора. `closedAt`>0 = закрытое (closed-история).
-///
-/// §122 — `uplink`/`downlink` = НАКОПЛЕННЫЙ итог (`getUplinkTotal/DownlinkTotal`),
-/// сколько ВСЕГО передано за соединение. `uplinkDelta`/`downlinkDelta` = байт за
-/// последний тик статуса (мгновенная скорость; у idle = 0). `outbound`/
-/// `outboundType` — выбранная нода/тип; `chains` — полная outbound-цепочка
-/// (Clash `chains`, §174: ядро отдаёт через `Connection.chain()`-итератор).
-class CcConnection {
-  const CcConnection({
-    required this.id,
-    required this.network,
-    required this.domain,
-    required this.destination,
-    this.source = '',
-    this.inbound = '',
-    this.inboundType = '',
-    required this.rule,
-    required this.uplink,
-    required this.downlink,
-    this.uplinkDelta = 0,
-    this.downlinkDelta = 0,
-    this.outbound = '',
-    this.outboundType = '',
-    this.protocol = '',
-    this.chains = const [],
-    this.detours = const [],
-    this.packageName = '',
-    this.processPath = '',
-    required this.createdAt,
-    required this.closedAt,
-  });
-
-  final String id;
-  final String network;
-  final String domain;
-  final String destination;
-  final String rule;
-
-  /// §661 — источник `ip:port` и вход (тег/тип inbound). При эндпоинтах и
-  /// локальных прокси мы шлюз: соединение приходит не только из `tun-in`.
-  /// Пусто на старом нативе.
-  final String source;
-  final String inbound;
-  final String inboundType;
-
-  /// §661 — стандартный вход: TUN устройства (или натив не отдал inbound).
-  bool get isStandardInbound => inbound.isEmpty || inbound == 'tun-in';
-
-  /// §661 — `source / inbound` для нестандартного входа, иначе `''`.
-  String get sourceLabel => isStandardInbound
-      ? ''
-      : (source.isNotEmpty ? '$source / $inbound' : inbound);
-
-  /// Накопленный итог за соединение (всего передано). `getUplinkTotal`.
-  final int uplink;
-  final int downlink;
-
-  /// Байт за последний тик (мгновенная скорость). `getUplink`. 0 у idle.
-  final int uplinkDelta;
-  final int downlinkDelta;
-
-  /// Выбранная нода/тип (libbox `getOutbound`/`getOutboundType`).
-  final String outbound;
-  final String outboundType;
-  final String protocol;
-
-  /// §174 — полная outbound-цепочка (Clash `chains`): selector→urltest→node.
-  /// Из `Connection.chain()`-итератора ядра. Пусто для прямого outbound.
-  final List<String> chains;
-
-  /// §178 — detour-хвост финального outbound (ядро SPEC 017, `Connection.detour()`).
-  /// Транспортная ось (куда физически ныряет пакет: `node → WARP`), порядок
-  /// node→наружу. Пусто: прямой outbound / block / dns / ядро без поля 23.
-  /// НЕ дублирует `chains` — node там, detour-теги тут.
-  final List<String> detours;
-
-  /// App-attribution из `getProcessInfo()`: package (для иконки) + путь процесса.
-  final String packageName;
-  final String processPath;
-
-  final int createdAt;
-  final int closedAt;
-
-  bool get isClosed => closedAt > 0;
-
-  /// §204 — routing-строка в нотации §252 (эволюция §181), идентичная
-  /// `TrafficEvent.routingLineOf`: `[net] rule ⇒ группы : транспорт-вход → …
-  /// → выход (селектор (выбор)) → dest` — справа от `:` физический путь
-  /// пакета (вход первым, выход перед целью).
-  /// `chains`/`detours` приходят из ТОГО ЖЕ источника ядра, что
-  /// `TrafficEvent.outboundChain`/`detourChain` (`Connection.chain()`/`.detour()`),
-  /// порядок идентичен (`[node, …selectors]` / `[node→наружу]`) — поэтому логика
-  /// копируется 1:1.
-  ///
-  /// Отличия от TrafficEvent (намеренно): process НЕ включаем (у ряда Conns своя
-  /// app-строка); duration НЕ дописываем (§204 D — таймер рендерится отдельным
-  /// виджетом справа в ряду / секцией Timing в detail, не внутри строки).
-  ///
-  /// [compact] — для ряда: опускает префикс `[net]` (дублирует бейдж/иконку),
-  /// строка начинается с `rule`.
-  /// [ruleLabel] — резолвленное человекочитаемое имя правила (UI-слой
-  /// `RuleNameResolver`); если передано — используется вместо сырого `rule`
-  /// (модель vpn не знает про резолвер). Пусто → берётся `rule` или `final`.
-  /// [labels] — `tag Направления → label` от UI (модель storage не знает):
-  /// Направления подписаны `label (tag)` ([directionTagDisplay]).
-  String routingLineOf({
-    bool compact = false,
-    String? ruleLabel,
-    Map<String, String> labels = const {},
-  }) {
-    final sb = StringBuffer();
-    // Ось решения (⇒): [net] rule → селекторы (сверху вниз = chains[1:].reversed).
-    final inner = <String>[];
-    final ruleText = (ruleLabel != null && ruleLabel.isNotEmpty)
-        ? ruleLabel
-        : (rule.isNotEmpty ? rule : 'final');
-    inner.add(
-      !compact && network.isNotEmpty ? '[$network] $ruleText' : ruleText,
-    );
-    if (chains.length > 1) {
-      inner.addAll(chains
-          .sublist(1)
-          .reversed
-          .map((t) => directionTagDisplay(t, labels)));
-    }
-    sb.write(inner.join(' ⇒ '));
-    // §252 — физический путь (→ по ходу пакета): транспорт изнутри наружу
-    // (detour-ось развёрнута: вход первым) → выход ОДНИМ элементом
-    // `селектор (…вложенно… (node))` (свёртка ПО СТРУКТУРЕ chains
-    // `[node, …selectors]`, не через SelectorInfo; пустые chains —
-    // outbound-fallback) → назначение.
-    final phys = <String>[
-      ...foldSelectorPairs(detours, labels: labels).reversed,
-    ];
-    final exitChain = chains.isNotEmpty
-        ? chains
-        : (outbound.isNotEmpty ? [outbound] : null);
-    if (exitChain != null) {
-      var exit = directionTagDisplay(exitChain.first, labels);
-      for (final sel in exitChain.skip(1)) {
-        exit = '${directionTagDisplay(sel, labels)} ($exit)';
-      }
-      phys.add(exit);
-    }
-    final dest = domain.isNotEmpty ? domain : _hostOfDestination;
-    if (dest.isNotEmpty) phys.add(dest);
-    if (phys.isNotEmpty) sb.write(' : ${phys.join(' → ')}');
-    return sb.toString();
-  }
-
-  /// Host из `destination` (`host:port` → `host`); IPv6 в `[..]:port` сохраняем.
-  String get _hostOfDestination {
-    final d = destination;
-    if (d.isEmpty) return '';
-    if (d.startsWith('[')) {
-      final end = d.indexOf(']');
-      return end > 0 ? d.substring(0, end + 1) : d;
-    }
-    final colon = d.lastIndexOf(':');
-    return colon > 0 ? d.substring(0, colon) : d;
-  }
-
-  factory CcConnection.fromMap(Map<String, dynamic> m) => CcConnection(
-    id: m['id']?.toString() ?? '',
-    network: m['network']?.toString() ?? '',
-    domain: m['domain']?.toString() ?? '',
-    destination: m['destination']?.toString() ?? '',
-    source: m['source']?.toString() ?? '',
-    inbound: m['inbound']?.toString() ?? '',
-    inboundType: m['inboundType']?.toString() ?? '',
-    rule: m['rule']?.toString() ?? '',
-    uplink: _int(m['uplink']),
-    downlink: _int(m['downlink']),
-    uplinkDelta: _int(m['uplinkDelta']),
-    downlinkDelta: _int(m['downlinkDelta']),
-    outbound: m['outbound']?.toString() ?? '',
-    outboundType: m['outboundType']?.toString() ?? '',
-    protocol: m['protocol']?.toString() ?? '',
-    chains:
-        (m['chains'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-    detours:
-        (m['detours'] as List?)?.map((e) => e.toString()).toList() ?? const [],
-    packageName: m['packageName']?.toString() ?? '',
-    processPath: m['processPath']?.toString() ?? '',
-    createdAt: _int(m['createdAt']),
-    closedAt: _int(m['closedAt']),
-  );
-}
-
-/// §180 — структурное DNS-событие из ядра (SPEC 018 v2, §261: команда
-/// `CommandDNS` в мультиплексе profilerClient, приходит через `writeDNSQuery`).
-/// Заменяет текстовый парсинг core-лога: атрибуция к приложению (`packageName`)
-/// приходит ИЗ ЯДРА (processInfo), не сшивается по connId.
-class CcDnsQuery {
-  const CcDnsQuery({
-    required this.domain,
-    required this.queryType,
-    required this.rcode,
-    this.ttl = 0,
-    this.source = '',
-    this.failed = false,
-    this.error = '',
-    this.packageName = '',
-    this.processPath = '',
-    this.dnsServer = '',
-    this.dnsServerType = '',
-    this.outbound = const [],
-    this.answers = const [],
-    this.groupPath = const [],
-    this.attempts = const [],
-    this.fanned = false,
-    this.survival = false,
-  });
-
-  /// Запрошенный домен (оригинал, не финальный CNAME-target).
-  final String domain;
-
-  /// qtype: 1=A, 28=AAAA, 5=CNAME, 65=HTTPS, 33=SRV, … (DNS RR type).
-  final int queryType;
-
-  /// Q1 (SPEC 018): `-1` = НЕТ ОТВЕТА (timeout), физически ≠ 65535. Иначе —
-  /// реальный response.Rcode (0=NOERROR, 3=NXDOMAIN…). НЕ кастить в unsigned:
-  /// ядро отдаёт signed, `_int` знак сохраняет.
-  final int rcode;
-
-  final int ttl;
-
-  /// exchanged/cached/optimistic/refreshed/rejected/failed (источник ответа).
-  final String source;
-
-  /// Q2 (SPEC 018): true на провале (timeout/SERVFAIL/rejected/loopback).
-  /// failed-событие → профайлер делает `dnsFail`.
-  final bool failed;
-
-  /// Причина провала ("timeout"/"loopback"/"rejected"…); "" на успехе.
-  final String error;
-
-  /// Атрибуция к приложению ИЗ ЯДРА (processInfo). Часто непуст — в отличие от
-  /// connId-сшивки текстового пути (корень §177-баннера).
-  final String packageName;
-  final String processPath;
-
-  /// rc.10 (SPEC 018+) — какой DNS-сервер резолвил запрос (на всех путях, вкл.
-  /// провалы). Пусто на старом ядре / если ядро не отдало.
-  final String dnsServer;
-
-  /// rc.10 — тип DNS-сервера (udp/tcp/tls/https/quic/…).
-  final String dnsServerType;
-
-  /// rc.10 — outbound-канал DNS-сервера (селектор развёрнут в активный узел
-  /// через Now() server-side), список как chain/detour. ПУСТО на cached
-  /// (cache-hit без сетевого пути).
-  final List<String> outbound;
-
-  /// Q3 (SPEC 018): ВЕСЬ response.Answer (CNAME-hops + финальные A/AAAA) в
-  /// исходном порядке. Пусто если подписка без includeAnswers. cnameChain
-  /// собирается из элементов с type==CNAME(5).
-  final List<CcDnsAnswer> answers;
-
-  /// §315 (kernel SPEC 035) — путь DNS-групп ИЗНУТРИ НАРУЖУ; пусто = запрос
-  /// шёл мимо группы. При вложенности: `[inner, outer]`.
-  final List<String> groupPath;
-
-  /// §315 — хронология проб ЭТОГО запроса: кто опрошен, с каким исходом и
-  /// RTT. Пусто на кеш-попадании и на не-групповых путях. Опоздавшие ответы
-  /// веера сюда НЕ попадают (их не было на момент эмита) — полная картина
-  /// живёт в state-RPC `getDnsGroups` (§312).
-  final List<CcDnsGroupAttempt> attempts;
-
-  /// §315 — в запросе был веер (спасение после сбоя цели / выборы `fastest` /
-  /// любой запрос `parallel`).
-  final bool fanned;
-
-  /// §315 — режим выживания: чистых членов не осталось, ответ получен одной
-  /// попыткой к наименее грязному. Красный флаг здоровья группы.
-  final bool survival;
-
-  /// Q1-helper: ответа от сервера не было (timeout).
-  bool get noAnswer => rcode == -1;
-
-  /// §315 — запрос шёл через DNS-группу.
-  bool get viaGroup => groupPath.isNotEmpty;
-
-  factory CcDnsQuery.fromMap(Map<String, dynamic> m) => CcDnsQuery(
-    domain: m['domain']?.toString() ?? '',
-    queryType: _int(m['queryType']),
-    rcode: _int(m['rcode']), // знак сохраняется → -1 остаётся -1 (Q1)
-    ttl: _int(m['ttl']),
-    source: m['source']?.toString() ?? '',
-    failed: m['failed'] == true,
-    error: m['error']?.toString() ?? '',
-    packageName: m['packageName']?.toString() ?? '',
-    processPath: m['processPath']?.toString() ?? '',
-    dnsServer: m['dnsServer']?.toString() ?? '',
-    dnsServerType: m['dnsServerType']?.toString() ?? '',
-    outbound:
-        (m['outbound'] as List?)
-            ?.map((e) => e.toString())
-            .where((s) => s.isNotEmpty)
-            .toList() ??
-        const [],
-    answers:
-        (m['answers'] as List?)
-            ?.map(
-              (a) => CcDnsAnswer.fromMap(
-                (a as Map).map((k, v) => MapEntry(k.toString(), v)),
-              ),
-            )
-            .toList() ??
-        const [],
-    // §315 — трасса группы; на старом ядре/нативе ключей нет → пустые дефолты.
-    groupPath:
-        (m['groupPath'] as List?)
-            ?.map((e) => e.toString())
-            .where((s) => s.isNotEmpty)
-            .toList() ??
-        const [],
-    attempts:
-        (m['attempts'] as List?)
-            ?.whereType<Map>()
-            .map(
-              (a) => CcDnsGroupAttempt.fromMap(
-                a.map((k, v) => MapEntry(k.toString(), v)),
-              ),
-            )
-            .toList() ??
-        const [],
-    fanned: m['fanned'] == true,
-    survival: m['survival'] == true,
-  );
-}
-
-/// §315 (kernel SPEC 035) — одна проба DNS-группы из трассы запроса.
-class CcDnsGroupAttempt {
-  const CcDnsGroupAttempt({
-    required this.server,
-    required this.serverType,
-    required this.outcome,
-    required this.rttMs,
-  });
-
-  /// Тег опрошенного участника (лист — не группа).
-  final String server;
-
-  /// Тип транспорта участника (udp/tls/https/…).
-  final String serverType;
-
-  /// `answered` · `timeout` · `network_error` · `servfail`.
-  final String outcome;
-
-  /// RTT пробы, мс.
-  final int rttMs;
-
-  bool get answered => outcome == 'answered';
-
-  factory CcDnsGroupAttempt.fromMap(Map<String, dynamic> m) =>
-      CcDnsGroupAttempt(
-        server: m['server']?.toString() ?? '',
-        serverType: m['serverType']?.toString() ?? '',
-        outcome: m['outcome']?.toString() ?? '',
-        rttMs: _int(m['rttMs']),
-      );
-}
-
-/// §180 — одна DNS-запись ответа (RR). Часть `CcDnsQuery.answers`.
-class CcDnsAnswer {
-  const CcDnsAnswer({
-    required this.name,
-    required this.type,
-    required this.rdata,
-    this.ttl = 0,
-  });
-
-  final String name;
-  final int type; // RR type (5=CNAME, 1=A, 28=AAAA…)
-  final String rdata; // значение записи (target для CNAME, IP для A/AAAA)
-  final int ttl;
-
-  bool get isCname => type == 5;
-  bool get isAddress => type == 1 || type == 28; // A / AAAA
-
-  factory CcDnsAnswer.fromMap(Map<String, dynamic> m) => CcDnsAnswer(
-    name: m['name']?.toString() ?? '',
-    type: _int(m['type']),
-    rdata: m['rdata']?.toString() ?? '',
-    ttl: _int(m['ttl']),
-  );
-}
-
-/// §4.6 — результат `urlTestOutbound`. Источник истины провала — `error`.
-class CcDelayResult {
-  const CcDelayResult({required this.delay, required this.error});
-
-  final int delay;
-  final String error;
-
-  bool get ok => error.isEmpty;
-
-  /// Маппинг в UI-контракт `lastDelay` (§4.6): ok → delay (вкл. 0мс); fail → -1.
-  int get lastDelayValue => ok ? delay : -1;
-
-  factory CcDelayResult.fromMap(Map<String, dynamic> m) => CcDelayResult(
-    delay: _int(m['delay']),
-    error: m['error']?.toString() ?? '',
-  );
-}
-
-/// §669 — ответ probe-сессии на вызов с чужим/устаревшим runId: прогон вытеснен
-/// новым (`ProbeSession.STALE_RUN` на Kotlin-стороне, сверка дословная).
-const kProbeStaleRun = 'stale run';
-
-/// §669 — результат `probeStart`: [error] '' при успехе, иначе текст ошибки;
-/// [runId] — владелец поднятой сессии (0 при ошибке). Его несут
-/// `probeUrlTest`/`probeGetUrl`/`probeCancel`/`probeStop`.
-class CcProbeStart {
-  const CcProbeStart({required this.error, required this.runId});
-
-  final String error;
-  final int runId;
-
-  bool get ok => error.isEmpty;
-
-  factory CcProbeStart.fromMap(Map<String, dynamic> m) => CcProbeStart(
-    error: m['error']?.toString() ?? '',
-    runId: _int(m['runId']),
-  );
-}
-
-/// §392 — результат диагностического GET через узел (kernel SPEC 058).
-///
-/// ИНВАРИАНТ: `error` — единственный признак несостоявшегося обмена (тег не
-/// найден, dial/TLS, таймаут). **Не-2xx статус ошибкой НЕ является**: 403 от
-/// Cloudflare или 429 от гео-сервиса — ровно те данные, ради которых проба и
-/// существует, они приезжают с `error == ''` и заполненным телом.
-///
-/// [remoteAddr] — адрес, куда цель отрезолвилась ИЗНУТРИ туннеля, а НЕ exit-IP
-/// узла: exit-IP несёт тело ответа (строка `ip=` у cdn-cgi/trace).
-///
-/// [elapsedMs] — время всего обмена вместе с чтением тела; это не замер
-/// задержки, и в историю urltest ядро его не пишет.
-class CcGetUrlResult {
-  const CcGetUrlResult({
-    required this.status,
-    required this.content,
-    required this.truncated,
-    required this.contentType,
-    required this.remoteAddr,
-    required this.elapsedMs,
-    required this.error,
-  });
-
-  final int status;
-  final String content;
-  final bool truncated;
-  final String contentType;
-  final String remoteAddr;
-  final int elapsedMs;
-  final String error;
-
-  /// Обмен состоялся (ответ получен, любым статусом).
-  bool get ok => error.isEmpty;
-
-  factory CcGetUrlResult.fromMap(Map<String, dynamic> m) => CcGetUrlResult(
-    status: _int(m['status']),
-    content: m['content']?.toString() ?? '',
-    truncated: m['truncated'] == true,
-    contentType: m['contentType']?.toString() ?? '',
-    remoteAddr: m['remoteAddr']?.toString() ?? '',
-    elapsedMs: _int(m['elapsedMs']),
-    error: m['error']?.toString() ?? '',
-  );
-}
-
-/// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты
-/// фиксированы по `slot`; нода в слоте может меняться (дотест). `delay`==0 →
-/// мёртвая / не измерена (живая всегда ≥1 — ядро клампит на чтении).
-class CcPoolSlot {
-  const CcPoolSlot({
-    required this.slot,
-    required this.tag,
-    required this.delay,
-  });
-
-  final int slot;
-  final String tag;
-  final int delay; // мс, 0 = мёртвая/не измерена
-
-  /// true → нода в слоте жива (есть замер). false → мёртвая/не измерена.
-  bool get alive => delay > 0;
-
-  factory CcPoolSlot.fromMap(Map<String, dynamic> m) => CcPoolSlot(
-    slot: _int(m['slot']),
-    tag: m['tag']?.toString() ?? '',
-    delay: _int(m['delay']),
-  );
-}
-
-/// §312 — член DNS-группы из `getDNSGroups` (kernel SPEC 035, схема v3).
-class CcDnsGroupMember {
-  const CcDnsGroupMember({
-    required this.tag,
-    required this.serverType,
-    required this.clean,
-    required this.liveErrors,
-    required this.lastErrorAgeMs,
-    required this.liveWins,
-    required this.current,
-    required this.lastRttMs,
-  });
-
-  final String tag;
-  final String serverType;
-  final bool clean; // ноль живых ошибок
-  final int liveErrors;
-  final int lastErrorAgeMs; // возраст последней живой ошибки; -1 = нет
-  final int liveWins; // только fastest
-  final bool current; // текущая цель группы
-  final int lastRttMs; // последняя успешная проба; 0 = не мерялся
-
-  factory CcDnsGroupMember.fromMap(Map<String, dynamic> m) => CcDnsGroupMember(
-    tag: m['tag']?.toString() ?? '',
-    serverType: m['serverType']?.toString() ?? '',
-    clean: m['clean'] == true,
-    liveErrors: _int(m['liveErrors']),
-    lastErrorAgeMs: _int(m['lastErrorAgeMs'], fallback: -1),
-    liveWins: _int(m['liveWins']),
-    current: m['current'] == true,
-    lastRttMs: _int(m['lastRttMs']),
-  );
-}
-
-/// §312 — снапшот состояния DNS-группы из `getDNSGroups` (kernel SPEC 035).
-class CcDnsGroup {
-  const CcDnsGroup({
-    required this.tag,
-    required this.mode,
-    required this.current,
-    required this.members,
-  });
-
-  final String tag;
-  final String mode; // stable | fastest | parallel
-  final String current; // '' = ещё не выбиралась / parallel
-  final List<CcDnsGroupMember> members;
-
-  factory CcDnsGroup.fromMap(Map<String, dynamic> m) => CcDnsGroup(
-    tag: m['tag']?.toString() ?? '',
-    mode: m['mode']?.toString() ?? '',
-    current: m['current']?.toString() ?? '',
-    members: [
-      for (final e in (m['members'] as List<dynamic>? ?? const []))
-        if (e is Map) CcDnsGroupMember.fromMap(CcChannel._asMap(e)),
-    ],
-  );
-}
-
-/// §4.7 — правило из `getRules` (route+DNS).
-class CcRule {
-  const CcRule({
-    required this.type,
-    required this.payload,
-    required this.action,
-    required this.isDNS,
-  });
-
-  final String type;
-  final String payload;
-  final String action;
-  final bool isDNS;
-
-  factory CcRule.fromMap(Map<String, dynamic> m) => CcRule(
-    type: m['type']?.toString() ?? '',
-    payload: m['payload']?.toString() ?? '',
-    action: m['action']?.toString() ?? '',
-    isDNS: m['isDNS'] == true,
-  );
-}
-
-int _int(Object? v, {int fallback = 0}) =>
-    v is int ? v : (v is num ? v.toInt() : fallback);

@@ -11,7 +11,7 @@ import '../../core_reject/core_reject_runner.dart';
 import '../../core_reject/core_reject_state.dart';
 import '../../diagnostics/path_mtu.dart';
 import '../../error_humanize.dart';
-import '../../platform_channels.dart';
+import '../../../vpn/platform_channels.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';

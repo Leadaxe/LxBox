@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'app_log.dart';
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 import 'project_links.dart';
 
 /// §390 — откуда установлено приложение. Один и тот же код и одна и та же

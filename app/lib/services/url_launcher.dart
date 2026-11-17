@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 
 /// Opens a URL using the platform's default handler.
 /// Falls back to copying to clipboard if the platform channel is unavailable.
