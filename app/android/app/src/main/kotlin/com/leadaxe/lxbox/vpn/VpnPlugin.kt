@@ -872,13 +872,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 UiCoreSession.ensure()?.connectScreen(); result.success(true)
             }
             "ccDisconnectScreen" -> {
-                UiCoreSession.ensure()?.disconnectScreen(); result.success(true)
+                UiCoreSession.client?.disconnectScreen(); result.success(true)
             }
             "ccConnectProfiler" -> {
                 UiCoreSession.ensure()?.connectProfiler(); result.success(true)
             }
             "ccDisconnectProfiler" -> {
-                UiCoreSession.ensure()?.disconnectProfiler(); result.success(true)
+                UiCoreSession.client?.disconnectProfiler(); result.success(true)
             }
             // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
             // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
@@ -890,7 +890,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopTailscaleStatus" -> {
-                val cc = UiCoreSession.ensure()
+                val cc = UiCoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
                 result.success(true)
             }
@@ -969,7 +969,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopTailscalePing" -> {
-                val cc = UiCoreSession.ensure()
+                val cc = UiCoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
                 result.success(true)
             }
@@ -984,7 +984,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopConnectionTest" -> {
-                val cc = UiCoreSession.ensure()
+                val cc = UiCoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
                 result.success(true)
             }
@@ -1003,7 +1003,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopTaildropInbox" -> {
-                val cc = UiCoreSession.ensure()
+                val cc = UiCoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
                 result.success(true)
             }
@@ -1247,7 +1247,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(true)
             }
             "ccCancelPing" -> {
-                UiCoreSession.ensure()?.cancelPing(); result.success(true)
+                UiCoreSession.client?.cancelPing(); result.success(true)
             }
             // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
             // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
@@ -1258,7 +1258,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 UiCoreSession.ensure()?.setStatusFast(fast); result.success(true)
             }
             "ccPauseClients" -> {
-                UiCoreSession.ensure()?.apply { pauseStatus(); pauseScreen() }
+                UiCoreSession.client?.apply { pauseStatus(); pauseScreen() }
                 result.success(true)
             }
             "ccResumeClients" -> {

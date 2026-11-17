@@ -46,7 +46,7 @@ internal class ClientHolder<T : Any>(
 /// обработчике `cc*` роли UI — страховка от гонки «Dart прочитал `Started`
 /// через `getVpnStatus` раньше, чем пришёл broadcast».
 ///
-/// Закрытие — `shutdownAll()` и обнуление. [close] синхронный: слушатель
+/// Закрытие — `shutdownAll()` и обнуление. [closeForCoreStop] синхронный: слушатель
 /// `CoreSession` «перед закрытием» (поток остановки; клиент должен отключиться
 /// до закрытия командного сервера). [closeOffMain] — broadcast `Stopped` и
 /// detach движка, оба на главном потоке.
@@ -62,8 +62,19 @@ object UiCoreSession {
     @Volatile
     internal var warningSink: ((String) -> Unit)? = null
 
+    /// Старт туннеля (`TunnelState.startedElapsedMs`), для которого сервис уже
+    /// начал закрывать командный сервер. Между этим моментом и статусом
+    /// `Stopped` статус ещё `Started`, но клиента создавать нельзя: он
+    /// подключился бы к закрывающемуся серверу. Новый старт получает новое
+    /// время — запрет снимается сам.
+    @Volatile
+    private var closingStart = -1L
+
     private val holder = ClientHolder(
-        started = { TunnelState.status == VpnStatus.Started },
+        started = {
+            val s = TunnelState.snapshot
+            s.status == VpnStatus.Started && s.startedElapsedMs != closingStart
+        },
         create = {
             BoxCommandClient { text -> warningSink?.invoke(text) }.also { it.startStatus() }
         },
@@ -77,7 +88,12 @@ object UiCoreSession {
 
     fun ensure(): BoxCommandClient? = holder.ensure()
 
-    fun close() = holder.close()
+    /// Слушатель `CoreSession` «перед закрытием»: синхронно закрыть клиента и
+    /// не создавать нового до следующего старта туннеля.
+    fun closeForCoreStop() {
+        closingStart = TunnelState.startedElapsedMs
+        holder.close()
+    }
 
     /// То же с главного потока: ссылка снимается сразу (следующий [ensure]
     /// создаст нового клиента), а `shutdownAll()` — вызовы в ядро — уходит в

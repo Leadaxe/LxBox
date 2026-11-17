@@ -92,7 +92,7 @@ class BoxApplication : Application() {
         // слушает. WARN-строки клиента идут в журнал приложения, который
         // ведёт сервис, — остаток общей памяти между сторонами; связка здесь,
         // чтобы ни одна сторона не ссылалась на другую.
-        CoreSession.addBeforeCloseListener { UiCoreSession.close() }
+        CoreSession.addBeforeCloseListener { UiCoreSession.closeForCoreStop() }
         UiCoreSession.warningSink = { text -> BoxService.appLogWarning(text) }
     }
 
