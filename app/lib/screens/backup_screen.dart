@@ -13,6 +13,7 @@ import '../services/lx_backup.dart';
 import '../services/lx_backup_import.dart';
 import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
+import '../services/workspaces/workspace_controller.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/error_format.dart';
@@ -550,7 +551,16 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final confirmed = await _confirmLxImport(plan.file);
       if (confirmed != true) return;
 
-      final result = await importer.apply(plan);
+      final LxImportResult result;
+      try {
+        result = await importer.apply(plan);
+      } finally {
+        // §748 — импорт пишет хранилище мимо контроллеров главного экрана:
+        // без пересоздания сцены импортированное не видно до перезапуска, а
+        // первая мутация старого контроллера затёрла бы его. И при сбое
+        // посреди записи — часть уже легла на диск.
+        await WorkspaceController.I.remountAfterExternalWrite();
+      }
       if (!mounted) return;
 
       // §641 — итог одной строкой: замена правил приёмника названа хвостом,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/automation/automation_sync.dart';
 import '../../services/backup_service.dart';
 import '../../services/l10n/locale_controller.dart';
+import '../../services/workspaces/workspace_controller.dart';
 import '../../vpn/box_vpn_client.dart';
 import 'import_preview_dialog.dart';
 import 'restore_summary.dart';
@@ -28,26 +29,41 @@ Future<void> restoreFromContents(
   final result = await showImportPreview(context, contents);
   if (result == null) return; // cancelled
 
-  final apply = await const BackupService().applyImport(
-    contents,
-    merge: result.merge,
-    include: result.include,
-  );
-  // §279 — restore мог привезти другой app_language: применить через
-  // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
-  await LocaleController.I.reloadFromStorage();
-  // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
-  await syncAutomationFromStorage();
-  if (onApplied != null) await onApplied();
+  final BackupApplyResult apply;
+  try {
+    apply = await const BackupService().applyImport(
+      contents,
+      merge: result.merge,
+      include: result.include,
+    );
+  } finally {
+    // §748 — restore пишет хранилище мимо контроллеров главного экрана.
+    // Вызывающий со своим [onApplied] перечитывает их сам; иначе сцена
+    // пересоздаётся: импортированное видно сразу, а старый контроллер не
+    // затрёт его первой мутацией. Remount перечитывает и язык (§279), и
+    // автоматизацию (§605).
+    if (onApplied == null) {
+      await WorkspaceController.I.remountAfterExternalWrite();
+    }
+  }
+  if (onApplied != null) {
+    // §279 — restore мог привезти другой app_language: применить через
+    // владеющий пайплайн (LocaleController), не дожидаясь рестарта.
+    await LocaleController.I.reloadFromStorage();
+    // §605 — бэкап мог привезти другой тумблер приёма команд и emit-гейты.
+    await syncAutomationFromStorage();
+    await onApplied();
+  }
   if (!context.mounted) return;
   // §607 — общий с главным экраном локализованный итог.
-  final summary =
-      restoreSummaryText(apply, fetchingSubscriptions: fetchingSubscriptions);
+  final summary = restoreSummaryText(
+    apply,
+    fetchingSubscriptions: fetchingSubscriptions,
+  );
   final appliedAnything = restoreAppliedAnything(apply);
-  // applyImport пишет в SettingsStorage, но controllers (Subscription /
-  // Home / Routing screen state) держат in-memory snapshot — UI остаётся
-  // stale. Restart-кнопка вызывает quitApp(); юзер сам тапает иконку,
-  // app поднимается с fresh storage.
+  // §748 — контроллеры главного экрана уже перечитаны (remount выше или
+  // [onApplied]). «Restart now» остаётся: перезапуск процесса перечитывает
+  // ещё и нативную сторону.
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
       content: Text(summary),

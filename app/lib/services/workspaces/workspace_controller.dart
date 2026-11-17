@@ -114,6 +114,23 @@ class WorkspaceController extends ChangeNotifier {
     }
   }
 
+  /// §748 — сцену переписали в обход контроллеров `HomeScreen` (импорт LX
+  /// Backup, restore, `POST /backup/import`). Перечитать всё тем же путём,
+  /// что загрузка слота: статические шаги + [generation]++ → `HomeScreen`
+  /// и его контроллеры пересоздаются и читают хранилище заново, а прежние
+  /// становятся `stale` и не пишут (барьер §515) — их снимок в памяти
+  /// затёр бы импортированное первой же мутацией.
+  ///
+  /// VPN не останавливается: меняются настройки, а не слот. Поднятый
+  /// `configDirty` заставляет новый `HomeScreen` пересобрать конфиг.
+  Future<void> remountAfterExternalWrite() async {
+    await SettingsStorage.flushToDisk();
+    SettingsStorage.markConfigDirty();
+    await _reloadStateFromDisk();
+    _generation++;
+    notifyListeners();
+  }
+
   /// Скопировать сцену в слот [name] и сделать его `current`.
   Future<void> saveAs(String name) async {
     await SettingsStorage.flushToDisk();
