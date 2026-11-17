@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/direction.dart';
 import '../../../models/node_link.dart';
+import '../../../models/node_warning.dart';
 import '../../../models/server_list.dart';
 import '../../../models/source_replace.dart';
 import '../../../models/tls_policy.dart';
 import '../../source_replace_screen.dart';
 import '../../../services/subscription/input_helpers.dart';
 import '../../../services/subscription/user_agent.dart';
+import '../../../widgets/detour_path_line.dart';
 import '../../../widgets/detour_target_picker.dart' show detourLinkDisplay;
 import '../detour_mode.dart';
 import '../subscription_detail_format.dart';
@@ -56,7 +58,18 @@ class SubscriptionSettingsTab extends StatelessWidget {
     this.onReplaceChanged,
     this.otherSources = const [],
     this.onTlsChanged,
+    this.buildResults,
+    this.overrideDetourRemoved,
   });
+
+  /// §752 — источник итогов сборки (контроллер подписок): строка пути
+  /// перерисовывается после пересборки без перезахода. `null` — не слушаем.
+  final Listenable? buildResults;
+
+  /// §752 — код последней сборки, снявший detour источника у его узлов
+  /// (`detour_unavailable`, §739), иначе `null`. Нет колбэка — путь рисуется
+  /// по выбору, как до §752.
+  final RegistryWarning? Function()? overrideDetourRemoved;
 
   /// §636 — TLS-политика источника изменена (запись сразу). Нет колбэка —
   /// секция не рисуется.
@@ -365,14 +378,24 @@ class SubscriptionSettingsTab extends StatelessWidget {
             // `server_list_build` снимает ссылку, узлы идут напрямую — экран
             // не должен рисовать путь через цель. Выбор в пикере ставит
             // use_detour_servers=true, и detour применяется сразу (и в тесте).
-            subtitle: Text(entry.overrideDetour.isEmpty ||
+            subtitle: entry.overrideDetour.isEmpty ||
                     !(entry.useDetourServers || entry.replaceDetourChain)
-                ? getLocalText.s("None — nodes connect directly")
+                ? Text(getLocalText.s("None — nodes connect directly"))
                 // detour — ВХОДНОЙ (трафик идёт через него ПЕРВЫМ, потом в
                 // ноды подписки, потом наружу). §252 — полная цепочка «как
                 // пакет пойдёт»: цель → её собственный detour → … (та же
                 // детализация, что у одиночного сервера в Node Settings).
-                : getLocalText.s("Phone → %s → Nodes → Internet", _overridePath())),
+                // §752 — detour снят сборкой: путь перечёркнут + «напрямую».
+                : ListenableBuilder(
+                    listenable: buildResults ?? const _NoListenable(),
+                    builder: (context, _) => DetourPathLine(
+                      path: getLocalText.s(
+                          "Phone → %s → Nodes → Internet", _overridePath()),
+                      directText: getLocalText.s(
+                          "Not applied: the detour is unavailable, nodes connect directly."),
+                      removed: overrideDetourRemoved?.call(),
+                    ),
+                  ),
             trailing: const Icon(Icons.chevron_right),
             onTap: onShowOverrideDetourPicker,
           ),
@@ -650,4 +673,15 @@ class SubscriptionSettingsTab extends StatelessWidget {
       ],
     );
   }
+}
+
+/// §752 — пустой [Listenable] для строки пути без источника итогов сборки.
+class _NoListenable implements Listenable {
+  const _NoListenable();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 }

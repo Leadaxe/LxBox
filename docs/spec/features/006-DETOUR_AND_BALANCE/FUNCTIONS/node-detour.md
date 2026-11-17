@@ -19,7 +19,11 @@ the **Detour** block in the node settings ("Route through another server
 first"); the **Detour server** row opens the target picker. Under the row —
 a path preview in packet order: `Phone → <hops> → <node> → Internet`, with
 the target expanded by its own detour (up to six hops), or "Traffic goes
-directly to this server.".
+directly to this server.". If the last build removed the detour (target
+unavailable, `detour_unavailable`), the preview is struck through and a ⚠
+line under it says the server goes directly; the chosen target stays. The
+same applies to the source-wide detour on the Settings tab of a subscription
+or folder ("nodes connect directly").
 
 ## Parameters
 

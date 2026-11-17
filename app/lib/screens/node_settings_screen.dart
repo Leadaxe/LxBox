@@ -24,6 +24,7 @@ import '../models/server_list.dart';
 import '../models/source_dialect.dart';
 import '../models/template_vars.dart';
 import '../models/tls_policy.dart';
+import '../widgets/detour_path_line.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
@@ -425,6 +426,26 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
           ? list
           : null,
     );
+  }
+
+  /// §752 — предупреждения последней сборки по этому узлу: config-тег из
+  /// обратной карты сборки по самому узлу (суффикс дедупа), иначе display-тег
+  /// с префиксом источника (как ⚠ строки члена папки, §739 итер. 3).
+  List<NodeWarning> _lastBuildWarnings() {
+    final node = _node;
+    if (node == null) return const [];
+    final c = widget.subController;
+    final byTag = c.lastBuildWarningsByTag;
+    if (byTag.isEmpty) return const [];
+    String? tag;
+    for (final e in c.lastEmittedTagMap.entries) {
+      if (identical(e.value, node)) {
+        tag = e.key;
+        break;
+      }
+    }
+    tag ??= TagResolver.displayTag(widget.entry.list.tagPrefix, node.tag);
+    return byTag[tag] ?? const [];
   }
 
   /// §252 — полная цепочка хопов от цели detour вглубь (её собственный
@@ -1045,15 +1066,27 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text(
-            // §252 — полная цепочка «как пакет пойдёт»: цель → её собственный
-            // detour → … (detourPathHops), а не только первый хоп.
-            _detour.isEmpty
-                ? getLocalText.s("Traffic goes directly to this server.")
-                : getLocalText.s("Phone → %1\$s → %2\$s → Internet", _detourPath(), _originalTag),
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-          ),
+          // §252 — полная цепочка «как пакет пойдёт»: цель → её собственный
+          // detour → … (detourPathHops), а не только первый хоп.
+          // §752 — detour снят последней сборкой (§739) — путь перечёркнут,
+          // под ним «идёт напрямую»; слушает контроллер: после пересборки
+          // вид меняется без перезахода.
+          child: _detour.isEmpty
+              ? Text(
+                  getLocalText.s("Traffic goes directly to this server."),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                )
+              : ListenableBuilder(
+                  listenable: widget.subController,
+                  builder: (context, _) => DetourPathLine(
+                    path: getLocalText.s("Phone → %1\$s → %2\$s → Internet",
+                        _detourPath(), _originalTag),
+                    directText: getLocalText.s(
+                        "Not applied: the detour is unavailable, traffic goes directly to this server."),
+                    removed: detourRemovedWarning(_lastBuildWarnings()),
+                  ),
+                ),
         ),
         // §636 — TLS: узловое переопределение ручек «TLS Fragmentation».
         const SizedBox(height: 16),

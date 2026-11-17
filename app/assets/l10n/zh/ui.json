@@ -6856,5 +6856,11 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "测试中 %d / %d 个节点使用 detour；其余直接检测。"
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "未生效：detour 不可用，流量直接连接到此服务器。"
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "未生效：detour 不可用，节点直接连接。"
   }
 }

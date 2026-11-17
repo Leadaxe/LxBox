@@ -7147,5 +7147,11 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "Detour учтён в тесте у %d из %d; остальные проверяются напрямую."
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "Не действует: detour недоступен, трафик идёт к этому серверу напрямую."
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "Не действует: detour недоступен, узлы подключаются напрямую."
   }
 }
