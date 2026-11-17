@@ -13,7 +13,7 @@ import '../models/server_list.dart';
 import '../models/source_replace.dart';
 import '../services/tag_resolver.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
 import '../widgets/urltest_idle_hint.dart';
 

@@ -1,21 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/custom_rule.dart' show kOutboundReject;
+import '../models/outbound_option.dart';
 import '../services/l10n/locale_controller.dart';
+
+export '../models/outbound_option.dart';
 
 /// §683 — служебное значение пункта «Resolve only» в [OutboundPicker]
 /// (не тег outbound; редактор правила переводит его в `resolve.only`).
 const String kResolveOnlyAction = '__resolve_only__';
-
-/// Опция в [OutboundPicker] — либо outbound tag, либо sentinel "reject".
-class OutboundOption {
-  const OutboundOption({required this.value, required this.label});
-  final String value;  // tag (e.g. "vpn-1", "direct-out") или `kOutboundReject`
-  final String label;  // human-readable: "vpn-1", "direct-out", "Reject"
-
-  static const reject =
-      OutboundOption(value: kOutboundReject, label: 'Reject');
-}
 
 /// Унифицированный dropdown для выбора **куда маршрутизировать** правило
 /// (App Rule / Custom Rule). Выбор — либо outbound tag, либо "Reject (block)".

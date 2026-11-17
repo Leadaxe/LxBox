@@ -13,7 +13,7 @@ import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/lx_code_editor.dart';
 import '../services/file_import.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
 import 'config_screen/mixins_tab.dart';
 

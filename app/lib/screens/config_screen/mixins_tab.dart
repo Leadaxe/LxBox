@@ -8,7 +8,7 @@ import '../../models/mixin.dart';
 import '../../models/validation.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/settings_storage.dart';
-import '../../services/ui_helpers.dart';
+import '../../widgets/ui_helpers.dart';
 import '../../widgets/reorder_grab_strip.dart';
 import '../mixin_edit_screen.dart';
 import '../routing_screen/routing_screen_menus.dart';

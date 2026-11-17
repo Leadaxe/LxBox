@@ -16,7 +16,7 @@
 import '../../models/config_node.dart';
 import '../../models/direction.dart';
 import '../../models/source_chain.dart';
-import '../../services/builder/node_link_resolve.dart';
+import '../builder/node_link_resolve.dart';
 import 'chain_hop_candidate.dart';
 
 /// Служебный тег шаблона, законный первой позицией: «первый хоп без прокси».

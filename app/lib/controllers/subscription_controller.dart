@@ -46,6 +46,7 @@ import '../services/parser/body_decoder.dart';
 import '../services/parser/ini_parser.dart';
 import '../services/parser/json_comments.dart';
 import '../services/parser/parse_all.dart';
+import '../services/parser/parse_env_snapshot.dart';
 import '../services/parser/source_classify.dart';
 import '../services/parser/tailscale_split.dart';
 import '../services/parser/uri_parsers.dart';

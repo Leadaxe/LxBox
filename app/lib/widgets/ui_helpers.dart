@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'l10n/locale_controller.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §219 — общий snackbar-хелпер для State'ов. До этого `_snack`/`_showSnack`
 /// дублировались приватно в backup/debug/warp_wizard/add_server_wizard экранах.

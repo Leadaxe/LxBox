@@ -1,9 +1,9 @@
 import '../../../controllers/subscription_controller.dart';
 import '../../../models/config_node.dart';
 import '../../../models/source_chain.dart';
-import '../../../screens/chain_edit/chain_form_validation.dart';
-import '../../../screens/chain_edit/chain_hop_candidate.dart';
-import '../../../screens/chain_edit/chain_hop_targets.dart';
+import '../../chains/chain_form_validation.dart';
+import '../../chains/chain_hop_candidate.dart';
+import '../../chains/chain_hop_targets.dart';
 import '../../builder/node_link_pool.dart';
 import '../../contract/chain_strip.dart' show chainStripKeyKnown, chainStripKeys;
 import '../../probe/chain_layer_probe.dart';

@@ -1,10 +1,10 @@
 import '../../models/custom_rule.dart';
 import '../../models/dns_ref.dart';
 import '../../models/parser_config.dart' show WizardVar;
-import '../../services/builder/post_steps.dart'
+import '../builder/post_steps.dart'
     show resolveTemplateDnsServerBody;
-import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
-import '../../services/dns/dns_server_holds.dart';
+import '../builder/preset_expand.dart' show normalizeDnsDetour;
+import 'dns_server_holds.dart';
 import 'resolved_server.dart';
 
 /// §044: render list — typed `ResolvedServer` для каждой ref-записи.

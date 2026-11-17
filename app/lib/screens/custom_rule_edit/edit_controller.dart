@@ -16,7 +16,7 @@ import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
 import '../../widgets/wifi_entry.dart';
 import '../../models/dns_ref.dart';
-import '../dns_settings_screen/dns_server_resolver.dart'
+import '../../services/dns/dns_server_resolver.dart'
     show defaultDnsServerTag;
 import 'network_choice.dart';
 import 'normalizers.dart' as norm;

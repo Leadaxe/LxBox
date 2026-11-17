@@ -50,7 +50,7 @@ import 'home/startup_wizard.dart';
 import '../services/debug/bootstrap.dart';
 import '../services/debug/debug_registry.dart';
 import '../services/haptic_service.dart';
-import '../services/nav/home_return_observer.dart';
+import '../widgets/home_return_observer.dart';
 import '../services/settings_storage.dart';
 import '../services/rule_set_auto_updater.dart';
 import '../services/subscription/auto_updater.dart';

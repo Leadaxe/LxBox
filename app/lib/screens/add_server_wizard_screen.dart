@@ -11,7 +11,7 @@ import '../models/template_vars.dart';
 import '../models/tls_spec.dart';
 import '../services/contract/registry_form.dart' hide FormState;
 import '../services/parser/uri_utils.dart' show newUuidV4;
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/openconnect_form.dart';
@@ -395,7 +395,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
     Navigator.of(context).pop();
   }
 
-  // §219 — _showSnack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _showSnack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   @override
   Widget build(BuildContext context) {

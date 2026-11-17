@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/controllers/subscription_controller.dart';
 import 'package:lxbox/screens/chain_edit/chain_edit_flow.dart';
-import 'package:lxbox/screens/chain_edit/chain_hop_targets.dart';
+import 'package:lxbox/services/chains/chain_hop_targets.dart';
 import 'package:lxbox/services/haptic_service.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';

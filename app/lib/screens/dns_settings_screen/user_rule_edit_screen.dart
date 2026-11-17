@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import '../../models/dns_ref.dart';
 import '../../services/error_format.dart';
 import '../../services/l10n/locale_controller.dart';
-import '../../services/ui_helpers.dart';
+import '../../widgets/ui_helpers.dart';
 import '../../widgets/lx_code_editor.dart';
 
 /// §626 ревизия 2 — полноэкранный редактор inline-правила DNS

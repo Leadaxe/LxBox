@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 import '../vpn/cc_channel.dart';
 import 'config_node.dart';
 import 'debug_entry.dart';
@@ -21,15 +19,12 @@ export 'debug_entry.dart';
 export 'tunnel_status.dart';
 
 enum NodeSortMode {
-  defaultOrder(Icons.swap_vert),
-  latencyAsc(Icons.signal_cellular_alt),
-  nameAsc(Icons.sort_by_alpha),
+  defaultOrder,
+  latencyAsc,
+  nameAsc,
   // §071/§100 — manual («Custom»). Теперь ВХОДИТ в tap-cycle (carousel, см.
   // `next`) И выбирается из sort-меню; активируется выбором/cycle ИЛИ drag'ом.
-  manual(Icons.drag_indicator);
-
-  const NodeSortMode(this.icon);
-  final IconData icon;
+  manual;
 
   /// §279 — display-label режима (рендер по локали в момент показа).
   /// Персист/Debug API используют `.name` (wire), не label.

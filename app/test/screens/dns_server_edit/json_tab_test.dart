@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/screens/dns_server_edit/tabs/json_tab.dart';
-import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/resolved_server.dart';
 import 'package:lxbox/widgets/lx_code_editor.dart';
 
 /// #143 / §458 — read-only JSON-вкладка редактора template/preset-сервера.

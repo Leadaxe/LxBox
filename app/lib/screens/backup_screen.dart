@@ -17,7 +17,7 @@ import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
@@ -272,7 +272,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     }
   }
 
-  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _snack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   // ——— §622: передача настроек телефон → TV ———
 

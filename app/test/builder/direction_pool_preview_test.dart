@@ -1,8 +1,7 @@
 import 'dart:isolate';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/controllers/subscription_controller/cache_rehydrate.dart'
-    show ParseEnvSnapshot;
+import 'package:lxbox/services/parser/parse_env_snapshot.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/parser_config.dart';
 import 'package:lxbox/models/server_list.dart';

@@ -8,7 +8,7 @@ import '../models/debug_entry.dart';
 import '../services/app_log.dart';
 import '../services/dump_builder.dart';
 import '../services/error_format.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import 'app_settings_screen.dart';
 import 'crash_reports_screen.dart';
 import 'oom_reports_screen.dart';
@@ -75,7 +75,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     return buf.toString();
   }
 
-  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _snack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   void _copyAll(List<DebugEntry> entries) {
     Clipboard.setData(ClipboardData(text: _entriesToText(entries)));

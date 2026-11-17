@@ -12,7 +12,7 @@ import '../services/mixins/mixin_path.dart';
 import '../services/mixins/mixin_preview.dart';
 import '../services/mixins/mixin_suggest.dart';
 import '../services/settings_storage.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/app_bottom_sheet.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/safe_bottom.dart';

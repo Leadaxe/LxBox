@@ -8,7 +8,7 @@ import '../services/format_utils.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/oom_reports.dart';
 import '../services/oom_share.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/big_text_view.dart';
 import '../widgets/safe_bottom.dart';
 

@@ -6,7 +6,7 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/settings_storage.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
 import '../widgets/outbound_picker.dart';
 import '../widgets/wifi_entry.dart';

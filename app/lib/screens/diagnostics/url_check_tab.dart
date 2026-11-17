@@ -7,7 +7,7 @@ import '../../controllers/home_controller.dart';
 import '../../services/app_info_cache.dart';
 import '../../services/diagnostics/connection_test.dart';
 import '../../services/l10n/locale_controller.dart';
-import '../../services/ui_helpers.dart';
+import '../../widgets/ui_helpers.dart';
 import '../../vpn/cc_channel.dart';
 import '../../widgets/banner_palette.dart';
 import '../../widgets/safe_bottom.dart';

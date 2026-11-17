@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
-import 'services/app_theme_seed.dart';
+import 'widgets/app_theme_seed.dart';
 import 'services/l10n/locale_controller.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/automation_sync.dart';
@@ -23,7 +23,7 @@ import 'services/oom_reports.dart';
 import 'services/stderr_reader.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
-import 'services/nav/home_return_observer.dart';
+import 'widgets/home_return_observer.dart';
 import 'services/settings_storage.dart';
 import 'services/taildrop_tags_sync.dart' show migrateLegacyTaildropPrefs;
 import 'services/template_loader.dart';

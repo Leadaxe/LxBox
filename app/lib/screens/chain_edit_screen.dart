@@ -33,12 +33,12 @@ import '../services/builder/node_link_resolve.dart';
 import '../services/contract/chain_strip.dart';
 import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
 import '../widgets/reorder_grab_strip.dart';
-import 'chain_edit/chain_form_validation.dart';
-import 'chain_edit/chain_hop_candidate.dart';
-import 'chain_edit/chain_hop_targets.dart';
+import '../services/chains/chain_form_validation.dart';
+import '../services/chains/chain_hop_candidate.dart';
+import '../services/chains/chain_hop_targets.dart';
 import '../widgets/app_bottom_sheet.dart';
 
 /// Результат редактора: saved (с обновлённой цепочкой) или deleted.

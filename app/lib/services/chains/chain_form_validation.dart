@@ -14,11 +14,11 @@
 
 import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
-import '../../services/builder/node_link_pool.dart';
-import '../../services/builder/node_link_resolve.dart';
-import '../../services/contract/chain_strip.dart';
-import '../../services/contract/registry_warning.dart';
-import '../../services/l10n/locale_controller.dart';
+import '../builder/node_link_pool.dart';
+import '../builder/node_link_resolve.dart';
+import '../contract/chain_strip.dart';
+import '../contract/registry_warning.dart';
+import '../l10n/locale_controller.dart';
 import 'chain_hop_candidate.dart';
 
 /// Насколько серьёзна находка формы.

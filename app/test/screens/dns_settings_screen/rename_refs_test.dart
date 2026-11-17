@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
-import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
+import 'package:lxbox/services/dns/dns_server_resolver.dart';
 
 /// §117 задача 4b — rename тега DNS-сервера: каскад по всем ссылкам
 /// (`renameDnsServerTagRefs` + `renameRuleDnsServerTag`), чтобы

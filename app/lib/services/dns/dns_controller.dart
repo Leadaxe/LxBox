@@ -19,8 +19,8 @@ import '../../models/parser_config.dart';
 // §300 — resolver/ResolvedServer живут в screens/ (§294 их VIEW-слой);
 // контроллер их ВЫЗЫВАЕТ (pure-функции, односторонняя зависимость, не цикл).
 // Перенос в services/ — отдельный шаг, не расширяем scope D1.
-import '../../screens/dns_settings_screen/dns_server_resolver.dart';
-import '../../widgets/outbound_picker.dart' show OutboundOption;
+import 'dns_server_resolver.dart';
+import '../../models/outbound_option.dart' show OutboundOption;
 import '../builder/build_config.dart' show varIntInBounds;
 import '../builder/post_steps.dart';
 import '../builder/preset_expand.dart';

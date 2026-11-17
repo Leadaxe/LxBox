@@ -15,7 +15,7 @@ import '../services/parser/body_decoder.dart' show SourceKind;
 import '../services/preset_nodes_view.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';

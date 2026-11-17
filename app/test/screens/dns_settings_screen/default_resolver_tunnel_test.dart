@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
-import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/dns_server_resolver.dart';
+import 'package:lxbox/services/dns/resolved_server.dart';
 
 /// §682 — предупреждение у Default Domain Resolver: резолвер через туннель.
 void main() {

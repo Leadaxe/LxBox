@@ -20,7 +20,7 @@ import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_detour.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
 import '../widgets/detour_target_picker.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-import 'locale_controller.dart';
+import '../services/l10n/locale_controller.dart';
 
 /// §279 Phase 2 (спека §7.2, решение 15) — единый мини-паттерн для экранов,
 /// держащих `WizardTemplate?`-поле (или производные от шаблона display-данные).

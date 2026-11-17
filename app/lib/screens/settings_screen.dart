@@ -8,7 +8,7 @@ import '../models/background_mode.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/parser_config.dart';
 import '../services/builder/if_engine.dart';
-import '../services/l10n/template_aware_state.dart';
+import '../widgets/template_aware_state.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/template_var_list.dart';

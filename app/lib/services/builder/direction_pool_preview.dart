@@ -12,8 +12,7 @@ library;
 
 import 'dart:isolate';
 
-import '../../controllers/subscription_controller/cache_rehydrate.dart'
-    show ParseEnvSnapshot;
+import '../parser/parse_env_snapshot.dart' show ParseEnvSnapshot;
 import '../../models/node_spec.dart' show NodeSpec;
 import '../../models/parser_config.dart';
 import '../../models/server_list.dart';

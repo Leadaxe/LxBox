@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../controllers/subscription_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/warp/masquerade_params.dart';
 import '../services/warp/warp_account.dart';
 import '../services/warp/masque_account.dart';
@@ -426,7 +426,7 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
     return '$n$unit';
   }
 
-  // §219 — _showSnack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _showSnack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   @override
   Widget build(BuildContext context) {

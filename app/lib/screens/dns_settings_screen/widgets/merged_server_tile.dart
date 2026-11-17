@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../services/dns/dns_server_holds.dart' show dnsListableTags;
 import '../../../vpn/cc_channel.dart';
 import '../../../widgets/reorder_grab_strip.dart';
-import '../resolved_server.dart';
+import '../../../services/dns/resolved_server.dart';
 import 'dns_badge.dart';
 import '../../../services/l10n/locale_controller.dart';
 

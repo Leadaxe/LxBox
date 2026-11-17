@@ -11,7 +11,7 @@ import '../vpn/platform_channels.dart' show PlatformChannels;
 import '../vpn/cc_channel.dart';
 import '../services/error_format.dart';
 import '../services/format_utils.dart' show formatTimeHm;
-import '../services/l10n/template_aware_state.dart';
+import '../widgets/template_aware_state.dart';
 import '../services/template_loader.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/subscription/user_agent.dart';

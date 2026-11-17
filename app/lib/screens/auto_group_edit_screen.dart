@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/node_spec.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/auto_group_form.dart';
 import '../widgets/safe_bottom.dart';
 

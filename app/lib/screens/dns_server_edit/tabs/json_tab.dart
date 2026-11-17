@@ -7,7 +7,7 @@ import '../../../models/codec/dns_record.dart' show dnsServerToRecord;
 import '../../../services/builder/post_steps.dart'
     show previewDnsGroupMembers;
 import '../../../services/builder/preset_expand.dart' show normalizeDnsDetour;
-import '../../dns_settings_screen/resolved_server.dart';
+import '../../../services/dns/resolved_server.dart';
 import '../edit_controller.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/lx_code_editor.dart';
