@@ -176,11 +176,11 @@ fun bgMayExit(s: BgExitState): Boolean =
 object BgLifecycle {
     private const val TAG = "BgLifecycle"
 
-    /// Задержка после остановки туннеля, закрытия нативного окна, конца вызова.
+    /// Задержка после остановки туннеля, закрытия нативного окна, снятия удержания.
     const val DELAY_IDLE_MS = 5_000L
     /// Задержка после закрытия окна приложения.
     const val DELAY_UI_GONE_MS = 1_500L
-    /// Процесс поднят (плиткой, приёмником, вызовом), а дела не нашлось.
+    /// Процесс поднят (плиткой, приёмником, вызовом без окна), а дела не нашлось.
     const val DELAY_START_MS = 15_000L
     /// Задержка самозавершения после `quitApp`: ответ вызова успевает уйти.
     private const val DELAY_QUIT_MS = 150L
@@ -223,8 +223,10 @@ object BgLifecycle {
 
     fun callFinished(ctx: Context) {
         activeCalls.decrementAndGet()
-        // Окно подключено — оно и держит процесс; проверять нечего.
-        if (!UiPresence.isAttached) check(ctx, DELAY_IDLE_MS)
+        // Окно подключено — оно и держит процесс; проверять нечего. Иначе —
+        // с запасом на холодный старт окна: его первые вызовы приходят раньше,
+        // чем движок подключится и окно назовёт себя (`uiAttached`).
+        if (!UiPresence.isAttached) check(ctx, DELAY_START_MS)
     }
 
     /// Удержание процесса (слушающая плитка). Парный вызов — [release].
@@ -276,6 +278,9 @@ object BgLifecycle {
         val s = state(app)
         if (!bgMayExit(s)) {
             Log.d(TAG, "stay: $s")
+            // Причина, у которой нет своего события об окончании (передача
+            // Taildrop, идущий вызов, проба): перепроверить позже.
+            if (s.taildropBusy || s.activeCalls > 0 || s.probeActive) check(app, DELAY_IDLE_MS)
             return
         }
         exit(app, "idle")

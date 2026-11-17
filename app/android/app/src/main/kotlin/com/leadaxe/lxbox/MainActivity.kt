@@ -44,6 +44,20 @@ class MainActivity : FlutterActivity() {
         const val ACTION_CONNECT = "connect"
         const val ACTION_DISCONNECT = "disconnect"
         const val ACTION_TOGGLE = "toggle"
+
+        /// §747 G — запас между закрытием окна и завершением процесса `:ui`.
+        private const val UI_EXIT_DELAY_MS = 300L
+
+        /// Живые экземпляры окна (onCreate…onDestroy), главный поток.
+        private var liveWindows = 0
+
+        private val exitHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
+        private val exitProcess = Runnable {
+            if (liveWindows > 0) return@Runnable
+            Log.i(TAG, "window closed — ui process exits")
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
     }
 
     /// Если activity была открыта именно из tile/shortcut (через extras),
@@ -308,12 +322,36 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // §747 G — новое окно: отложенное завершение процесса отменяется.
+        liveWindows++
+        exitHandler.removeCallbacks(exitProcess)
         super.onCreate(savedInstanceState)
         // §430 — юзер открыл приложение, а в шторке уведомление от умершего
         // сервиса: короткий bounce сервиса, чтобы AMS его снял.
         // §747 — состояние туннеля знает `:bg`: проверку и bounce делает он.
         bg("clearStaleNotification")
         handleQuickAction(intent)
+    }
+
+    /// §747 G — окно закрыто (смахнули задачу, Back, `finish()` после быстрого
+    /// действия): процесс `:ui` больше не нужен и завершается сам — Flutter
+    /// и рантайм ядра для клиента возвращают память только так. Уход в фон
+    /// (Home) и пересоздание активити системой (`isFinishing == false`)
+    /// процесс не трогают.
+    ///
+    /// `super.onDestroy()` отсоединяет движок: `VpnPlugin` закрывает клиента
+    /// ядра и шлёт `:bg` «окно закрыто». Завершение ставится в хвост полосы
+    /// `BgClient` — после этого и всех ранее отправленных вызовов (команда
+    /// старта перед `finish()`), плюс запас [UI_EXIT_DELAY_MS].
+    override fun onDestroy() {
+        val finishing = isFinishing
+        super.onDestroy()
+        liveWindows--
+        if (finishing) {
+            BgClient.onLane {
+                BgClient.onMain { exitHandler.postDelayed(exitProcess, UI_EXIT_DELAY_MS) }
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

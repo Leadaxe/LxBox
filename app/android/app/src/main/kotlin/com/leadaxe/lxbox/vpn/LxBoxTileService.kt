@@ -54,6 +54,19 @@ class LxBoxTileService : TileService() {
         }
     }
 
+    // §747 G — пока система привязана к плитке (шторка открыта и ещё
+    // полминуты после), процесс `:bg` не завершается сам: иначе SystemUI
+    // тут же поднял бы его заново ради привязки.
+    override fun onCreate() {
+        super.onCreate()
+        BgLifecycle.hold()
+    }
+
+    override fun onDestroy() {
+        BgLifecycle.release(applicationContext)
+        super.onDestroy()
+    }
+
     override fun onStartListening() {
         super.onStartListening()
         instanceRef = java.lang.ref.WeakReference(this)

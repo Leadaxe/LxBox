@@ -387,6 +387,10 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         // чтобы Stats screen warning исчез при stop VPN.
         TunnelState.setSessionAllowBypass(false)
         super.onDestroy()
+        // §747 G — туннель остановлен, сервис уничтожен: если причин жить нет,
+        // процесс `:bg` с задержкой завершится (память ядра возвращает только
+        // завершение процесса). Новый старт до проверки её отменяет сам.
+        BgLifecycle.check(applicationContext, BgLifecycle.DELAY_IDLE_MS)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
