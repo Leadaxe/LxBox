@@ -273,7 +273,9 @@ Owner's decision, 2026-09-24.
     The Android build fails on a component without it; the map of the sides and
     the rules are in `ARCHITECTURE.md` → “Process boundary”.
   - Native code of the window never calls service objects directly — only
-    `BgClient` (a `BgMethods` method), and never from the main thread.
+    `BgClient` (a `BgMethods` / `BgCcMethods` method), and never from the main
+    thread. The window never loads the core: `grep libbox /proc/<pid of :ui>/maps`
+    must print nothing.
 - **Signatures.** Debug and release APKs are signed differently: `adb install -r`
   fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`; `adb uninstall` wipes settings.
 - **`local.properties` `sdk.dir`** is rewritten by Flutter on every run — set

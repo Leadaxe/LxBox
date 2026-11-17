@@ -89,8 +89,7 @@ void main() {
     });
 
     test('window-side names that only look similar are not', () {
-      expect(uiServiceSideUse('val cc = UiCoreSession.client'), isNull);
-      expect(uiServiceSideUse('UiCoreSession.ensure()'), isNull);
+      expect(uiServiceSideUse('val cc = MyCoreSession.client'), isNull);
       expect(uiServiceSideUse('ConfigFile.write(context, config)'), isNull);
       expect(
         uiServiceSideUse('BgClient.forward(ctx, "taildropSave", a, r)'),
@@ -136,7 +135,7 @@ void main() {
 
     test('a comment does not hide or cause a violation', () {
       final code = stripComments([
-        'val cc = CoreSession.client // UiCoreSession',
+        'val cc = CoreSession.client // BgClient',
         '// CoreSession.client',
       ]);
       expect(uiServiceSideUse(code[0]), isNotNull);
@@ -185,17 +184,36 @@ void main() {
     });
   });
 
-  group('UiSinks members (745)', () {
-    test('every member on the line is listed', () {
-      expect(uiSinksMembers('if (UiSinks.coreLogSink == null) return'), [
-        'coreLogSink',
-      ]);
-      expect(uiSinksMembers('UiSinks.ccStatusSink = UiSinks.ccGroupsSink'), [
-        'ccStatusSink',
-        'ccGroupsSink',
-      ]);
-      expect(uiSinksMembers('object UiSinks {'), isEmpty);
-      expect(uiSinksMembers('MyUiSinks.x'), isEmpty);
+  group('no core in the window process (747)', () {
+    test('libbox imports, Libbox calls and ensureLibbox are violations', () {
+      expect(
+        uiCoreUse('import io.nekohasekai.libbox.CommandClient'),
+        isNotNull,
+      );
+      expect(uiCoreUse('import io.nekohasekai.libbox.*'), isNotNull);
+      expect(
+        uiCoreUse('result.success(io.nekohasekai.libbox.Libbox.version())'),
+        isNotNull,
+      );
+      expect(uiCoreUse('val v = Libbox.checkConfig(text)'), isNotNull);
+      expect(uiCoreUse('BoxApplication.ensureLibbox()'), isNotNull);
+    });
+
+    test('ordinary window code is not', () {
+      expect(uiCoreUse('toBg(call, result, long = true)'), isNull);
+      expect(uiCoreUse('"getCoreVersion", "checkConfig" -> forward()'), isNull);
+      expect(uiCoreUse('val myLibbox = 1'), isNull);
+      final code = stripComments(['// Libbox.setup is never called here']);
+      expect(uiCoreUse(code[0]), isNull);
+    });
+
+    test('the screen client and the probe are service-side names', () {
+      expect(uiServiceSideUse('ScreenCoreSession.ensure()'), isNotNull);
+      expect(uiServiceSideUse('val cc: BoxCommandClient? = null'), isNotNull);
+      expect(uiServiceSideUse('StreamSinks.ccStatusSink = sink'), isNotNull);
+      expect(uiServiceSideUse('ProbeSession.start(config)'), isNotNull);
+      expect(uiServiceSideUse('PProfClient.fetch(path, 5000)'), isNotNull);
+      expect(uiServiceSideUse('L10n.str(ctx, id)'), isNotNull);
     });
   });
 

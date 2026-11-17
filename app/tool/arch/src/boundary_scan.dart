@@ -1,16 +1,15 @@
 // §742 C — чистые функции разбора для tool/arch/boundary_check.dart
 // (вынесены, чтобы test/tool/boundary_check_test.dart мог их импортировать).
 
-final _uiSinksMemberRe = RegExp(r'\bUiSinks\.(\w+)');
-
 // §747 F — имена сервисной стороны (процесс `:bg`), которых файл стороны окна
 // (процесс `:ui`) не касается. Слева от имени не буква: `UiCoreSession` не
 // совпадает с `CoreSession`. Объекты Taildrop — только обращение через точку:
 // типы libbox `TaildropInbox…` клиент ядра окна использует законно.
 final _serviceSideNameRe = RegExp(
-  r'(?<![A-Za-z0-9_])(CoreSession|ServiceCommandClient|BootReceiver|'
+  r'(?<![A-Za-z0-9_])(CoreSession|ScreenCoreSession|ServiceCommandClient|'
+  r'BoxCommandClient|StreamSinks|ProbeSession|PProfClient|BootReceiver|'
   r'NativeCache|AutomationCache|ConfigManager|BoxService|BgMethods|'
-  r'BgLifecycle|BgLogPipe|UiPresence|ProbeGate|AutomationRelay)\b',
+  r'BgCcMethods|BgLifecycle|BgEventPipe|UiPresence|AutomationRelay|L10n)\b',
 );
 final _taildropObjectRe = RegExp(
   r'(?<![A-Za-z0-9_])(Taildrop|TaildropClip|TaildropServiceFiles)\.',
@@ -37,6 +36,20 @@ String? uiServiceSideUse(String codeLine) {
     if (!_constantNameRe.hasMatch(member)) return 'BoxVpnService.$member';
   }
   return null;
+}
+
+final _coreInWindowRe = RegExp(
+  r'\bio\.nekohasekai\.libbox\b|(?<![A-Za-z0-9_])Libbox\.|\bensureLibbox\b',
+);
+
+/// §747 (итерация 2) — нарушение в строке файла стороны окна (уже без
+/// комментариев) или null: окно ядро не грузит вовсе. Любой `import
+/// io.nekohasekai.libbox…`, обращение `Libbox.…` или вызов `ensureLibbox`
+/// в процессе окна означал бы загрузку `libbox.so` и второй среды Go ради
+/// того, что уже есть в `:bg`.
+String? uiCoreUse(String codeLine) {
+  final m = _coreInWindowRe.firstMatch(codeLine);
+  return m == null ? null : 'ядро в процессе окна: ${m.group(0)}';
 }
 
 final _xmlCommentRe = RegExp(r'<!--.*?-->', dotAll: true);
@@ -66,11 +79,6 @@ List<String> manifestProcessViolations(String manifestXml) {
   }
   return out;
 }
-
-/// §745 C — поля `UiSinks.<имя>`, к которым обращается строка.
-List<String> uiSinksMembers(String codeLine) => [
-  for (final m in _uiSinksMemberRe.allMatches(codeLine)) m.group(1)!,
-];
 
 /// Убирает комментарии из строк исходника (Dart / Kotlin): целиковые `//`,
 /// `///`, блоки `/* … */` (в том числе `/** … */` на несколько строк) и

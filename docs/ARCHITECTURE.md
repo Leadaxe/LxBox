@@ -1067,32 +1067,36 @@ MainActivity.kt              # a FlutterActivity, the only component of the :ui 
                              #   ends the :ui process when the window is finished
 editor/SoraEditorPlatformView.kt # §624 — the native code editor (sora-editor) as a platform view behind
                              #   every JSON field; the factory is registered in MainActivity; see “Native code editor”
-vpn/VpnPlugin.kt             # the Flutter plugin: the MethodCallHandler for every /method — handlers that need the
-                             #   service side are forwarded to :bg by name (§747, BgClient → BgMethods);
-                             #   the status/coreLog/lxbox/cc/* EventChannels (it sets and clears the UiSinks);
-                             #   the §122 cc methods (ccConnectScreen/ccUrlTestOutbound/ccGetGroups/…);
-                             #   the statusReceiver and BgEvents receivers; the copy of TunnelState; app-icon encoding
-vpn/UiSinks.kt               # §740 the Flutter-engine EventSinks (coreLogSink + 10 cc*Sink); UI side, written
-                             #   by VpnPlugin and BoxCommandClient only (§747) — see “Process boundary”
+vpn/VpnPlugin.kt             # the Flutter plugin (:ui): the MethodCallHandler for every /method — every handler that
+                             #   needs the service side or the core is forwarded to :bg by name (§747, BgClient);
+                             #   the status EventChannel; the lxbox/coreLog and lxbox/cc/* channels are fed with ready
+                             #   frames of the event channel; the copy of TunnelState; app-icon encoding
+vpn/StreamSinks.kt           # §747 :bg — the sinks of the window data streams (10 × lxbox/cc/*): the core clients write
+                             #   into them, BgEventPipe.Sink turns a value into a frame; set by streamListen/streamCancel
 vpn/UiLaunchRequests.kt      # §740 openConnectOpenRequest / taildropOpenRequest: MainActivity writes, VpnPlugin reads
-vpn/AutomationBridge.kt      # the §047 seam into Dart. AutomationRelay (:bg): a command as a BgEvents broadcast;
-                             #   AutomationBridge (:ui): the Dart channel, sendAutomationBroadcast
+vpn/AutomationBridge.kt      # the §047 seam into Dart (:ui): the Dart channel, sendAutomationBroadcast
+vpn/AutomationRelay.kt       # §747 :bg — a native automation command / the native Stop as an event-channel frame
 vpn/ProcessRole.kt           # §747 which process this is: :ui, :bg or unnamed (an error)
 vpn/BgControlProvider.kt     # §747 the :ui → :bg channel: ContentProvider.call() with a reply, in :bg
 vpn/BgMethods.kt             # §747 the service half of the VpnPlugin handlers (settings, tunnel state, stop/quit,
-                             #   core calls, Path MTU, Taildrop, openconnect)
-vpn/BgClient.kt              # §747 the caller in :ui: the ordered lane, threads for long calls, forward()
-vpn/BgCodec.kt               # §747 MethodChannel values ↔ ByteArray (StandardMessageCodec); BgError
-vpn/BgEvents.kt              # §747 the :bg → :ui broadcasts and the tunnel snapshot on the wire
-vpn/BgLogPipe.kt             # §747 the core-log stream through a pipe: BgLogPipe (:bg), UiLogPipeReader (:ui)
-vpn/BgLifecycle.kt           # §747 ending :bg when nothing needs it (BgLifecycle, bgMayExit), UiPresence, ProbeGate
+                             #   Path MTU, Taildrop, openconnect)
+vpn/BgCcMethods.kt           # §747 the handlers that go to the core: the cc* calls of the screen client, the probe,
+                             #   formatConfig / checkConfig / getCoreVersion
+vpn/BgClient.kt              # §747 :ui — the ordered lane of calls, long calls answered by a frame, forward(),
+                             #   the reader of the event channel
+vpn/BgCodec.kt               # §747 MethodChannel values ↔ ByteArray (StandardMessageCodec), the ready EventChannel
+                             #   envelope, BgError; EventFrames — the frame of the event channel
+vpn/BgEvents.kt              # §747 the tunnel snapshot on the wire (BROADCAST_STATUS, tunnelSnapshot), launch extras
+vpn/BgEventPipe.kt           # §747 :bg — the event channel to the window: one pipe, one writer thread, PipeQueues
+                             #   (replies kept, snapshots coalesced, events and log bounded), BgEventPipe.Sink
+vpn/BgLifecycle.kt           # §747 ending :bg when nothing needs it (BgLifecycle, bgMayExit); UiPresence
 vpn/ConfigFile.kt            # §747 the config file: atomic write, read — used by both processes
 vpn/AutomationCache.kt       # §740 the single access point of the lxbox_automation prefs file
-vpn/BoxCommandClient.kt      # §122 — the UI↔core control channel through the libbox CommandClient, UI role (§745):
+vpn/BoxCommandClient.kt      # §122 — the screen client of the core through the libbox CommandClient (§745), in :bg (§747):
                              #   statusClient/screenClient/profilerClient; the addCommand subscription plus the write* commands
                              #   (§163/§164, the setStatusInterval power model). It replaced Clash HTTP
-vpn/UiCoreSession.kt         # §745 the holder of the UI-role client: ensure() on Started, closed on
-                             #   Stopping / Stopped / on engine detach
+vpn/ScreenCoreSession.kt     # §745/§747 the holder of the screen client: ensure() when Started and the window is attached;
+                             #   closed first when the command server closes, and when the window detaches
 vpn/ServiceCommandClient.kt  # §745 the service-role client (held by CoreSession): openconnect, the notification
                              #   node label, Taildrop sending and saving
 vpn/CommandClientShared.kt   # §745 what both clients share: the lxbox-cc lane, the no-op handler, the emitters,
@@ -1107,8 +1111,8 @@ vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface
 vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
 vpn/BoxApplication.kt        # Application, runs in both processes (§747): onCreate = initCommon, then initServiceSide
-                             #   in :bg or initUiSide in :ui; ensureLibbox() — Libbox.setup, lazy in :bg (full setup),
-                             #   runtime only in :ui; singletons wifiObserver (:ui), wifiStateCache
+                             #   in :bg or initUiSide in :ui; ensureLibbox() — Libbox.setup, lazy, :bg only;
+                             #   singletons wifiObserver (:ui), wifiStateCache
 vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
                              #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
@@ -1123,8 +1127,8 @@ vpn/VpnStatus.kt             # the Stopped/Starting/Started/Stopping enum (the n
 vpn/BootReceiver.kt          # the BOOT_COMPLETED auto-start plus the boxvpn_boot mirror (every access through prefs())
 vpn/NativeCache.kt           # §707 Kotlin's own cache, the lxbox_native_cache prefs file
 vpn/VpnWatchdog.kt           # §428 the dead-hand alarm that restarts a tunnel whose process died
-vpn/ProbeSession.kt          # §236 a headless probe in :ui: a temporary CommandServer plus a tun-less config while the
-                             #   VPN is off; agreed with :bg through ProbeGate (§747)
+vpn/ProbeSession.kt          # §236 a headless probe (:bg): a temporary CommandServer plus a tun-less config while the
+                             #   VPN is off
 vpn/Taildrop*.kt             # §707 Taildrop: sending, receiving into Downloads, notifications, service files,
                              #   the Share and Send-clipboard activities (TaildropClip holds the clipboard feeds)
 vpn/StopTrace.kt · SerialLane.kt · CacheDbLockRetry.kt · L10n.kt · LocaleChangedReceiver.kt ·
@@ -1619,7 +1623,7 @@ HomeController/UI                    Sing-box (Go goroutines)
        │                              BoxService.writeDebugMessage:
        │                                ├─ strip ANSI escapes
        │                                ├─ skip TRACE/DEBUG (volume reduction)
-       │                                └─ UiSinks.coreLogSink.success  ← main thread post
+       │                                └─ BgEventPipe.logLine  (:bg → pipe → :ui, §747)
        │                                       │
        │                              EventChannel "lxbox/coreLog"
        │                                       │
@@ -1652,8 +1656,7 @@ HomeController/UI                    Sing-box (Go goroutines)
 ```
 
 **Key design rules:**
-- `UiSinks.coreLogSink` (a volatile field, §740; it lived in the `BoxVpnService` companion before) is fed from `BoxService.writeDebugMessage`, which the core calls from any thread; `VpnPlugin` sets and clears the sink.
-- `EventChannel.EventSink.success()` requires the **main thread**, so we dispatch through `coreLogMainHandler`.
+- The core calls `BoxService.writeDebugMessage` from any thread; the line goes into the bounded log queue of `BgEventPipe` (only while Dart listens to `lxbox/coreLog`) and reaches the window as a frame of the event channel, in batches of up to 200 lines — see “Process boundary”.
 - Forwarding is gated by the `Libbox.setup(SetupOptions{debug: ...})` flag (read from the `BootReceiver` prefs).
 
 ### 7. The detour dependency graph (§355)
@@ -1739,10 +1742,10 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 │ BoxApplication : Application            │  │ VpnPlugin : MethodCallHandler      │
 │  • onCreate (registered in Manifest)    │  │  • setMethodCallHandler            │
 │  • §334 CrashRecovery ← STRICTLY BEFORE setup │ • its own statusSink (status_events) │
-│    one event, two subscribers: the cleanup here, │ • sets/clears UiSinks (coreLog,   │
-│    the §316 banner in Dart, from the archive │    10 × lxbox/cc/*) — §740          │
+│    one event, two subscribers: the cleanup here, │ • coreLog + 10 × lxbox/cc/*: frames │
+│    the §316 banner in Dart, from the archive │    of the :bg event channel (§747)  │
 │  • ensureLibbox(): Libbox.setup, lazy   │  │ • registers AutomationBridge       │
-│    in :bg, runtime only in :ui (§747)   │  │ • getVpnStatus asks :bg for the    │
+│    and only in :bg (§747)               │  │ • getVpnStatus asks :bg for the    │
 │  • Singleton WifiNetworkObserver (:ui)  │  │   tunnel snapshot (§747)           │
 │  • Singleton WifiStateCache (§569)      │  │ • forwards service-side handlers   │
 │  • §747 onCreate runs one side only     │  │   to BgMethods through BgClient    │
@@ -1778,144 +1781,154 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 
 **The app runs as two named processes** (§747): `:ui` — the window (`MainActivity`, the Flutter
 engine, `VpnPlugin`), and `:bg` — everything of the service side (`BoxVpnService` with the core,
-the tile, auto-start, the watchdog, the receivers, AppFunctions, the native Taildrop and
-automation windows, `BgControlProvider`). Every manifest component carries `android:process`
-explicitly (an `activity-alias` has no such attribute and lives in the process of its target);
-library components are redeclared in the app manifest with `tools:node="merge"`. There is no
-unnamed default process: a component without `android:process` fails the Android build (a check
-of the merged manifest in `app/android/app/build.gradle.kts`), and `BoxApplication` started in
-an unnamed process runs the steps of neither side and logs an error.
+both core clients, the probe, the tile, auto-start, the watchdog, the receivers, AppFunctions,
+the native Taildrop and automation windows, `BgControlProvider`). Every manifest component
+carries `android:process` explicitly (an `activity-alias` has no such attribute and lives in the
+process of its target); library components are redeclared in the app manifest with
+`tools:node="merge"`. There is no unnamed default process: a component without
+`android:process` fails the Android build (a check of the merged manifest in
+`app/android/app/build.gradle.kts`), and `BoxApplication` started in an unnamed process runs the
+steps of neither side and logs an error.
 
 Why two: a loaded library cannot be unloaded from a live process, only the end of the process
 returns its memory. With the VPN on and the window closed only `:bg` lives; with the VPN off and
-the window closed nothing does. While the window is open the two processes together are about
-70 MB heavier than one (the `:ui` process loads `libbox.so` for its core client).
+the window closed nothing does.
+
+**The core (`libbox.so`) is loaded in `:bg` only.** The window never loads it: it has no core
+client, no probe, no `Libbox.*` call. Everything the screen shows comes from `:bg` as ready data
+over the event channel, and every call that touches the core is forwarded to `:bg`.
 
 | Side | Process | Classes |
 |---|---|---|
-| **Service** | `:bg` | `BoxVpnService`, `BoxService`, `PlatformInterfaceWrapper`, `DefaultNetworkMonitor`, `ServiceNotification`, `BootReceiver`, `VpnWatchdog`, `LxBoxTileService`, `QuickShortcuts`, `LxBoxIntentReceiver`, `automation/` (receivers and edit activities), `appfunctions/`, `Taildrop*` (the inbox, notifications, `TaildropShareActivity`, `TaildropClipActivity`), `ConfigManager`, `NativeCache`, `AutomationCache`, `L10n` (native surfaces), `PProfClient` |
-| **Service** — the seam | `:bg` | `BgControlProvider`, `BgMethods`, `BgLogPipe`, `UiPresence`, `ProbeGate`, `BgLifecycle`, `AutomationRelay`, `ServiceCommandClient` and its holder `CoreSession` |
-| **UI** | `:ui` | `MainActivity`, `VpnPlugin`, `UiSinks`, `UiLaunchRequests`, `AutomationBridge`, the Sora editor (`editor/`), `WifiNetworkObserver` / `WifiHistoryBridge`, `LanTransferSender`, `ProbeSession` |
-| **UI** — the seam | `:ui` | `BgClient`, `UiLogPipeReader`, `BoxCommandClient` and its holder `UiCoreSession` |
-| **Both** | | `BoxApplication` (steps split by `ProcessRole`), `ProcessRole`, `TunnelState` (the owner in `:bg`, a copy in `:ui`), `BgCodec`, `BgEvents`, `ConfigFile`, `PathMtuProbe` (the channel in `:ui`, the probe in `:bg`), `WifiInfoReader` / `WifiStateCache`, `CommandClientShared.kt` |
+| **Service** | `:bg` | `BoxVpnService`, `BoxService`, `PlatformInterfaceWrapper`, `DefaultNetworkMonitor`, `ServiceNotification`, `BootReceiver`, `VpnWatchdog`, `LxBoxTileService`, `QuickShortcuts`, `LxBoxIntentReceiver`, `automation/` (receivers and edit activities), `appfunctions/`, `Taildrop*` (the inbox, notifications, `TaildropShareActivity`, `TaildropClipActivity`), `ConfigManager`, `NativeCache`, `AutomationCache`, `L10n`, `PProfClient`, `ProbeSession` |
+| **Service** — the core clients | `:bg` | `ServiceCommandClient` (holder `CoreSession`), `BoxCommandClient` (holder `ScreenCoreSession`), `CommandClientShared.kt`, `StreamSinks` |
+| **Service** — the seam | `:bg` | `BgControlProvider`, `BgMethods`, `BgCcMethods`, `BgEventPipe`, `UiPresence`, `BgLifecycle`, `AutomationRelay` |
+| **UI** | `:ui` | `MainActivity`, `VpnPlugin`, `UiLaunchRequests`, `AutomationBridge`, the Sora editor (`editor/`), `WifiNetworkObserver` / `WifiHistoryBridge`, `LanTransferSender` |
+| **UI** — the seam | `:ui` | `BgClient` (calls and the reader of the event channel) |
+| **Both** | | `BoxApplication` (steps split by `ProcessRole`), `ProcessRole`, `TunnelState` (the owner in `:bg`, a copy in `:ui`), `BgCodec` / `EventFrames`, `BgEvents`, `ConfigFile`, `PathMtuProbe` (the channel in `:ui`, the probe in `:bg`), `WifiInfoReader` / `WifiStateCache` |
 
 **`BoxApplication` by process.** `onCreate` runs in every process, so each step runs on its own
 side only (`ProcessRole.role`): in `:bg` — `QuickShortcuts.refresh`, `Taildrop.sweepInboxesAsync`,
-`TaildropClip.syncOnProcessStart`, `BgLifecycle.install`; in `:ui` — `WifiNetworkObserver`, the
-log receivers of the UI core client and a background `Libbox.setup`. A foreign step is harmful,
-not just wasted: `CrashRecovery` in the window would delete the `cache.db` of a running core.
-`Libbox.setup` is `BoxApplication.ensureLibbox()`: in `:bg` it is **lazy** — called by
-`BoxService` before the command server starts (and by `pprofProfile`), so a `:bg` process raised
-for a setting, the tile or a receiver does not load the core; it does the full setup (locale,
-`debug`, the oom-killer and memory limit, `crashReportSource`, `CrashRecovery`, the stored quic-go
-knobs). In `:ui` it is the runtime only: no crash file, no oom-killer, no `CrashRecovery`.
+`TaildropClip.syncOnProcessStart`, `BgLifecycle.install`; in `:ui` — `WifiNetworkObserver` and
+one early call that starts `:bg` ahead of the engine. `Libbox.setup` is
+`BoxApplication.ensureLibbox()`, `:bg` only (it throws in `:ui`) and **lazy** — called by
+`BoxService` before the command server starts and by the handlers that need the core without a
+tunnel (the probe, `formatConfig`, `checkConfig`, `pprofProfile`, the first `getCoreVersion` of
+an installed build — the version string is then cached in `lxbox_native_cache`). A `:bg` process
+raised for a setting, the tile or a receiver does not load the core. One exception: a non-empty
+crash file at `:bg` start loads the core at once, so that `Libbox.setup` archives the report for
+the Dart banner and `CrashRecovery` cleans the caches.
 
 #### `:ui` → `:bg`: a call with a reply
 
-One mechanism — `ContentResolver.call()` on `BgControlProvider` (not exported). It is
-synchronous, returns a reply and starts `:bg` when the process is not there. The method name is
-the `MethodChannel` method name; the arguments and the result are `MethodChannel` values encoded
-by `StandardMessageCodec` into a `ByteArray` inside the `Bundle` (`BgCodec`), so the types of the
-Dart contract survive the boundary with no hand-written serialization. A refusal the Dart side
-saw as a `PlatformException` travels as `BgError(code, message)`.
+One mechanism — `ContentResolver.call()` on `BgControlProvider` (not exported); it starts `:bg`
+when the process is not there. The method name is the `MethodChannel` method name; the
+arguments and the result are `MethodChannel` values encoded by `StandardMessageCodec`
+(`BgCodec`), so the types of the Dart contract survive the boundary with no hand-written
+serialization. A refusal the Dart side saw as a `PlatformException` travels as
+`BgError(code, message)`. The handler bodies live in `BgMethods` (settings, tunnel state,
+commands, Taildrop, openconnect, Path MTU) and `BgCcMethods` (everything that goes to the core:
+the `cc*` calls of the screen client, the probe, `formatConfig`, `checkConfig`,
+`getCoreVersion`); `VpnPlugin` forwards by name (`BgClient.forward`), and the names and reply
+shapes of the Dart contract are unchanged. **No handler that runs in `:ui` touches the core.**
 
-The handlers of `VpnPlugin` that need the service side live in `BgMethods`; `VpnPlugin` forwards
-by name (`BgClient.forward`), and the names and reply shapes of the Dart contract are unchanged.
-Forwarded: every read and write of the settings (`boxvpn_boot`, `lxbox_native_cache`,
-`lxbox_automation` — **`:bg` is the single owner of the three `SharedPreferences` files**),
-`stopVPN` and `quitApp` (the wait for `Stopped` lives where the status is set), `getVpnStatus`,
-`getTunnelUptimeMs`, `getCurrentSessionAllowBypass`, `isForeignVpnActive`, the commands to the
-service (`startVPN` after the consent, `startVpnHeadless`, `reloadVPN`, `resetNetwork`,
-`forceStopVPN`, `clearDnsCache`), the notification labels, `setCoreLogsVerbose`, `setQuicKnob`,
-`setMemoryLimit`, `setAppLanguage`, `getMemoryInfo` (the memory of `:bg` — the core is there),
-`pprofProfile`, the Path MTU probe (it needs the service's `protect`), Taildrop (save, send,
-clip state, service stats, the sweep after a tag change), and the five openconnect calls.
+Two kinds of call, both sent from one ordered lane of `BgClient` (never from the main thread),
+which keeps the order of the Dart calls (`setHasTun` → `startVPN`, `saveConfig` → `reloadVPN`):
 
-- **Threads.** `BgClient.call` is never made from the main thread. Fast calls go through one
-  ordered lane (`BgClient.onLane`), which keeps the order of the Dart calls: `setHasTun` →
-  `startVPN`, `saveConfig` → `reloadVPN`. Long calls (`stopVPN`, `pprofProfile`, Taildrop
-  send/save, openconnect, Path MTU, `getMemoryInfo`) each take a thread of their own
-  (`BgClient.onLong`). In `:bg` a call runs on a Binder pool thread and holds it until it
-  returns.
-- **Large data does not go through Binder** (the limit is about 1 MB). The config is written and
-  read by `:ui` itself as a file (`ConfigFile`, atomic: a temporary file plus rename); after a
-  write it calls `configSaved` and `:bg` drops the cache of `ConfigManager`. A pprof profile comes
-  back as a file in `cacheDir/bg-xfer`; Taildrop bytes above 256 KB go there too.
-- **Stay in `:ui`:** every `cc*` call of the UI core client, `getCoreVersion`, `formatConfig`,
-  `checkConfig`, the app lists, the system settings screens, `ProbeSession`.
-- `MainActivity` (quick actions from the tile and shortcuts, the consent flow) asks `:bg` the
-  same way: `getHasTun`, `tunnelSnapshot`, `startVpnService`, `stopVpnNative`, `l10nString`
-  (a toast in the app language), `clearStaleNotification`, `retryShortcutRelabel`.
+- **fast** — synchronous, the reply comes back in the same call; in `:bg` it runs on a Binder
+  pool thread. Settings, commands to the service, subscriptions, start/stop of streams, pause
+  and resume (`ccPauseClients`, `ccResumeClients`, `ccSetStatusFast`).
+- **long** — `invokeAsync`: the call only starts the method on a thread of `:bg` and returns at
+  once; the reply arrives as a `!reply` frame of the event channel. `stopVPN`, every blocking
+  gRPC to the core (`ccUrlTestOutbound`, `ccGetGroups`, …), the probe, `checkConfig`,
+  `pprofProfile`, Taildrop, openconnect, Path MTU. A hundred parallel measurements occupy
+  neither the lane nor the Binder pool (15 threads). With no event channel the caller falls
+  back to a synchronous call on a thread of its own.
 
-#### `:bg` → `:ui`: events
+**Large data does not go through Binder** (the limit is about 1 MB): arguments and synchronous
+replies above 256 KB travel as a file in `cacheDir/bg-xfer` (a config sent for a check), replies
+of long calls travel through the pipe and have no such limit. The saved config is written and
+read by `:ui` itself as a file (`ConfigFile`, atomic: a temporary file plus rename); after a
+write it calls `configSaved` and `:bg` drops the cache of `ConfigManager`.
 
-- **`BROADCAST_STATUS` carries the whole tunnel snapshot**: `status`, `revoked`,
-  `startedElapsedMs`, `sessionAllowBypass`, plus an order mark (`epoch` — the start of the owner
-  process, `seq` — the write number in it). `TunnelState` in `:bg` is the single owner
-  (§742); `:ui` keeps a copy written only by the status receiver and by the snapshot request
-  (`tunnelSnapshot`) made when the engine attaches and on every `getVpnStatus` — the broadcast is
-  not sticky, a window opened over a running tunnel would otherwise see `Stopped`. The copy takes
-  a snapshot only when its mark is newer (`TunnelState.acceptMirror`), so a call reply and a
-  broadcast cannot overwrite each other out of order. A changed `epoch` means `:bg` was
-  restarted: `VpnPlugin` announces itself again and reopens the log stream.
-- **Openconnect**: `:bg` sends `BG_OPENCONNECT_CHANGED` with no data, `:ui` fetches the snapshot
-  with `ccGetOpenConnectStatus` and hands it to its sink. Form values (passwords, codes) travel
-  only as call arguments — never in a broadcast, never in the log.
-- **Automation and the native Stop**: `AutomationRelay` in `:bg` sends `BG_AUTOMATION_ACTION`
-  (the name plus the arguments); the receiver in `:ui` is registered while the engine is
-  attached and passes the command to `AutomationBridge` (the Dart `MethodChannel`). With no
-  window process the command is skipped with a log line, as before.
-- **The core log and the application-log lines of the service**: a stream through a pipe. When
-  Dart subscribes to `lxbox/coreLog`, `VpnPlugin` creates the pipe, keeps the read end
-  (`UiLogPipeReader`) and hands the write end to `:bg` (`openLogPipe` → `BgLogPipe`). Lines are
-  length-prefixed frames; the reader delivers them to the sink in batches of up to 200 and reads
-  the next batch only after the previous one is delivered. The gate “nobody listens — do not
-  format” stays the first line of `BoxService.writeDebugMessage` (`BgLogPipe.active`); the queue
-  in `:bg` is bounded (4096, extra lines are dropped), so a frozen window never blocks a core
-  thread. On unsubscribe (`closeLogPipe`), or when `:ui` dies (the write gets `EPIPE`), writing
-  stops. Warnings of the UI core client are written by the UI side itself
-  (`UiSinks.appLogWarning`).
-- **The window's presence**: on engine attach `VpnPlugin` passes a Binder token (`uiAttached`);
-  `:bg` links to its death (`UiPresence`) and so learns about a killed `:ui` without polling. On
-  detach it calls `uiDetached`.
+**`:bg` is the single owner of the three `SharedPreferences` files** (`boxvpn_boot`,
+`lxbox_native_cache`, `lxbox_automation`); the window reads and writes settings by calls only.
+`MainActivity` (quick actions from the tile and shortcuts, the consent flow) asks `:bg` the same
+way: `getHasTun`, `tunnelSnapshot`, `startVpnService`, `stopVpnNative`, `l10nString`,
+`clearStaleNotification`, `retryShortcutRelabel`.
+
+#### `:bg` → `:ui`: the event channel
+
+One pipe carries everything the window receives besides call replies: the core log, the streams
+of the core clients (status, outbounds, groups, connections, DNS queries, Tailscale, Tailscale
+ping, the connection test, the Taildrop inbox, openconnect), the replies of long calls and the
+automation commands. On engine attach `VpnPlugin` creates the pipe, keeps the read end and
+hands the write end to `:bg` together with a Binder token (`uiAttached`): `:bg` links to the
+token's death (`UiPresence`) and so learns about a killed `:ui` without polling.
+
+- **A frame** is a stream name and a payload (`EventFrames`). The name of a Dart stream is the
+  name of its `EventChannel`. Its payload is the ready success envelope of that channel, built
+  in `:bg` (`BgCodec.encodeEventEnvelope`): the window passes the bytes to the engine as they are
+  (`BinaryMessenger.send`) — a snapshot of the groups of a thousand nodes is encoded once and
+  never decoded in the window. Service frames (`!reply`, `!automation`) are decoded by the
+  window.
+- **Sinks in `:bg`.** The core clients write into `StreamSinks` fields exactly as they wrote into
+  Flutter `EventSink`s; the sink is `BgEventPipe.Sink`. A field is non-null only while Dart
+  listens: `onListen` / `onCancel` of every `EventChannel` reach `:bg` as `streamListen` /
+  `streamCancel`, so the gate “nobody listens — do not build” of the emitters is unchanged and
+  the core does not send streams nobody reads. `BoxService.writeDebugMessage` checks
+  `BgEventPipe.logActive` first.
+- **One writer thread, four queues** (`PipeQueues`): replies and automation commands are never
+  dropped; snapshots are coalesced per stream — the last one wins; event streams (DNS queries,
+  connection-test steps) and the log are bounded, the extra is dropped; log lines go in batches
+  of up to 200. Values are encoded by the writer thread right before the write, so a superseded
+  snapshot is never encoded and neither a core thread nor the main thread of `:bg` waits. A
+  window frozen in the background does not read: the writer blocks on `write`, snapshots replace
+  each other, the queues stay bounded — `:bg` neither hangs nor grows.
+- **The reader** (`BgClient`) reads the next frame only after the previous one is delivered on
+  the main thread. When the pipe ends (`:bg` is gone) the pending long calls fail.
+- **Automation and the native Stop**: `AutomationRelay` in `:bg` sends an `!automation` frame;
+  `VpnPlugin` passes it to `AutomationBridge` (the Dart `MethodChannel`). With no window the
+  command is skipped with a log line, as before.
+
+**`BROADCAST_STATUS` stays a broadcast** and carries the whole tunnel snapshot: `status`,
+`revoked`, `startedElapsedMs`, `sessionAllowBypass`, plus an order mark (`epoch` — the start of
+the owner process, `seq` — the write number in it). `TunnelState` in `:bg` is the single owner
+(§742); `:ui` keeps a copy written only by the status receiver and by the snapshot request
+(`tunnelSnapshot`, on engine attach and on every `getVpnStatus` — the broadcast is not sticky).
+The copy takes a snapshot only when its mark is newer (`TunnelState.acceptMirror`). A changed
+`epoch` means `:bg` was restarted: `VpnPlugin` opens the event channel again and repeats its
+subscriptions. Nothing in the window depends on the copy except the reply of `getVpnStatus`
+when the call fails.
 
 **Still Intents/broadcasts, unchanged:** the commands inside `:bg` (`ACTION_STOP`,
 `ACTION_FORCE_STOP`, `ACTION_RELOAD`, `ACTION_RESET_NETWORK`, `ACTION_CLEAR_DNS_CACHE`,
 `ACTION_RECONNECT`, `ACTION_UPDATE_NOTIFICATION`, `ACTION_CLEAR_STALE_NOTIFICATION`), the
-notification `PendingIntent`s, the `VpnWatchdog` alarm, the outgoing automation broadcasts; the
-`command.sock` socket and the files (`singbox_config.json`, `cache.db`, …) are shared by path.
+notification `PendingIntent`s, the `VpnWatchdog` alarm, the outgoing automation broadcasts.
 
-#### Two core clients, two holders (§745)
+#### Two core clients, two holders (§745) — both in `:bg`
 
-Each side owns its own client of `command.sock`:
-
-| | Service role (`:bg`) | UI role (`:ui`) |
+| | Service client | Screen client |
 |---|---|---|
 | Class | `ServiceCommandClient` | `BoxCommandClient` |
-| Holder | `CoreSession` (`client`, `isUp`) | `UiCoreSession` (`client`, `isUp`, `ensure()`, `closeOffMain()`) |
-| Created by | `BoxService`, after `startCommandServer()` and `Started` | the UI side: `UiCoreSession.ensure()` creates it and starts the status stream when there is no client and the copy of `TunnelState` says `Started` |
-| Does | the openconnect status subscription, the “Sign-in required” notification, the SSO listener and the challenge answers; the notification node label on a start without the window; Taildrop sending and saving | the status stream, the screen and profiler clients, ping, Tailscale status and ping, the Taildrop inbox stream, the connection test, every unary `cc*` call of `VpnPlugin` |
-| Callers | `BoxService`, `Taildrop*`, `BgMethods` (openconnect, Taildrop) | `VpnPlugin` only |
+| Holder | `CoreSession` (`client`, `isUp`) | `ScreenCoreSession` (`client`, `ensure()`, `closeForCoreStop()`, `closeOffThread()`) |
+| Created | by `BoxService`, after `startCommandServer()` and `Started` | by `ensure()` when the tunnel is `Started` **and** the window is attached (`UiPresence`) |
+| Does | the openconnect status subscription, the “Sign-in required” notification, the SSO listener and the challenge answers; the notification node label on a start without the window; Taildrop sending and saving | the status stream, the screen and profiler clients, ping, Tailscale status and ping, the Taildrop inbox stream, the connection test, every unary `cc*` call |
+| Callers | `BoxService`, `Taildrop*`, `BgMethods` | `BgCcMethods` |
 
-`VpnPlugin` brings the UI client in line with the copy of the tunnel state after every accepted
-snapshot (`syncUiClient`): `Started` — `ensure()`, on the main thread, before the event goes to
-Dart, so the client exists by the first `cc*` call; `Stopping` and `Stopped` — `closeOffMain()`
-(the reference is taken away at once, `shutdownAll` runs on a thread of its own). Every UI-role
-`cc*` handler that starts or reads something also calls `ensure()`; handlers that only stop,
-pause or cancel take the existing client and never create one. The client is closed in
-`onDetachedFromEngine` too. There is **no “before close” listener** any more: the service does
-not wait for the UI client, because the core closes the command server with live clients of
-another process (measured on an emulator: 142 ms, 273 ms with the client process frozen). Without
-a Flutter engine there is no UI client. The `lxbox-cc` lane (`CommandLane`) is one per process.
+`ScreenCoreSession.ensure()` is called by `BoxService` after `Started`, by `UiPresence` when the
+window attaches, and by every `cc*` handler that starts or reads something (handlers that only
+stop, pause or cancel take the existing client). Without a window there is no screen client: the
+status stream does not tick on a start from the tile, on auto-start or from AppFunctions, and
+when the window detaches or dies the client is closed. **Closing order inside the process**
+(`BoxService.closeCommandServerAtomic`): the screen client is closed synchronously and no new one
+may be created until the next tunnel start (`closeForCoreStop` — the status can still be
+`Started` there) → the service client → the command server. No client reconnects to a closing
+server. The `lxbox-cc` lane (`CommandLane`) is one for both clients.
 
-#### The probe without a tunnel (`ProbeSession`)
-
-It stays in `:ui` (up to 100 parallel measurements; the Binder pool of `:bg` is 15 threads), and
-it starts a core of its own on the same `command.sock`. So the two processes agree through
-`ProbeGate` in `:bg`: before a start `:ui` calls `probeBegin` — `:bg` refuses unless the tunnel is
-`Stopped`, otherwise remembers “a probe is running”; before starting its own command server
-`BoxService`, if a probe is running, sends `BG_STOP_PROBE` and waits for `probeEnd` for at most
-2 s. A dead `:ui` clears the mark (`UiPresence`).
+**The probe without a tunnel** (`ProbeSession`) runs in `:bg` next to the service, so its gate is
+in-process again (`CoreSession.isUp || TunnelState.status != Stopped`), and `BoxService` stops it
+before starting its own command server.
 
 #### Ending a process that is not needed
 
@@ -1926,48 +1939,56 @@ it starts a core of its own on the same `command.sock`. So the two processes agr
 - **`:bg`**: after an event that removes a reason to live (the service is destroyed, the window
   is closed, a native window is destroyed, a call without a window has finished) `BgLifecycle`
   schedules a check and, if `bgMayExit` holds, flushes the settings files and ends the process.
-  Reasons to live: the tunnel is not `Stopped` or the service instance exists; the window
-  process is attached; an open native window of `:bg`; a bound tile; a call in progress; a
-  Taildrop transfer or inbox sweep; “VPN desired” with a stopped tunnel (the watchdog is about to
-  restart it); a running probe. The tile, auto-start, the watchdog alarm, automation commands and
-  the window's calls start a new `:bg` when needed.
+  Reasons to live: the tunnel is not `Stopped` or the service instance exists; a start command
+  was just sent and the service is not created yet; the window process is attached; an open
+  native window of `:bg`; a bound tile; a call in progress; a Taildrop transfer or inbox sweep;
+  “VPN desired” with a stopped tunnel (the watchdog is about to restart it); a running probe.
+  The tile, auto-start, the watchdog alarm, automation commands and the window's calls start a
+  new `:bg` when needed.
 - **`quitApp`**: `:bg` stops the tunnel, drops “VPN desired” and the watchdog alarm, then ends;
   `:ui` closes its activities and ends. Settings read once per process (`core_logs_enabled`,
   `memory_limit`) therefore apply from the next tunnel start.
 
+**A start on its way.** Between `startForegroundService` and `onStartCommand` the tunnel is still
+`Stopped` and nothing receives `ACTION_STOP`. A Stop that arrives there marks the start as
+cancelled (`BoxVpnService` companion): `onStartCommand` still calls `startForeground` (the
+promise to the system) and then stops itself without raising the tunnel. Every
+`startForegroundService` is answered by `startForeground`, including the stale-notification
+bounce that reaches a service already running.
+
 **Rules for new code (normative):**
-1. Flutter engine objects (`EventSink`, `MethodChannel`) live only in `UiSinks` / `AutomationBridge`,
-   never on the service side.
-2. The service side does not reference `VpnPlugin`, `UiSinks`, `UiCoreSession` or
-   `AutomationBridge`; it reaches the window with a `BgEvents` broadcast (no secrets in it) or
-   through the log pipe.
-3. The UI side does not reference service-side objects (`CoreSession`, `BootReceiver`,
-   `NativeCache`, `AutomationCache`, `Taildrop*`, `ConfigManager`, `BoxService`, `BgMethods`, the
-   non-constant members of `BoxVpnService`): in `:ui` they would be an empty copy. It reaches the
-   service with `BgClient` (a method of `BgMethods`), never from the main thread.
-4. New service state the UI needs goes through the status broadcast, a `BgMethods` call or the
-   CommandClient — not a static field.
+1. The core is loaded in `:bg` only. Window-side files do not import `io.nekohasekai.libbox`,
+   do not call `Libbox.*` or `ensureLibbox()`.
+2. The service side does not reference `VpnPlugin` or `AutomationBridge`; it reaches the window
+   through the event channel (`StreamSinks` for data streams, `AutomationRelay` for commands).
+3. The UI side does not reference service-side objects (`CoreSession`, `ScreenCoreSession`,
+   `BoxCommandClient`, `StreamSinks`, `ProbeSession`, `BootReceiver`, `NativeCache`,
+   `AutomationCache`, `Taildrop*`, `ConfigManager`, `BoxService`, `BgMethods`, `L10n`, the
+   non-constant members of `BoxVpnService`): in `:ui` they would be an empty copy. It reaches
+   the service with `BgClient`, never from the main thread; a handler that can block is
+   forwarded as a long call.
+4. New data the screen needs from the core is a stream in `StreamSinks` (a snapshot or an event
+   stream) or a `BgCcMethods` call — not a static field and not a new broadcast.
 5. Prefs go through the file's single access point (`BootReceiver.prefs()`, `NativeCache`,
    `AutomationCache`), and only in `:bg`.
 6. A new `BoxApplication.onCreate` step goes into the function of its side.
 7. A new manifest component carries `android:process`; a plugin that brings its own component is
    redeclared in the app manifest with `tools:node="merge"`.
+8. No secrets in broadcasts or logs: openconnect form values travel only as call arguments.
 
 **The rules are enforced** by `app/tool/arch/boundary_check.dart` (the `checks` CI job, §742):
-no `VpnPlugin` references outside `VpnPlugin.kt`/`MainActivity.kt`, `EventSink` fields only in
-the allowed files, `getSharedPreferences(` only in the three access points; since §745
-`UiCoreSession` is named only by itself, `VpnPlugin.kt` and `BoxApplication.kt`; since §747 the
-UI files touch no service-side object (`kt-ui-service-side`), `UiSinks` is used only by
-`VpnPlugin.kt`, `BoxCommandClient.kt` and `BoxApplication.initUiSide`, `AutomationBridge` only by
-itself and `VpnPlugin.kt`, and every component of the source manifest carries `:ui` or `:bg`
-(`manifest-process`). The merged manifest is checked by the Android build. The same checker
-guards the Dart layer direction and freezes the list of UI files that call the bridge directly.
-An exception is added in the checker itself, with a reason.
+no `VpnPlugin` references outside `VpnPlugin.kt`/`MainActivity.kt`, `EventSink` types only in the
+allowed files, `getSharedPreferences(` only in the three access points; since §747 the UI files
+touch no service-side object (`kt-ui-service-side`) and nothing of the core (`kt-ui-no-core`),
+`AutomationBridge` is named only by itself and `VpnPlugin.kt`, and every component of the source
+manifest carries `:ui` or `:bg` (`manifest-process`). The merged manifest is checked by the
+Android build. The same checker guards the Dart layer direction and freezes the list of UI files
+that call the bridge directly. An exception is added in the checker itself, with a reason.
 
-**Known limits.** `:ui` does not watch `:bg` for death: if `:bg` is killed while the tunnel is
-up, the window keeps its last snapshot until the next `getVpnStatus` (Dart asks on resume), which
-starts a new `:bg` and returns `Stopped`. The window's own `Libbox` locale follows the app
-language setting but not a change of the system locale while the window is open.
+**Known limits.** `:ui` does not watch `:bg` for death beyond the end of the event channel: if
+`:bg` is killed while the tunnel is up, pending long calls fail at once, but the window keeps its
+last tunnel snapshot until the next `getVpnStatus` (Dart asks on resume), which starts a new
+`:bg` and returns `Stopped`.
 
 ### Structured Concurrency
 
@@ -1990,8 +2011,8 @@ BoxService (per instance, recreated with every new BoxVpnService)
 ### Channel Contract
 
 The three Flutter–Android channels below are registered in `VpnPlugin.kt` (the `lxbox/cc/*`
-EventChannels too); the sinks of `lxbox/coreLog` and `lxbox/cc/*` are held in `UiSinks.kt`
-(§740), the `status_events` sink in `VpnPlugin` itself. The Dart names are in
+EventChannels too); `lxbox/coreLog` and `lxbox/cc/*` are fed from `:bg` through the event
+channel (§747, the sinks are in `StreamSinks.kt`), the `status_events` sink is in `VpnPlugin` itself. The Dart names are in
 `vpn/platform_channels.dart`:
 
 | Channel | Type | Direction |
@@ -2236,8 +2257,8 @@ The core emits changes and the UI subscribes. The old flow of three pollers is g
 
 ### The native clients (`BoxCommandClient.kt`)
 
-`BoxCommandClient` is the UI-role client (§745): the UI side creates it on `Started` and closes
-it — see “Process boundary”. The service-role client is `ServiceCommandClient` (openconnect, the
+`BoxCommandClient` is the screen client (§745); since §747 it lives in `:bg`, held by
+`ScreenCoreSession`, and the window gets its data as frames — see “Process boundary”. The service-role client is `ServiceCommandClient` (openconnect, the
 notification node label, Taildrop from notifications), with a unary client of its own.
 
 Five independent `CommandClient`s decouple the update rates and the lifecycles.
@@ -2524,7 +2545,7 @@ LxBox is a monolith, but architecturally it holds several self-contained layers 
 
 | Files | Lines |
 |---|---|
-| `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions, UiSinks, UiLaunchRequests, AutomationBridge}.kt` | ~6050 |
+| `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions, StreamSinks, UiLaunchRequests, AutomationBridge}.kt` | ~6050 |
 | `app/lib/vpn/box_vpn_client.dart` (+ `box_vpn_client/` parts) + `vpn/platform_channels.dart` | ~1480 |
 | `app/lib/models/{tunnel_status, background_mode, app_info}.dart` | ~230 |
 
@@ -2547,7 +2568,7 @@ LxBox is a monolith, but architecturally it holds several self-contained layers 
 
 | Files | Lines |
 |---|---|
-| `app/android/.../BoxCommandClient.kt` (UI role) + `UiCoreSession.kt` | ~1560 |
+| `app/android/.../BoxCommandClient.kt` (the screen client) + `ScreenCoreSession.kt` | ~1560 |
 | `app/android/.../ServiceCommandClient.kt` (service role) + `CoreSession.kt` | ~510 |
 | `app/android/.../CommandClientShared.kt` | ~400 |
 | `app/lib/vpn/cc_channel.dart` (958; + `cc_channel/` parts: method names and DTOs) + `cc_openconnect.dart` | ~2490 |

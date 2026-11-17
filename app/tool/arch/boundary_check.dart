@@ -103,20 +103,22 @@ const _frozenUiBridge = <String, String>{
 
 String _kbase(String name) => '${_kotlinRoot}com/leadaxe/lxbox/$name';
 
-/// §747 — файлы стороны окна (процесс `:ui`). Нативные окна Taildrop и
-/// автоматизации сюда не входят: они живут в `:bg`, рядом с клиентом сервиса.
+/// §747 — файлы стороны окна (процесс `:ui`): всё, что исполняется в нём.
+/// Клиент ядра экрана, проба и нативные окна Taildrop и автоматизации сюда не
+/// входят: они живут в `:bg`, рядом с ядром.
 bool _isKotlinUi(String p) =>
     p == _kbase('MainActivity.kt') ||
     p == _kbase('LanTransferSender.kt') ||
     p == _kbase('vpn/VpnPlugin.kt') ||
-    // §745 — клиент ядра роли UI и его держатель.
-    p == _kbase('vpn/BoxCommandClient.kt') ||
-    p == _kbase('vpn/UiCoreSession.kt') ||
-    p == _kbase('vpn/UiSinks.kt') ||
     p == _kbase('vpn/UiLaunchRequests.kt') ||
-    // §747 — вызывающая сторона канала окно → сервис.
+    p == _kbase('vpn/AutomationBridge.kt') ||
+    // §747 — вызывающая сторона канала окно → сервис и читатель канала событий.
     p == _kbase('vpn/BgClient.kt') ||
     p == _kbase('vpn/WifiNetworkObserver.kt') ||
+    // Читатель Wi-Fi общий для окна и сервиса — типов ядра в нём нет.
+    p == _kbase('vpn/WifiInfoReader.kt') ||
+    p == _kbase('vpn/WifiStateCache.kt') ||
+    p == _kbase('vpn/PermissionUtils.kt') ||
     _under(p, _kbase('editor/'));
 
 const _manifestPath = 'android/app/src/main/AndroidManifest.xml';
@@ -126,18 +128,7 @@ const _manifestRuleDescription =
     'android:process ":ui" или ":bg"';
 
 final _vpnPluginRe = RegExp(r'\bVpnPlugin\b');
-final _uiCoreSessionRe = RegExp(r'\bUiCoreSession\b');
 
-/// §745 C — кто обращается к каким полям `UiSinks`: файл → разрешённые поля
-/// (null — любые). Файл вне списка к `UiSinks` не обращается.
-final _uiSinksUsers = <String, Set<String>?>{
-  _kbase('vpn/VpnPlugin.kt'): null,
-  _kbase('vpn/BoxCommandClient.kt'): null,
-  // §747 — initUiSide отдаёт клиенту окна приёмник журнала; сервисная
-  // сторона к UiSinks не обращается вовсе (лог идёт через pipe, openconnect —
-  // событием).
-  _kbase('vpn/BoxApplication.kt'): {'appLogWarning'},
-};
 final _automationBridgeRe = RegExp(r'(?<![A-Za-z0-9_])AutomationBridge\b');
 final _eventSinkRe = RegExp(r'\bEventSink\b');
 final _sharedPrefsRe = RegExp(r'\bgetSharedPreferences\(');
@@ -205,11 +196,12 @@ final rules = <Rule>[
   Rule(
     id: 'kt-eventsink-type',
     description:
-        'EventSink как тип поля/параметра — только UiSinks.kt, '
-        'VpnPlugin.kt и CommandClientShared.kt (эмиттеры)',
+        'EventSink как тип поля/параметра — только StreamSinks.kt, '
+        'BgEventPipe.kt, VpnPlugin.kt и CommandClientShared.kt (эмиттеры)',
     applies: _kt,
     allow: {
-      _kbase('vpn/UiSinks.kt'): 'держатель приёмников UI',
+      _kbase('vpn/StreamSinks.kt'): 'приёмники потоков данных окна в :bg',
+      _kbase('vpn/BgEventPipe.kt'): 'приёмник, пишущий кадр в канал событий',
       _kbase('vpn/VpnPlugin.kt'): 'onListen/onCancel и локальный statusSink',
       _kbase('vpn/CommandClientShared.kt'):
           'существующее, разобрать: SnapshotEmitter/EventEmitter принимают '
@@ -221,13 +213,23 @@ final rules = <Rule>[
   Rule(
     id: 'kt-ui-service-side',
     description:
-        'файлы стороны окна (:ui — VpnPlugin, MainActivity, BoxCommandClient, '
-        'UiCoreSession, UiSinks, BgClient, editor/ …) не трогают сервисную '
-        'сторону (:bg): CoreSession, ServiceCommandClient, BootReceiver, '
-        'NativeCache, AutomationCache, Taildrop*, ConfigManager, BoxService, '
-        'BgMethods и др.; из BoxVpnService — только константы',
+        'файлы стороны окна (:ui — VpnPlugin, MainActivity, BgClient, '
+        'AutomationBridge, editor/ …) не трогают сервисную сторону (:bg): '
+        'CoreSession, ScreenCoreSession, BoxCommandClient, StreamSinks, '
+        'ProbeSession, BootReceiver, NativeCache, AutomationCache, Taildrop*, '
+        'ConfigManager, BoxService, BgMethods и др.; из BoxVpnService — только '
+        'константы',
     applies: _isKotlinUi,
     check: (p, code, i) => uiServiceSideUse(code[i]),
+  ),
+  Rule(
+    id: 'kt-ui-no-core',
+    description:
+        'файлы стороны окна не импортируют io.nekohasekai.libbox, не '
+        'обращаются к Libbox. и не зовут ensureLibbox — ядро в :ui не '
+        'загружается',
+    applies: _isKotlinUi,
+    check: (p, code, i) => uiCoreUse(code[i]),
   ),
   Rule(
     id: 'kt-automationbridge-ref',
@@ -237,45 +239,12 @@ final rules = <Rule>[
         'через AutomationRelay',
     applies: _kt,
     allow: {
-      _kbase('vpn/AutomationBridge.kt'): 'сам мост и AutomationRelay',
-      _kbase('vpn/VpnPlugin.kt'): 'ставит канал и принимает событие из :bg',
+      _kbase('vpn/AutomationBridge.kt'): 'сам мост',
+      _kbase('vpn/VpnPlugin.kt'): 'ставит канал и принимает кадр из :bg',
     },
     check: (p, code, i) => _automationBridgeRe.hasMatch(code[i])
         ? 'ссылка на AutomationBridge'
         : null,
-  ),
-  Rule(
-    id: 'kt-uicoresession-ref',
-    description:
-        'UiCoreSession упоминается только в UiCoreSession.kt, VpnPlugin.kt '
-        'и BoxApplication.kt — сервисная сторона о клиенте UI не знает',
-    applies: _kt,
-    allow: {
-      _kbase('vpn/UiCoreSession.kt'): 'сам держатель',
-      _kbase('vpn/VpnPlugin.kt'): 'единственный вызывающий клиента UI',
-      _kbase('vpn/BoxApplication.kt'): 'initUiSide: приёмник журнала клиента',
-    },
-    check: (p, code, i) =>
-        _uiCoreSessionRe.hasMatch(code[i]) ? 'ссылка на UiCoreSession' : null,
-  ),
-  Rule(
-    id: 'kt-uisinks-member',
-    description:
-        'UiSinks: VpnPlugin.kt и BoxCommandClient.kt — любые поля, '
-        'BoxApplication.kt — appLogWarning, остальные файлы (вся сервисная '
-        'сторона) — никаких',
-    applies: (p) => _kt(p) && p != _kbase('vpn/UiSinks.kt'),
-    check: (p, code, i) {
-      final members = uiSinksMembers(code[i]);
-      if (members.isEmpty) return null;
-      if (!_uiSinksUsers.containsKey(p)) return 'UiSinks.${members.first}';
-      final ok = _uiSinksUsers[p];
-      if (ok == null) return null;
-      for (final m in members) {
-        if (!ok.contains(m)) return 'UiSinks.$m';
-      }
-      return null;
-    },
   ),
   Rule(
     id: 'kt-sharedprefs',
