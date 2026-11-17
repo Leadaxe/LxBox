@@ -179,7 +179,7 @@ Owner's decision, 2026-09-18.
   - `flutter test` on the test files this task wrote or changed, plus cases that
     bear directly on the change. Not a whole `test/` directory, not the whole
     contract corpus, not all goldens.
-- Checkers (`tool/l10n/*_check.dart`, `tool/docs/parity_check.dart`,
+- Checkers (`tool/l10n/*_check.dart`, `tool/docs/parity_check.dart`, `tool/arch/boundary_check.dart`,
   `tool/check_contract_lock.dart`) are not required locally — the same `checks`
   job runs them on CI (owner's decision, 2026-09-24; ui + hardcoded take about a
   minute locally). One exception: a task that edits UI strings or the template
