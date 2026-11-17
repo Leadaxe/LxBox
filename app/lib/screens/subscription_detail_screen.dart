@@ -40,6 +40,7 @@ import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/telegram_link.dart'; // §657
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -853,7 +854,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: FocusSafeTabBarView(
         controller: _tabCtrl,
         children: [
           // Tab 1: Nodes

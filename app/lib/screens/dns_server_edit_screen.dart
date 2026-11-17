@@ -17,6 +17,7 @@ import 'dns_settings_screen/dns_server_copy.dart' show dnsCopyTag;
 import 'dns_settings_screen/dns_server_delete.dart';
 import '../services/dns/resolved_server.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §117 задача 4 — полноэкранный редактор DNS-сервера (locked decision №8).
 /// Паттерн 1:1 с [CustomRuleEditScreen]: Scaffold-route,
@@ -398,7 +399,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
                 ],
               ),
             ),
-            body: TabBarView(
+            body: FocusSafeTabBarView(
               children: [
                 DnsServerParamsTab(onSave: _save),
                 const DnsServerJsonTab(),

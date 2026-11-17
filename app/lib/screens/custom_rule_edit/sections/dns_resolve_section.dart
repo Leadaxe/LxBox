@@ -4,6 +4,7 @@ import '../edit_controller.dart';
 import '../widgets/section_header.dart';
 import '../../../models/custom_rule.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/dpad_radio_group.dart';
 
 /// §683 — секция «DNS & Resolve»: всё про резолв доменов правила в одном
 /// месте (бывшие секция DNS §117/§256 и окно «Action & Resolve» §247).
@@ -109,7 +110,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
           child: Text(getLocalText.s("Answer"), style: t.textTheme.bodyMedium
               ?.copyWith(fontWeight: FontWeight.w500)),
         ),
-        RadioGroup<DnsAnswerMode>(
+        DpadRadioGroup<DnsAnswerMode>(
           groupValue: mode,
           onChanged: (v) {
             if (v != null && !gate) c.setDnsAnswerMode(v);

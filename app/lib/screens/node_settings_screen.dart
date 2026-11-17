@@ -43,6 +43,7 @@ import '../widgets/auto_group_form.dart';
 import 'node_settings/auto_group_source.dart';
 import 'node_settings/node_document.dart';
 import 'subscriptions_screen/entry_warnings.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// Настройки одиночного сервера (UserServer) ИЛИ члена папки (§237).
 /// Вкладки: **Settings** (Protocol/Server/Tag + эмодзи-пикер + Detour),
@@ -866,7 +867,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ),
         body: _originalTag.isEmpty
             ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
+            : FocusSafeTabBarView(
                 controller: _tabs,
                 children: [
                   _buildSettingsTab(theme),

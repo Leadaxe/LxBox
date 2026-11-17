@@ -19,6 +19,7 @@ import '../services/l10n/locale_controller.dart';
 import '../services/subscription/subscription_identity.dart';
 import '../widgets/safe_bottom.dart';
 import '../models/tailscale_bundle.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 // SocksSpec.emit() требует TemplateVars — для wizard-created SOCKS5 без
 // substitution используем пустые. Это match'ит manual UserServer pattern
@@ -429,7 +430,7 @@ class _AddServerWizardScreenState extends State<AddServerWizardScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: FocusSafeTabBarView(
         controller: _tab,
         children: [
           _buildSocksForm(context),

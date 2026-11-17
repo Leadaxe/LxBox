@@ -41,6 +41,7 @@ import '../services/l10n/locale_controller.dart';
 import '../services/file_import.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/app_bottom_sheet.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §234 — экран папки серверов. Зеркалит SubscriptionDetailScreen: вкладка
 /// членов (per-member toggle, drag-reorder, long-press меню) + Settings
@@ -1179,7 +1180,7 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
             ],
           ),
         ),
-        body: TabBarView(
+        body: FocusSafeTabBarView(
           controller: _tabCtrl,
           children: [
             _buildMembersTab(theme),

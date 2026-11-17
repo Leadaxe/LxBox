@@ -26,6 +26,7 @@ import 'node_settings/exit_node_store.dart';
 import 'owner_navigation.dart';
 import 'subscriptions_screen/entry_warnings.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §258 — экран деталей outbound'а («View details» из меню ноды): вкладки
 /// **Overview** (основные параметры + рантайм-цепочка detour, хопы
@@ -369,7 +370,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
           ],
         ),
         body: SafeArea(
-          child: TabBarView(
+          child: FocusSafeTabBarView(
             children: [
               _buildOverviewTab(context),
               _buildJsonTab(context),

@@ -17,6 +17,7 @@ import '../services/contract/registry_form.dart' as rf show FormState;
 import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
 import 'banner_palette.dart' show warningSeverityStyle;
+import 'dpad_radio_group.dart';
 
 /// Схема узла OpenConnect в реестре.
 const kOpenConnectScheme = 'openconnect';
@@ -489,7 +490,7 @@ class _OpenConnectFormState extends State<OpenConnectForm> {
     return [
       const SizedBox(height: 4),
       _label(title),
-      RadioGroup<String>(
+      DpadRadioGroup<String>(
         groupValue: active,
         onChanged: (id) {
           if (id == null) return;

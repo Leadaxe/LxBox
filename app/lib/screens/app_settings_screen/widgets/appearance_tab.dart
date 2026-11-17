@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../main.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/dpad_radio_group.dart';
 
 /// §541 — Appearance tab для App Settings: всё про внешний вид (тема,
 /// компоновка — поворот и две колонки списка узлов, язык).
@@ -42,7 +43,7 @@ class AppearanceTab extends StatelessWidget {
         Text(getLocalText.s("Appearance"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        RadioGroup<ThemeMode>(
+        DpadRadioGroup<ThemeMode>(
           groupValue: themeNotifier.mode,
           onChanged: (v) { if (v != null) themeNotifier.setMode(v); },
           child: Column(
@@ -105,7 +106,7 @@ class AppearanceTab extends StatelessWidget {
         Text(getLocalText.s("Language"),
             style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        RadioGroup<String>(
+        DpadRadioGroup<String>(
           groupValue: LocaleController.I.setting,
           onChanged: (v) { if (v != null) LocaleController.I.set(v); },
           child: Column(

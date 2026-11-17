@@ -14,6 +14,7 @@ import '../sections/srs_section.dart';
 import '../sections/wifi_section.dart';
 import 'preset_params_tab.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/dpad_radio_group.dart';
 
 /// §053 Stage 3 — Params tab для inline/srs ветки.
 ///
@@ -101,7 +102,7 @@ class ParamsTab extends StatelessWidget {
         const Divider(),
         Text(getLocalText.s("Source"), style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
-        RadioGroup<CustomRuleKind>(
+        DpadRadioGroup<CustomRuleKind>(
           groupValue: c.kind,
           onChanged: (v) {
             if (v == null) return;

@@ -16,6 +16,7 @@ import '../services/file_import.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/safe_bottom.dart';
 import 'config_screen/mixins_tab.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §333 — страховочный порог: выше него редактор открывается read-only.
 /// Даже построчному редактору многомегабайтный конфиг на слабом устройстве
@@ -342,7 +343,7 @@ class _ConfigScreenState extends State<ConfigScreen>
                 ],
               ),
             ),
-            body: TabBarView(
+            body: FocusSafeTabBarView(
               controller: _tabController,
               children: [
                 _KeepAlive(

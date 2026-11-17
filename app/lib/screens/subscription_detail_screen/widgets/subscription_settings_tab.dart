@@ -15,6 +15,7 @@ import '../subscription_detail_format.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/safe_bottom.dart';
 import '../../../widgets/tls_policy_tiles.dart';
+import '../../../widgets/dpad_radio_group.dart';
 
 /// Settings tab: tag-prefix field, detour-mode radio group (+ sub-options) and
 /// the subscription-info block. Extracted verbatim from `_buildSettingsTab` /
@@ -257,7 +258,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
           // register'ы (sub-options для mode=use) хранятся независимо, не
           // обнуляются при переключении mode'а — юзер вернётся в use, флаги
           // на месте.
-          RadioGroup<DetourMode>(
+          DpadRadioGroup<DetourMode>(
             groupValue: detourMode,
             onChanged: (m) => onSetDetourMode(m!),
             child: Column(children: [
@@ -302,7 +303,7 @@ class SubscriptionSettingsTab extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(left: 24),
-                  child: RadioGroup<bool>(
+                  child: DpadRadioGroup<bool>(
                     groupValue: entry.replaceDetourChain,
                     onChanged: (v) => onReplaceDetourChainChanged(v!),
                     child: Column(children: [

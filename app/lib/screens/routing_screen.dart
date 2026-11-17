@@ -52,6 +52,7 @@ import 'routing_screen/widgets/routing_tabs.dart';
 import 'routing_screen/widgets/srs_status_button.dart';
 import 'tun_apps_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 part 'routing_screen/routing_srs_cache.dart';
 
@@ -406,7 +407,7 @@ class _RoutingScreenState extends State<RoutingScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: FocusSafeTabBarView(
         controller: _tabController,
         children: [
           // ─── Directions: Направления (CRUD) + Auto tuning ───

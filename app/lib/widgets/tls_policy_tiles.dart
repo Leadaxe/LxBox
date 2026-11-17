@@ -6,6 +6,7 @@ import '../models/tls_policy.dart';
 import '../services/core_duration.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/settings_storage.dart';
+import 'dpad_radio_group.dart';
 
 /// §636 — откуда наследуется поле TLS-политики.
 enum TlsLevel { global, folder, subscription }
@@ -147,7 +148,7 @@ class _TlsPolicyTilesState extends State<TlsPolicyTiles> {
       builder: (ctx) => SimpleDialog(
         title: Text(title),
         children: [
-          RadioGroup<int>(
+          DpadRadioGroup<int>(
             groupValue: switch (current) { null => 0, true => 1, false => 2 },
             onChanged: (v) => Navigator.pop(ctx, v),
             child: Column(

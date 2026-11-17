@@ -15,6 +15,7 @@ import 'oom_reports_screen.dart';
 import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/dpad_field_exit.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key, this.initialTab = 0, this.errorsOnly = false});
@@ -140,7 +141,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
                 Tab(text: getLocalText.s("Profiling")),
               ]),
             ),
-            body: TabBarView(children: [
+            body: FocusSafeTabBarView(children: [
               _buildLogTab(filtered),
               const CrashReportsTab(),
               const OomReportsTab(),
