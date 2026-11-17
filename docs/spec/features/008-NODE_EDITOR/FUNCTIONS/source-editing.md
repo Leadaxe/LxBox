@@ -43,7 +43,6 @@ answer.
 | the document has no node | "The document has no node to save." |
 | the core rejected it | "The core rejected the node: <core text>" |
 | the input had extra content | "Only the node is saved. The rest of the input is not kept." |
-| there were comments | "Comments were removed." |
 | folder member or standalone server, the text yielded no node | "Could not parse server config — keeping current" |
 | success | "Saved" |
 
@@ -91,7 +90,8 @@ answer.
 - **A folder member and a standalone server** — transactionally: text
   without a node is not written, the record stays as it was (P10).
 - **Comments** `//`, `/* */` and `#` (to the end of the line, outside strings)
-  are stripped before parsing; a custom body
+  are kept in the source as typed and stripped only for parsing (task 741;
+  a trimmed document remainder is rebuilt without them); a custom body
   type unknown to the application is accepted with a warning; a body without
   `type` — refusal (P12).
 - **Auto node of a folder.** Source is the stored record `kind: auto`
@@ -126,3 +126,4 @@ answer.
 | 10 | [237](../../../tasks/237-folder-member-node-settings.md) | Implemented | Editing a folder member is transactional |
 | 11 | [603](../../../tasks/603-subscription-and-own-server-bugs.md) | Implemented | A standalone server does not save a source without a node |
 | 12 | [686](../../../tasks/686-folder-auto-node-source-tab.md) | In progress | Source of an auto node = its stored record, editable; Edit INI |
+| 13 | [741](../../../tasks/741-json-comments-kept-in-source.md) | Done | JSON comments are kept in the source |

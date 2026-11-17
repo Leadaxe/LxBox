@@ -10,6 +10,8 @@
 
 ### Changed
 
+- **Comments in a server's JSON are kept ([task 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).** A server pasted or edited as JSON keeps its `//`, `/* */` and `#` comments: the Source tab shows the text as typed after pasting, saving and restoring a backup, and the «Comments were removed.» message is gone. Comments are skipped only when the app reads the JSON; the same server with and without comments is still one server in a backup. A pasted whole config keeps only its nodes, and that text is rebuilt without comments, as before.
+  (RU: комментарии `//`, `/* */` и `#` в JSON сервера сохраняются: вкладка Source показывает текст как набран после вставки, сохранения и восстановления из бэкапа; сообщение «Comments were removed.» убрано.)
 - **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).** Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
   (RU: в списке серверов папки ⚠ «Hop … unavailable» теперь стоит у строки того сервера, у которого detour снят при сборке.)
 

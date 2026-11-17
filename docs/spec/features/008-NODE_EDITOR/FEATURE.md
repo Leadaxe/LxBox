@@ -114,10 +114,10 @@ the node list, folders and order — [007-NODE_LIST](../007-NODE_LIST/FEATURE.md
   tag rather than by position in the body.
 - **P12. Comments and an unknown type do not get in the way.** JSON with `//`,
   `/* */` and `#` (to the end of the line, as the core reads it; `#` inside a
-  string stays) is accepted, it goes into the source without comments with the
-  message "Comments were removed."; a custom body of a type unknown to the
+  string stays) is accepted, it goes into the source as typed, with the
+  comments (task 741; a trimmed document remainder — without them); a custom body of a type unknown to the
   application is accepted with a warning; a body without `type` — refusal.
-  **Witness:** units "input with comments is accepted, source without
+  **Witness:** units "input with comments is accepted, source with
   comments", "pasting a body of an unknown type…", "a body without type is
   still rejected". **Mutation:** strict JSON parsing before stripping
   comments.
@@ -187,7 +187,7 @@ saving a JSON body.
 **Outputs:** a new "custom server" record (standalone) with one node; the
 changed source of a custom server or a folder member; a config rebuild;
 messages "Added: <tag>", "Saved", "Only the node is saved. The rest of the
-input is not kept.", "Comments were removed.", "The core rejected the node:
+input is not kept.", "The core rejected the node:
 …".
 
 ## Data flow

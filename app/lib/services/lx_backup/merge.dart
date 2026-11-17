@@ -246,11 +246,16 @@ typedef BackupLinkMapper = NodeLink Function(NodeLink link, {bool legacy});
 ///    сливались в один.
 ///  * **Прочее** — `trim()` как есть.
 ///
+/// §741 (контракт 1.1.172, BACKUP.md §9) — комментарии JSON-исходника
+/// (`//`, `/* */`, `#`) снимаются ДО канонизации ([jsonSourceText]): тот же
+/// узел с пометками в тексте и без них — одна запись. Ссылку и `.conf` эта
+/// функция не меняет.
+///
 /// Одна и та же функция канонизирует и приехавшее тело, и локальный
 /// `rawBody`: сравнение имеет смысл, только когда обе стороны приведены к
 /// одной форме.
 String canonicalNodeBody(String body) {
-  final t = body.trim();
+  final t = jsonSourceText(body.trim()).trim();
   if (t.startsWith('{')) {
     final map = _tryDecodeObject(t);
     if (map != null) {

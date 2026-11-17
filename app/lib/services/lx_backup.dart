@@ -34,6 +34,7 @@ import 'lx_backup_slice.dart';
 import 'node_link_address.dart';
 import 'node_hash.dart' show deepSortKeys;
 import 'parser/body_decoder.dart';
+import 'parser/json_comments.dart';
 import 'parser/parse_all.dart';
 import 'parser/uri_utils.dart' show newUuidV4;
 import 'record_vars.dart';

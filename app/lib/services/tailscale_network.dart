@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import '../vpn/cc_channel.dart';
 import 'l10n/locale_controller.dart';
+import 'parser/json_comments.dart';
 
 /// Расхождение записанного `exit_node` тела узла и действующего exit node ядра
 /// (таблица раздела 5 спеки 581).
@@ -107,8 +108,11 @@ String withExitNode(String source, String? value) => withBodyFields(source, {
 /// поле, прочее записывается как есть. Порядок прочих ключей сохраняется,
 /// новые идут в конец; запись — JSON с отступом в два пробела. Не объект —
 /// [FormatException].
+///
+/// §741 — комментарии JSON-исходника снимаются перед разбором; запись
+/// пересобирается без них (правка полей текстом не делается).
 String withBodyFields(String source, Map<String, Object?> fields) {
-  final decoded = jsonDecode(source);
+  final decoded = jsonDecode(jsonSourceText(source));
   if (decoded is! Map) {
     throw const FormatException('node source is not a JSON object');
   }

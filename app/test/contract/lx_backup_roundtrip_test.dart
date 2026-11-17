@@ -13,6 +13,7 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/models/tls_policy.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/json_comments.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 import 'package:lxbox/services/dns/dns_backup.dart';
 import 'package:lxbox/services/json_clone.dart';
@@ -656,6 +657,97 @@ void main() {
       }
       final folder = merged.whereType<FolderServers>().single;
       expect(folder.members.single.tls, local);
+    });
+  });
+
+  // §741 (контракт 1.1.172) — комментарии JSON-исходника едут в `origin.raw`
+  // как набраны, дубль с пометками и без них — одна запись.
+  group('§741 комментарии в JSON-исходнике', () {
+    const commentedRoot = '// пометка автора\n'
+        '{\n'
+        '  "type": "trojan", /* "блок" */\n'
+        '  "tag": "c-root",\n'
+        '  "server": "example-7.com",\n'
+        '  "server_port": 443, # порт\n'
+        '  "password": "p//not#comment/*x*/"\n'
+        '}';
+    const commentedMember = '{\n'
+        '  # член папки\n'
+        '  "type": "trojan",\n'
+        '  "tag": "c-member",\n'
+        '  "server": "example-8.com",\n'
+        '  "server_port": 443,\n'
+        '  "password": "p" // пароль\n'
+        '}';
+
+    List<ServerList> lists() => [
+          UserServer(
+            id: 'srv-c',
+            name: '',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            origin: UserSource.paste,
+            rawBody: commentedRoot,
+          ),
+          FolderServers(
+            id: 'fold-c',
+            name: 'C',
+            enabled: true,
+            tagPrefix: '',
+            detourPolicy: DetourPolicy.defaults,
+            createdAt: DateTime.utc(2026, 11, 17),
+            members: [FolderMember(raw: commentedMember)],
+          ),
+        ];
+
+    test('экспорт → импорт: текст байт в байт, узлы разобраны', () async {
+      final out = await _export(_State(lists: lists()));
+      final sources = (jsonDecode(out.json) as Map)['sources'] as List;
+      final root = sources.firstWhere((s) => (s as Map)['tag'] == 'c-root') as Map;
+      expect((root['origin'] as Map)['raw'], commentedRoot);
+      expect((root['origin'] as Map)['kind'], 'singbox');
+
+      final plan = planLxBackupImport(
+          out.json,
+          LxImportReceiver(
+              lists: const [], directions: const [], chains: const []));
+      expect(plan.file.warnings, isEmpty);
+      final srv = plan.lists.whereType<UserServer>().single;
+      expect(srv.rawBody, commentedRoot);
+      expect(parseAll(decode(srv.rawBody), own: true).single.tag, 'c-root');
+      final folder = plan.lists.whereType<FolderServers>().single;
+      expect(folder.members.single.raw, commentedMember);
+      expect(folder.members.single.node?.tag, 'c-member');
+    });
+
+    test('импорт того же узла без комментариев ничего не добавляет', () async {
+      final plainState = _State(lists: [
+        UserServer(
+          id: 'srv-p',
+          name: '',
+          enabled: true,
+          tagPrefix: '',
+          detourPolicy: DetourPolicy.defaults,
+          origin: UserSource.paste,
+          rawBody: jsonSourceText(commentedRoot),
+        ),
+      ]);
+      final merged = planLxBackupImport(
+          (await _export(plainState)).json,
+          LxImportReceiver(
+              lists: lists(), directions: const [], chains: const [])).lists;
+      final servers = merged.whereType<UserServer>().toList();
+      expect(servers, hasLength(1));
+      expect(servers.single.rawBody, commentedRoot,
+          reason: 'совпавший узел держит свой текст');
+    });
+
+    test('канон тела один с комментариями и без', () {
+      expect(canonicalNodeBody(commentedRoot),
+          canonicalNodeBody(jsonSourceText(commentedRoot)));
+      expect(canonicalNodeBody(commentedMember),
+          canonicalNodeBody(jsonEncode(jsonDecode(jsonSourceText(commentedMember)))));
     });
   });
 }

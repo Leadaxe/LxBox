@@ -10,6 +10,7 @@ import 'package:lxbox/services/contract/body_edit.dart';
 import 'package:lxbox/services/contract/body_sanitizer.dart';
 import 'package:lxbox/services/contract/warning_codes.dart';
 import 'package:lxbox/services/parser/body_decoder.dart';
+import 'package:lxbox/services/parser/json_comments.dart';
 import 'package:lxbox/services/parser/parse_all.dart';
 
 import '../contract_paths.dart';
@@ -105,9 +106,11 @@ void main() {
           expect(raw, wantRaw, reason: 'origin.raw строкой');
         }
 
+        // §741 — текст может начинаться с комментария: «JSON ли это»
+        // решается по тексту без комментариев (`jsonSourceText`).
         final authored = own &&
             kind == SourceDialect.singbox.code &&
-            raw.trimLeft().startsWith(RegExp(r'[{\[]'));
+            jsonSourceText(raw).trimLeft().startsWith(RegExp(r'[{\[]'));
         expect(authored, expected['authored'], reason: 'authored');
         expect(restNotKept, expected['rest_not_kept'],
             reason: 'сообщение об остатке');

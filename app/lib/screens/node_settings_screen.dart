@@ -533,9 +533,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         savedMessage: () => ready.droppedExtras
             ? getLocalText.s(
                 "Only the nodes are saved. The rest of the input is not kept.")
-            : ready.commentsRemoved
-                ? getLocalText.s("Comments were removed.")
-                : getLocalText.s("Saved"));
+            : getLocalText.s("Saved"));
   }
 
   /// §686 — Save вкладки Source auto-узла: запись разбирается строго и

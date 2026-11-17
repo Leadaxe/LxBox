@@ -13,6 +13,7 @@ import 'dart:convert';
 
 import '../../models/codec/source_record.dart';
 import '../../models/source_dialect.dart';
+import '../parser/json_comments.dart';
 import '../parser/source_classify.dart';
 import '../contract/registry.dart';
 import '../parser/body_decoder.dart' show SourceKind;
@@ -185,7 +186,7 @@ bool masqueradeKeysPresent(String raw, {SourceDialect? dialect}) {
   switch (kind) {
     case SourceDialect.singbox:
     case SourceDialect.xray:
-      final m = jsonDecode(t) as Map;
+      final m = jsonDecode(jsonSourceText(t)) as Map; // §741
       return _kKeys.any(m.containsKey);
     case SourceDialect.wgIni:
       final lines = t.split('\n');

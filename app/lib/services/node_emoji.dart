@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:characters/characters.dart';
 
 import '../models/node_spec.dart';
+import 'parser/json_comments.dart';
 
 /// §090 G2b — эмодзи-теги серверов.
 ///
@@ -70,15 +71,23 @@ String withDefaultEmoji(String rawBody, NodeSpec node) {
 String prependEmojiToRawBody(String rawBody, String emoji) {
   final trimmed = rawBody.trim();
   if (trimmed.isEmpty) return rawBody;
-  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-    return _prependToJsonTag(trimmed, emoji) ?? rawBody;
+  // §741 — JSON с комментариями (`//`, `/* */`, `#`) начинается и с `//` /
+  // `#`: опознаётся по тексту без них, а не по первому символу — иначе `#`
+  // комментария принимался за фрагмент ссылки.
+  final plain = uncommentedJson(trimmed);
+  if (plain != null ||
+      trimmed.startsWith('{') ||
+      trimmed.startsWith('[')) {
+    return _prependToJsonTag(trimmed, emoji, plain: plain) ?? rawBody;
   }
   return _prependToUriFragment(trimmed, emoji);
 }
 
-String? _prependToJsonTag(String json, String emoji) {
+/// [plain] — [json] без комментариев (§741); тогда тег голого тела ставится
+/// правкой текста ([withJsonTag]), комментарии остаются.
+String? _prependToJsonTag(String json, String emoji, {String? plain}) {
   try {
-    final parsed = jsonDecode(json);
+    final parsed = jsonDecode(plain ?? json);
     final map = parsed is List
         ? (parsed.isNotEmpty ? parsed.first : null)
         : parsed;
@@ -86,6 +95,10 @@ String? _prependToJsonTag(String json, String emoji) {
     final cur = (map['tag'] as String?) ?? '';
     if (hasEmoji(cur)) return json;
     map['tag'] = cur.isEmpty ? emoji : '$emoji $cur';
+    if (plain != null && parsed is Map) {
+      final edited = withJsonTag(json, map['tag'] as String);
+      if (edited != null) return edited;
+    }
     if (parsed is List) {
       parsed[0] = map;
       return jsonEncode(parsed);

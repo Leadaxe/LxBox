@@ -66,8 +66,8 @@ re-reading (P1).
   `-1`, `-2`; the message shows the entered tag, not the final one.
 - Paste error (not recognized, zero nodes) — a message with the reason, the
   wizard stays open.
-- JSON with comments is accepted; the message "Comments were removed."
-  instead of "Added".
+- JSON with comments is accepted; the comments are kept in the source as
+  typed (task 741), the message is the usual "Added".
 - Switching tabs does not reset what was entered in other tabs.
 - There is no separate "Display name" field: the record title is the tag.
 

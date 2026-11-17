@@ -15,6 +15,11 @@
 /// - массив (тел или документов) — форма ввода: режется на элементы, каждый
 ///   со своим видом.
 ///
+/// §741 (контракт 1.1.172) — комментарии JSON (`//`, `/* */`, `#`) остаются
+/// в тексте элемента, когда обрезать нечего (голое тело, документ без
+/// лишних ключей); обрезанный документ и элемент массива пересобираются без
+/// них. Разбор идёт по тексту без комментариев ([jsonSourceText]).
+///
 /// Ссылки (`uri`) и `.conf` (`wg_ini`) — один элемент, текст как есть: где
 /// список ссылок режется на записи построчно, решает вызывающий (как и раньше,
 /// по узлам разбора).
@@ -32,8 +37,9 @@ import 'json_comments.dart';
 final class SourceItem {
   const SourceItem(this.text, this.dialect, {this.extrasDropped = false});
 
-  /// Текст источника записи: голое тело как набрано, документ обрезанный до
-  /// узловых массивов, элемент массива (JSON с отступом в два пробела).
+  /// Текст источника записи: голое тело как набрано (§741: с комментариями),
+  /// документ обрезанный до узловых массивов, элемент массива (JSON с
+  /// отступом в два пробела).
   final String text;
 
   final SourceDialect dialect;
@@ -46,7 +52,7 @@ final class SourceItem {
   bool get isDocument {
     if (!dialect.isJson) return false;
     try {
-      final v = jsonDecode(text);
+      final v = jsonDecode(jsonSourceText(text));
       return v is Map &&
           (v['outbounds'] is List || v['endpoints'] is List) &&
           v[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
@@ -62,7 +68,6 @@ final class SourceClassification {
     required this.dialect,
     required this.items,
     this.wasArray = false,
-    this.commentsRemoved = false,
     this.jsonError,
   });
 
@@ -75,9 +80,6 @@ final class SourceClassification {
 
   /// Вход был массивом (`*_array`).
   final bool wasArray;
-
-  /// §585 — во входе были комментарии `//` или `/* */`; в [items] их нет.
-  final bool commentsRemoved;
 
   /// Текст похож на JSON (`{`/`[`, не `.conf`), но не разбирается: сообщение
   /// `FormatException`.
@@ -118,7 +120,7 @@ SourceDialect? dialectOfDecoded(DecodedBody decoded) => switch (decoded) {
 SourceDialect sourceDialectOf(String text) {
   final t = text.trim();
   if (t.isEmpty) return SourceDialect.uri;
-  final plain = uncommentedJson(t) ?? t;
+  final plain = jsonSourceText(t);
   final decoded = decode(plain);
   final d = dialectOfDecoded(decoded);
   if (d != null) {
@@ -149,9 +151,9 @@ SourceClassification classifySource(String text) {
   if (trimmed.isEmpty) {
     return const SourceClassification(dialect: null, items: []);
   }
-  final uncommented = uncommentedJson(trimmed);
-  final plain = uncommented ?? trimmed;
-  final commentsRemoved = uncommented != null;
+  // §741 — разбор по тексту без комментариев; в элемент, где обрезать
+  // нечего, уходит [trimmed] — как набран.
+  final plain = jsonSourceText(trimmed);
   final decoded = decode(plain);
 
   if (decoded is IniConfig || decoded is AmneziaConfig) {
@@ -170,12 +172,12 @@ SourceClassification classifySource(String text) {
     }
     if (decoded is! JsonConfig) {
       return SourceClassification(
-          dialect: null, items: const [], commentsRemoved: commentsRemoved);
+          dialect: null, items: const []);
     }
     final d = dialectOfDecoded(decoded);
     if (d == null) {
       return SourceClassification(
-          dialect: null, items: const [], commentsRemoved: commentsRemoved);
+          dialect: null, items: const []);
     }
     final elements = decoded.source.elements ?? r'$self';
     if (elements.startsWith('[]') && value is List) {
@@ -183,7 +185,6 @@ SourceClassification classifySource(String text) {
       return SourceClassification(
         dialect: d,
         wasArray: true,
-        commentsRemoved: commentsRemoved,
         items: [
           for (final e in value)
             if (e is Map)
@@ -196,14 +197,12 @@ SourceClassification classifySource(String text) {
     if (value is Map && elements != r'$self') {
       return SourceClassification(
         dialect: d,
-        commentsRemoved: commentsRemoved,
-        items: [_trimmedDocument(value.cast<String, dynamic>(), d, plain)],
+        items: [_trimmedDocument(value.cast<String, dynamic>(), d, trimmed)],
       );
     }
     return SourceClassification(
       dialect: d,
-      commentsRemoved: commentsRemoved,
-      items: [SourceItem(plain, d)],
+      items: [SourceItem(trimmed, d)],
     );
   }
 
@@ -213,7 +212,8 @@ SourceClassification classifySource(String text) {
 }
 
 /// Документ, обрезанный до узловых массивов. [asTyped] — исходный текст:
-/// обрезать нечего — текст как набран, байт в байт.
+/// обрезать нечего — текст как набран, байт в байт (§741: с комментариями);
+/// обрезка что-то сняла — остаток пересобран, комментариев в нём нет.
 SourceItem _trimmedDocument(
     Map<String, dynamic> doc, SourceDialect d, String? asTyped) {
   final keys = nodeArrayKeysOf(d);

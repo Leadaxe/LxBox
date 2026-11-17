@@ -6022,9 +6022,6 @@
   "The app does not know this node type and does not check it. The node goes to the core as written.": {
     "value": "应用不认识此节点类型，也不对其做检查。节点按原样交给内核。"
   },
-  "Comments were removed.": {
-    "value": "注释已移除。"
-  },
   "via %s": {
     "value": "经 %s"
   },

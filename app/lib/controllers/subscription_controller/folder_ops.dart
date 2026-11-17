@@ -358,9 +358,27 @@ mixin _FolderOpsMixin on ChangeNotifier {
       );
     }
 
+    // §741 (контракт 1.1.172) — голое тело JSON с комментариями — один член
+    // с текстом как набран: пометки автора остаются в его источнике. Прочие
+    // формы — источник узла (§454), как прежде.
+    String? typed;
+    if (nodes.length == 1 && uncommentedJson(input.trim()) != null) {
+      final c = classifySource(input);
+      if (!c.wasArray &&
+          c.items.length == 1 &&
+          c.items.first.dialect.isJson &&
+          !c.items.first.isDocument) {
+        typed = c.items.first.text;
+      }
+    }
+
     final usedNames = <String>{};
     final added = <FolderMember>[];
     for (final n in nodes) {
+      if (typed != null) {
+        added.add(FolderMember(raw: typed, nameHint: memberNameHintFor(n)));
+        continue;
+      }
       // §456 — источник члена = источник узла как есть (§454); INI несёт имя
       // через `nameHint`, JSON — в теле. Фолбэк имени файла — только ссылке
       // без своего фрагмента. §439 — группе имя не раздаётся (`kind: auto`).

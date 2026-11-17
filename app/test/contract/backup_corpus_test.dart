@@ -17,6 +17,7 @@ import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/services/json_clone.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/lx_backup_import.dart';
+import 'package:lxbox/services/parser/json_comments.dart';
 import 'package:lxbox/services/record_vars.dart';
 
 import '../parser/engine_test_setup.dart';
@@ -816,12 +817,24 @@ Future<void> _checkReplaces(_State state, Map<String, dynamic> expected) async {
 /// §576/§722 — `origin_raw`: «тег» (корневой сервер) или «имя папки/тег»
 /// (член) → JSON источника записи (объект или массив, по значению; у объекта
 /// корневой `tag` не сравнивается — его несёт запись).
+///
+/// §741 (контракт 1.1.172) — ожидание СТРОКОЙ: текст байт в байт
+/// (комментарии JSON-исходника хранятся как набраны). Расхождение LxBox:
+/// тег записи живёт в тексте голого тела (имя узла читается из его JSON),
+/// и импорт кладёт его правкой текста ([withJsonTag], комментарии и прочие
+/// байты не трогаются) — допускается ровно эта вставка.
 void _checkOriginRaw(_State state, Map<String, dynamic> expected) {
   final want = (expected['origin_raw'] as Map?)?.cast<String, dynamic>();
   if (want == null) return;
   want.forEach((key, wantBody) {
     final rec = _ownRecordOf(state, key);
     expect(rec, isNotNull, reason: 'origin_raw: нет записи $key');
+    if (wantBody is String) {
+      final tag = key.substring(key.indexOf('/') + 1);
+      expect(rec!.$1, anyOf(wantBody, withJsonTag(wantBody, tag)),
+          reason: 'origin_raw $key: источник записи строкой (байт в байт)');
+      return;
+    }
     Object? got = jsonDecode(rec!.$1);
     Object? exp = wantBody;
     if (got is Map && exp is Map) {

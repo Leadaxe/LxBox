@@ -4,6 +4,7 @@ import 'dart:math';
 import 'amnezia_link.dart';
 import 'engine/document.dart';
 import 'engine/section_loader.dart';
+import 'json_comments.dart';
 import 'uri_utils.dart';
 
 /// Результат декодирования тела подписки (§3.2 спеки 026).
@@ -164,8 +165,12 @@ DocumentSource _fallback(String kind) =>
 /// рукописный порядок: [_classifyLegacy]. Опознание документа, в отличие от
 /// разбора узла, обязано работать и без реестра: на нём стоит вся вставка из
 /// буфера, и молчаливый отказ выглядел бы как «подписка пустая».
+///
+/// §741 — комментарии JSON-исходника (`//`, `/* */`, `#`) снимаются здесь,
+/// на входе разбора ([jsonSourceText]): хранимый `origin.raw` несёт их как
+/// набраны, и любой разбор узлов из него идёт через эту функцию.
 DecodedBody decode(String body) {
-  final original = body.trimRight();
+  final original = jsonSourceText(body.trimRight());
   if (original.isEmpty) return const DecodeFailure('empty body');
 
   final registry = MapperSections.I.documents;

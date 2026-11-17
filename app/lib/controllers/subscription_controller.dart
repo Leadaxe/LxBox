@@ -210,11 +210,6 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   /// §279 Phase 4 — хранимая ошибка = [UiMsg] (рендер в build). null = нет.
   UiMsg? get lastError => _lastError;
 
-  /// §585 — последняя вставка sing-box JSON шла с комментариями `//` или
-  /// `/* */`, и они убраны из источника записи. Экран говорит об этом одной
-  /// строкой («Comments were removed.»).
-  bool get lastCommentsRemoved => _lastCommentsRemoved;
-  bool _lastCommentsRemoved = false;
 
   /// §722 D — последняя вставка/импорт принесла документ (или элемент
   /// массива), обрезанный до узловых массивов: остальное не сохранено.
@@ -983,7 +978,7 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   static bool _isJsonDocument(String raw, SourceDialect dialect) {
     if (!dialect.isJson) return false;
     try {
-      final v = jsonDecode(raw);
+      final v = jsonDecode(jsonSourceText(raw));
       return v is Map &&
           nodeArrayKeysOf(dialect).any((k) => v[k] is List) &&
           v[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
@@ -998,7 +993,9 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
       String raw, SourceDialect dialect, NodeSpec owner) {
     if (hasEmoji(owner.tag)) return raw;
     final emoji = defaultEmojiFor(owner);
-    final doc = (jsonDecode(raw) as Map).cast<String, dynamic>();
+    // §741 — документ с комментариями пересобирается без них (известное
+    // ограничение: переименование узла документа текст не правит).
+    final doc = (jsonDecode(jsonSourceText(raw)) as Map).cast<String, dynamic>();
     final renamed = renameNodeInDocument(
         doc, dialect, owner.tag.isEmpty ? emoji : '$emoji ${owner.tag}',
         oldTag: owner.tag);
@@ -1042,7 +1039,6 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
 
     _busy = true;
     _lastError = null;
-    _lastCommentsRemoved = false;
     _lastExtrasDropped = false;
     notifyListeners();
     // Input может быть URL подписки (с токеном), direct-link (vless://user@host),
@@ -1157,12 +1153,10 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
             list: dlServer, nodeCount: dlServer.nodes.length));
         await _persist();
       } else {
-        // §585 — комментарии `//` и `/* */` снимаются до разбора: в источник
-        // записи уходит текст без них.
-        final uncommented = uncommentedJson(trimmed);
-        switch (await _addJsonNodes(uncommented ?? trimmed, origin: origin)) {
+        // §741 — комментарии `//`, `/* */`, `#` остаются в источнике записи
+        // как набраны; разбор снимает их сам (`decode` → `jsonSourceText`).
+        switch (await _addJsonNodes(trimmed, origin: origin)) {
           case _JsonAdd.added:
-            _lastCommentsRemoved = uncommented != null;
             await _persist();
           case _JsonAdd.empty:
             // Форму опознали, узлов не собралось — ошибку уже выставил

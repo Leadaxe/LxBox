@@ -248,11 +248,18 @@ LxServer? _server10(
   // §722 — тег записи ложится в голое тело JSON-диалекта (`tag` у sing-box
   // и Xray). Документ (§11 п.6: при чтении не обрезается), массив, ссылка,
   // `.conf` и нечитаемый JSON — текст как есть.
+  //
+  // §741 (контракт 1.1.172) — голое тело с комментариями хранится текстом
+  // как набран: тег записи встаёт в него правкой текста ([withJsonTag]),
+  // пометки автора остаются. Без комментариев — как прежде, объектом.
   final dialect = node.dialect;
-  final obj = dialect.isJson ? _tryDecodeObject(raw.trim()) : null;
+  final plain = dialect.isJson ? uncommentedJson(raw.trim()) : null;
+  final obj = dialect.isJson ? _tryDecodeObject(plain ?? raw.trim()) : null;
   final bare = obj != null &&
       obj[dialect == SourceDialect.singbox ? 'type' : 'protocol'] is String;
-  if (bare) {
+  if (bare && plain != null) {
+    uri = (tag.isEmpty ? null : withJsonTag(raw.trim(), tag)) ?? raw.trim();
+  } else if (bare) {
     configJson = {...obj, if (tag.isNotEmpty) 'tag': tag};
   } else {
     uri = raw;
