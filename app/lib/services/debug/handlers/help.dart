@@ -288,18 +288,18 @@ GET    /assistant/exits?direction=<tag>[&q=sub]  Exit names of a direction as wr
 POST   /assistant/check-url                      Body {url, app?}: URL Check to depth http, fresh, as package app;
                                                  waits ≤20 s → {outcome, failed_stage, error, http_status,
                                                  elapsed_ms, route:{direction,exit,direct,blocked}, findings, advice}
-POST   /assistant/check-exit                     Body {direction}: GET 1.1.1.1/cdn-cgi/trace through it →
+POST   /assistant/check-exit                     Body {direction: tag}: GET 1.1.1.1/cdn-cgi/trace through it →
                                                  {outcome, country, ip, exit, error}
 GET    /assistant/apps?q=<substr>                Installed apps by label/package → [{package, label}] (≤10)
 GET    /assistant/app-route?app=<package>        Static route by saved rules → {app, target, target_name,
                                                  rule_name, conditional}
-POST   /assistant/exit                           Body {direction, exit}: select the exit in the running core
+POST   /assistant/exit                           Body {direction: tag, exit}: select the exit in the running core
                                                  (until restart) → {direction, exit, changed}
 POST   /assistant/connection                     Body {id, enabled}: turn a WG/AWG/OpenVPN/OpenConnect/Tailscale
                                                  connection on/off (id from overview), rebuild, reload; turning on
                                                  with the tunnel down starts it headless → {status:"applied",
                                                  summary, changed, reload_pending?, vpn_started?, needs_consent?}
-Errors of the app: not_found → 404, invalid_argument → 400, vpn_off|busy|no_index|locked|source_off → 409,
+Errors of the app: not_found → 404, invalid_argument → 400, vpn_off|busy|locked|source_off → 409,
 other → 500; the code is the first word of error.message. App routing changes go through POST /rules.
 
 === Directions CRUD (routing directions) ===
@@ -839,11 +839,11 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/assistant/overview', 'description': '{vpn_status, default_route, directions:[{tag,name,exit_count,current_exit}], connections:[{id,name,type,enabled,state}]}'},
     {'method': 'GET', 'path': '/assistant/exits', 'params': {'direction': 'direction tag', 'q': 'case-insensitive substring (optional)'}, 'description': 'Exit names of a direction as written → {direction, exits (≤200), total, truncated}'},
     {'method': 'POST', 'path': '/assistant/check-url', 'body': '{url, app?}', 'description': 'URL Check (depth http, fresh) as package app; waits ≤20 s → {outcome, failed_stage, error, http_status, elapsed_ms, route, findings, advice}'},
-    {'method': 'POST', 'path': '/assistant/check-exit', 'body': '{direction}', 'description': 'Actual exit of a direction via 1.1.1.1/cdn-cgi/trace → {outcome, country, ip, exit, error}'},
+    {'method': 'POST', 'path': '/assistant/check-exit', 'body': '{direction (tag)}', 'description': 'Actual exit of a direction via 1.1.1.1/cdn-cgi/trace → {outcome, country, ip, exit, error}'},
     {'method': 'GET', 'path': '/assistant/apps', 'params': {'q': 'label or package substring'}, 'description': 'Installed apps → [{package, label}] (≤10)'},
     {'method': 'GET', 'path': '/assistant/app-route', 'params': {'app': 'package'}, 'description': 'Route of the app by saved rules → {app, target, target_name, rule_name, conditional}'},
-    {'method': 'POST', 'path': '/assistant/exit', 'body': '{direction, exit}', 'description': 'Select the exit in the running core (until restart) → {direction, exit, changed}'},
-    {'method': 'POST', 'path': '/assistant/connection', 'body': '{id, enabled}', 'description': 'Turn a WG/AWG/OpenVPN/OpenConnect/Tailscale connection on/off, rebuild, reload; on + tunnel down → headless start → {status, summary, changed, reload_pending?, vpn_started?, needs_consent?}. Errors: not_found 404, invalid_argument 400, vpn_off|busy|no_index|locked|source_off 409, other 500'},
+    {'method': 'POST', 'path': '/assistant/exit', 'body': '{direction (tag), exit}', 'description': 'Select the exit in the running core (until restart) → {direction, exit, changed}'},
+    {'method': 'POST', 'path': '/assistant/connection', 'body': '{id, enabled}', 'description': 'Turn a WG/AWG/OpenVPN/OpenConnect/Tailscale connection on/off, rebuild, reload; on + tunnel down → headless start → {status, summary, changed, reload_pending?, vpn_started?, needs_consent?}. Errors: not_found 404, invalid_argument 400, vpn_off|busy|locked|source_off 409, other 500'},
     // Directions CRUD (routing directions)
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},

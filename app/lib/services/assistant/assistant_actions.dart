@@ -89,14 +89,14 @@ typedef AssistantApply = Future<Map<String, Object?>> Function(
 /// папки — `setMembersEnabled`, узел подписки —
 /// `setSubscriptionNodesEnabled` (отметка `disabledHashes`; страховочные
 /// `*ByCoreTag` пишут вердикт ядра — не наш случай). Уже в нужном
-/// состоянии → `applied` без пересборки. После применения — индекс.
+/// состоянии → `applied` без пересборки. Подключения собираются заново в
+/// момент вызова (тот же состав, что у индекса [buildAssistantIndex]).
 Future<Map<String, Object?>> setConnectionEnabled({
   required String id,
   required bool enabled,
   required SubscriptionController sub,
   HomeController? home,
   AssistantApply? apply,
-  Future<void> Function()? syncIndex,
 }) async {
   final connections = assistantConnections(
     [for (final e in sub.entries) e.list],
@@ -131,7 +131,6 @@ Future<Map<String, Object?>> setConnectionEnabled({
             startIfStopped: startIfStopped,
           );
   final extras = await applyFn(startIfStopped: enabled);
-  await (syncIndex ?? syncAssistantIndex)();
   return {
     'status': 'applied',
     'summary': summary,

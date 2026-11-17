@@ -152,40 +152,18 @@ void main() {
     });
   });
 
-  test('syncAssistantIndex: без канала (не Android) — no-op, без исключений',
-      () async {
-    await syncAssistantIndex(lists: const []);
-  });
-
-  test('syncAssistantIndex: собирает из хранилища и отправляет JSON',
+  test('collectAssistantIndex: собирает из хранилища в момент вызова',
       () async {
     await setUpTempStorage();
     await SettingsStorage.setDirections(
         [const Direction(tag: 'vpn-1', label: 'Proxy')]);
     await SettingsStorage.saveRouteFinal('direct-out');
-    String? sent;
-    await syncAssistantIndex(
+    final idx = await collectAssistantIndex(
       lists: [userServer('u1', wgNode('Office'))],
       emittedTagMap: const {},
-      send: (json) async => sent = json,
     );
-    final idx = jsonDecode(sent!) as Map<String, dynamic>;
     expect(idx['route_final'], 'direct-out');
     expect((idx['directions'] as List).single['name'], 'Proxy');
     expect((idx['connections'] as List).single['id'], 'Office');
-  });
-
-  test('syncAssistantIndex: ошибка отправки глотается', () async {
-    await setUpTempStorage();
-    var called = false;
-    await syncAssistantIndex(
-      lists: const [],
-      emittedTagMap: const {},
-      send: (json) async {
-        called = true;
-        throw StateError('native too old');
-      },
-    );
-    expect(called, isTrue);
   });
 }

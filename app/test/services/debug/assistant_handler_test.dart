@@ -39,7 +39,9 @@ void main() {
         body: body == null ? const [] : utf8.encode(jsonEncode(body)),
       );
 
-  setUp(() {
+  setUp(() async {
+    // §750 — overview/app-route собирают индекс из хранилища в момент запроса.
+    await setUpTempStorage();
     calls = [];
     answer = (_) => null;
     messenger.setMockMethodCallHandler(methods, (call) async {
@@ -113,7 +115,10 @@ void main() {
         {'url': 'https://example.com', 'app': 'org.example.chat'});
     expect(calls[2].arguments, {'direction': 'vpn-2'});
     expect(calls[3].arguments, {'query': 'chat'});
-    expect(calls[4].arguments, {'app': 'org.example.chat'});
+    expect(calls[4].arguments['app'], 'org.example.chat');
+    // Индекс собран в момент запроса и передан аргументом.
+    expect(jsonDecode(calls[4].arguments['index'] as String),
+        containsPair('v', 1));
     expect(calls[5].arguments, {'direction': 'vpn-1', 'exit': 'DE Frankfurt'});
   });
 
@@ -135,7 +140,6 @@ void main() {
       ('invalid_argument', 400),
       ('vpn_off', 409),
       ('busy', 409),
-      ('no_index', 409),
       ('locked', 409),
       ('core_error', 500),
       ('something_new', 500),

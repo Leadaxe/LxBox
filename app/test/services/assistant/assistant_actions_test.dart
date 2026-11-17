@@ -48,7 +48,6 @@ void main() {
   group('setConnectionEnabled (хранилище + контроллер)', () {
     late SubscriptionController sub;
     late List<bool> applied;
-    late int indexSyncs;
 
     Future<Map<String, Object?>> fakeApply(
         {required bool startIfStopped}) async {
@@ -56,21 +55,17 @@ void main() {
       return const {};
     }
 
-    Future<void> fakeSync() async => indexSyncs++;
-
     Future<Map<String, Object?>> run(String id, bool enabled) =>
         setConnectionEnabled(
           id: id,
           enabled: enabled,
           sub: sub,
           apply: fakeApply,
-          syncIndex: fakeSync,
         );
 
     setUp(() async {
       await setUpTempStorage();
       applied = [];
-      indexSyncs = 0;
       sub = SubscriptionController();
       addTearDown(sub.dispose);
       final lists = <ServerList>[
@@ -90,7 +85,6 @@ void main() {
       expect(r['changed'], true);
       expect(sub.entries[0].list.enabled, isTrue);
       expect(applied, [true], reason: 'включение просит старт при down');
-      expect(indexSyncs, 1);
     });
 
     test('член папки: выключение без старта', () async {
@@ -117,7 +111,6 @@ void main() {
       expect(r['status'], 'applied');
       expect(r['changed'], false);
       expect(applied, isEmpty);
-      expect(indexSyncs, 0);
     });
 
     test('config_locked_for_debug → locked, хранилище не тронуто', () async {

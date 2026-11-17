@@ -3,22 +3,18 @@
 /// Нативу (AppFunctions, без Flutter-движка) нужны подписи Направлений,
 /// подключения (включая выключенные) и правила по приложениям — всё это
 /// живёт в `lxbox_settings.json`, который Kotlin не открывает (ARCHITECTURE
-/// § 5). Dart собирает сводку и передаёт её методом канала
-/// `setAssistantIndex`; натив хранит её в `lxbox_assistant`. Это производное
-/// зеркало, а не настройка: dirty-флаг настроек не поднимается.
+/// § 5). Dart собирает сводку в момент запроса ([collectAssistantIndex]) и
+/// передаёт её нативу аргументом `index` вызова (`assistantOverview`,
+/// `assistantAppRoute`); нигде не хранится и заранее не считается.
 library;
 
 import 'dart:collection';
-import 'dart:convert';
-import 'dart:io' show Platform;
 
 import '../../config/consts.dart' show kDetourTagPrefix;
 import '../../models/custom_rule.dart';
 import '../../models/direction.dart';
 import '../../models/node_spec.dart';
 import '../../models/server_list.dart';
-import '../../vpn/box_vpn_client.dart';
-import '../app_log.dart';
 import '../builder/rule_order.dart' show sortRulesByNum;
 import '../debug/debug_registry.dart';
 import '../node_hash.dart' show sourceNodeIdentities;
@@ -263,36 +259,26 @@ String _directionName(Direction d) {
       : base;
 }
 
-/// §750 — собрать индекс по хранилищу и источникам и передать нативу.
+/// §750 — собрать индекс сейчас, в момент запроса (предрасчёта нет: решение
+/// владельца — всё по требованию).
 ///
 /// Источники — из контроллера подписок, если он поднят (у подписок узлы
-/// живут в кэше, в хранилище их нет); иначе — из хранилища (старт
-/// приложения до экрана Home). Ошибки глотаются с логом: натив может быть
-/// старым, в тестах канала нет. [send] — inject-точка тестов; по умолчанию
-/// канал, и только на Android.
-Future<void> syncAssistantIndex({
+/// живут в кэше, в хранилище их нет); иначе — из хранилища. [lists] и
+/// [emittedTagMap] — inject-точки тестов.
+Future<Map<String, Object?>> collectAssistantIndex({
   List<ServerList>? lists,
   Map<String, NodeSpec>? emittedTagMap,
-  Future<void> Function(String json)? send,
 }) async {
-  final sender =
-      send ?? (Platform.isAndroid ? BoxVpnClient.I.setAssistantIndex : null);
-  if (sender == null) return;
-  try {
-    final sub = DebugRegistry.I.sub;
-    final sources = lists ??
-        (sub != null
-            ? [for (final e in sub.entries) e.list]
-            : await SettingsStorage.getServerLists());
-    final index = buildAssistantIndex(
-      directions: await SettingsStorage.getDirections(),
-      rules: await SettingsStorage.getCustomRules(),
-      lists: sources,
-      routeFinal: await SettingsStorage.getRouteFinal(),
-      emittedTagMap: emittedTagMap ?? sub?.lastEmittedTagMap ?? const {},
-    );
-    await sender(jsonEncode(index));
-  } catch (e) {
-    AppLog.I.warning('Assistant index sync failed: $e');
-  }
+  final sub = DebugRegistry.I.sub;
+  final sources = lists ??
+      (sub != null
+          ? [for (final e in sub.entries) e.list]
+          : await SettingsStorage.getServerLists());
+  return buildAssistantIndex(
+    directions: await SettingsStorage.getDirections(),
+    rules: await SettingsStorage.getCustomRules(),
+    lists: sources,
+    routeFinal: await SettingsStorage.getRouteFinal(),
+    emittedTagMap: emittedTagMap ?? sub?.lastEmittedTagMap ?? const {},
+  );
 }

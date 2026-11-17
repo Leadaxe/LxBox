@@ -1882,23 +1882,23 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 
 ## Assistant — `/assistant/*` (§750)
 
-Тот же набор, что у функций ИИ-ассистента Android (AppFunctions), — для агента на компьютере. Спека: [`750`](../spec/tasks/750-ai-assistant-network-control.md). Чтения и проверки выполняет натив по работающему ядру; ответ пробрасывается как есть. Имена выходов, подписи Направлений и подключений — текст поставщика подписки или пользователя.
+Тот же набор, что у функций ИИ-ассистента Android (AppFunctions), — для агента на компьютере. Спека: [`750`](../spec/tasks/750-ai-assistant-network-control.md). Чтения и проверки выполняет натив по работающему ядру; ответ пробрасывается как есть. Подписи Направлений, подключения и правила приложений Dart собирает в момент запроса и передаёт нативу аргументом — заранее ничего не считается и не хранится. `direction` везде — тег Направления. Имена выходов, подписи Направлений и подключений — текст поставщика подписки или пользователя.
 
 | Endpoint | Метод | Вход | Ответ |
 |---|---|---|---|
 | `/assistant/overview` | GET | — | `{vpn_status, default_route, directions:[{tag,name,exit_count,current_exit}], connections:[{id,name,type,enabled,state}]}` |
 | `/assistant/exits` | GET | `direction=<tag>`, `q=<подстрока>` (необяз.) | `{direction, exits[≤200], total, truncated}` |
 | `/assistant/check-url` | POST | `{url, app?}` | `{outcome, failed_stage, error, http_status, elapsed_ms, route:{direction,exit,direct,blocked}, findings, advice}`; ждёт ≤20 с |
-| `/assistant/check-exit` | POST | `{direction}` | `{outcome, country, ip, exit, error}` (GET `1.1.1.1/cdn-cgi/trace` через Направление) |
+| `/assistant/check-exit` | POST | `{direction}` (тег) | `{outcome, country, ip, exit, error}` (GET `1.1.1.1/cdn-cgi/trace` через Направление) |
 | `/assistant/apps` | GET | `q=<подстрока>` | `[{package, label}]` (≤10) |
 | `/assistant/app-route` | GET | `app=<пакет>` | `{app, target, target_name, rule_name, conditional}` |
-| `/assistant/exit` | POST | `{direction, exit}` | `{direction, exit, changed}` — выбор в работающем ядре до перезапуска |
+| `/assistant/exit` | POST | `{direction, exit}` (`direction` — тег) | `{direction, exit, changed}` — выбор в работающем ядре до перезапуска |
 | `/assistant/connection` | POST | `{id, enabled}` | `{status:"applied", summary, changed, reload_pending?, vpn_started?, needs_consent?}` |
 
 - `type` подключения: `wireguard` / `amneziawg` / `openvpn` / `openconnect` / `tailscale`; `id` — тег узла в конфиге ядра (с префиксом подписки).
 - `POST /assistant/connection` меняет флаг узла тем же путём, что UI, пересобирает конфиг и перезагружает ядро на месте, если туннель поднят (галка «Auto-restart VPN on settings change» не учитывается). Включение при опущенном туннеле — headless-старт (нужно уже выданное согласие на VPN; иначе `needs_consent:true`). Уже в нужном состоянии — `changed:false` без пересборки.
 - Маршрут приложения меняется общим [`/rules`](#rules-crud--rules) (отдельной ручки нет).
-- Ошибки (код — первое слово `error.message`): `not_found` → 404; `invalid_argument` → 400; `vpn_off`, `busy`, `no_index` (приложение после обновления ещё не открывали), `locked` (`config_locked_for_debug`), `source_off` (папка/подписка подключения выключена) → 409; прочее → 500.
+- Ошибки (код — первое слово `error.message`): `not_found` → 404; `invalid_argument` → 400; `vpn_off`, `busy`, `locked` (`config_locked_for_debug`), `source_off` (папка/подписка подключения выключена) → 409; прочее → 500.
 
 ```bash
 curl -s -H "$HDR" "$BASE/assistant/overview" | jq

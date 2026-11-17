@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../vpn/box_vpn_client.dart';
 import '../../assistant/assistant_actions.dart';
 import '../../assistant/assistant_index.dart';
@@ -14,7 +16,7 @@ import '_shared.dart';
 /// Чтения и проверки делает натив (методы канала `assistant*`, ответ
 /// пробрасывается как есть); `{"error":{code,message}}` натива → HTTP-ошибка:
 /// `not_found` → 404, `invalid_argument` → 400, `vpn_off` / `busy` /
-/// `no_index` / `locked` / `source_off` → 409, прочее → 500. Код натива
+/// `locked` / `source_off` → 409, прочее → 500. Код натива
 /// остаётся первым словом сообщения (`vpn_off: …`).
 ///
 /// Routes:
@@ -28,21 +30,21 @@ import '_shared.dart';
 /// - `POST /assistant/connection`   `{id, enabled}`
 ///
 /// Маршрут приложения меняется общим `POST /rules` (узкая операция снята
-/// решением владельца 17.11.2026).
+/// решением владельца 17.11.2026). Индекс (подписи Направлений, подключения,
+/// правила приложений) собирается в момент запроса и уходит нативу
+/// аргументом — ничего заранее не считается. `direction` — только тег.
 Future<DebugResponse> assistantHandler(DebugRequest req, DebugContext ctx) async {
   final client = BoxVpnClient.I;
   switch (req.path) {
     case '/assistant/overview':
       _requireMethod(req, 'GET');
-      // Индекс свежий: натив берёт из него подписи и подключения.
-      await syncAssistantIndex();
-      return _native(await client.assistantOverview());
+      // Индекс собирается сейчас: натив берёт из него подписи и подключения.
+      return _native(await client.assistantOverview(await _indexJson()));
 
     case '/assistant/exits':
       _requireMethod(req, 'GET');
       final direction = req.requiredQuery('direction');
       final q = (req.q('q') ?? '').trim();
-      await syncAssistantIndex();
       return _native(await client.assistantListExits(direction,
           query: q.isEmpty ? null : q));
 
@@ -67,8 +69,7 @@ Future<DebugResponse> assistantHandler(DebugRequest req, DebugContext ctx) async
     case '/assistant/app-route':
       _requireMethod(req, 'GET');
       final app = req.requiredQuery('app');
-      await syncAssistantIndex();
-      return _native(await client.assistantAppRoute(app));
+      return _native(await client.assistantAppRoute(await _indexJson(), app));
 
     case '/assistant/exit':
       _requireMethod(req, 'POST');
@@ -98,6 +99,9 @@ Future<DebugResponse> assistantHandler(DebugRequest req, DebugContext ctx) async
   }
   throw NotFound('assistant path: ${req.path}');
 }
+
+/// §750 — индекс ассистента, собранный сейчас, строкой JSON.
+Future<String> _indexJson() async => jsonEncode(await collectAssistantIndex());
 
 void _requireMethod(DebugRequest req, String method) {
   if (req.method != method) {
@@ -134,7 +138,7 @@ DebugError assistantDebugError(String code, String message) {
   return switch (code) {
     'not_found' => NotFound(text),
     'invalid_argument' => BadRequest(text),
-    'vpn_off' || 'busy' || 'no_index' || 'locked' || 'source_off' =>
+    'vpn_off' || 'busy' || 'locked' || 'source_off' =>
       Conflict(text),
     _ => InternalError(text),
   };

@@ -293,6 +293,7 @@ class SettingsStorage {
     'automation_emit_health',
     'automation_explainer_shown_v1',
     'appfunctions_enabled', // §721 — AI assistant control (Android AppFunctions)
+    'appfunctions_allow_changes', // §750 — шлюз ассистента: группа «Изменения»
     // Subscription identity headers
     'subscription_user_agent',
     'subscription_send_hwid',
@@ -1141,6 +1142,15 @@ class SettingsStorage {
 
   static Future<void> setAppFunctionsEnabled(bool enabled) =>
       setVar('appfunctions_enabled', enabled ? 'true' : 'false');
+
+  /// §750 — тумблер «Let assistants change settings»: шлюз ассистента к
+  /// Debug API исполняет группу «Изменения» (правила, Направления,
+  /// источники). Default OFF. Читает только Dart-шлюз, зеркала в натив нет.
+  static Future<bool> getAppFunctionsAllowChanges() async =>
+      (await getVar('appfunctions_allow_changes', 'false')) == 'true';
+
+  static Future<void> setAppFunctionsAllowChanges(bool enabled) =>
+      setVar('appfunctions_allow_changes', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // Backup snapshot (§031) — dump/export/replace всего `lxbox_settings.json`.

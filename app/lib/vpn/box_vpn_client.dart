@@ -1007,7 +1007,43 @@ class BoxVpnClient {
     _methods.setMethodCallHandler(_handleNativeCall);
   }
 
+  /// §750 — шлюз ассистента к Debug API: натив (`AssistantBridge`) зовёт
+  /// `assistantCall` с `{method, path, body?}` и ждёт `{status, body}`.
+  /// Ставится в `main()` вместе с мостом автоматизации.
+  Future<Map<String, Object?>> Function(
+      String method, String path, String? body)? _onAssistantCall;
+
+  /// §750 — регистрирует обработчик входящего `assistantCall`. Идемпотентно.
+  void registerAssistantCallHandler(
+      Future<Map<String, Object?>> Function(
+              String method, String path, String? body)
+          handler) {
+    _onAssistantCall = handler;
+    _methods.setMethodCallHandler(_handleNativeCall);
+  }
+
   Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (call.method == _Methods.assistantCall) {
+      final handler = _onAssistantCall;
+      if (handler == null) {
+        return const {'status': 503, 'body': '{"error":"not_ready"}'};
+      }
+      try {
+        final raw = (call.arguments as Map?) ?? const {};
+        return await handler(
+          '${raw['method'] ?? ''}',
+          '${raw['path'] ?? ''}',
+          raw['body'] as String?,
+        );
+      } catch (e) {
+        // Наружу исключения не выпускаем: натив ждёт ответ по контракту.
+        AppLog.I.error('[assistant] gateway call failed: $e');
+        return {
+          'status': 500,
+          'body': jsonEncode({'error': 'internal error: $e'}),
+        };
+      }
+    }
     if (call.method == _Methods.automationAction) {
       final handler = _onAutomationAction;
       if (handler == null) return null;
@@ -1037,20 +1073,11 @@ class BoxVpnClient {
     );
   }
 
-  /// §750 — передать нативу индекс ассистента (JSON-строка
-  /// `buildAssistantIndex`). Натив хранит его в `lxbox_assistant`.
-  Future<void> setAssistantIndex(String json) async {
-    await _invoke<void>(
-      _Methods.setAssistantIndex,
-      args: {'json': json},
-      timeout: _Timeouts.settings,
-      onTimeoutValue: null,
-    );
-  }
-
   /// §750 — `{vpn_status, default_route, directions, connections}`.
-  Future<Object?> assistantOverview() =>
-      _assistantCall(_Methods.assistantOverview);
+  /// [indexJson] — индекс ассистента, собранный в момент запроса
+  /// (`collectAssistantIndex`): натив ничего не хранит.
+  Future<Object?> assistantOverview(String indexJson) =>
+      _assistantCall(_Methods.assistantOverview, args: {'index': indexJson});
 
   /// §750 — `{direction, exits, total, truncated}`.
   Future<Object?> assistantListExits(String direction, {String? query}) =>
@@ -1073,8 +1100,10 @@ class BoxVpnClient {
       _assistantCall(_Methods.assistantFindApps, args: {'query': query});
 
   /// §750 — `{app, target, target_name, rule_name, conditional}`.
-  Future<Object?> assistantAppRoute(String app) =>
-      _assistantCall(_Methods.assistantAppRoute, args: {'app': app});
+  /// [indexJson] — индекс, собранный в момент запроса.
+  Future<Object?> assistantAppRoute(String indexJson, String app) =>
+      _assistantCall(_Methods.assistantAppRoute,
+          args: {'index': indexJson, 'app': app});
 
   /// §750 — `{direction, exit, changed}`.
   Future<Object?> assistantSelectExit(String direction, String exit) =>
