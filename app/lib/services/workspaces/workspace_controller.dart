@@ -53,6 +53,10 @@ class WorkspaceController extends ChangeNotifier {
 
   bool _pendingAutoConnect = false;
 
+  /// §748 — закрыть экраны поверх корня перед [remountAfterExternalWrite].
+  /// Ставит `main()`: навигатором владеет `LxBoxApp`.
+  void Function()? onExternalRemount;
+
   /// Одноразовый флаг «VPN был поднят до загрузки — поднять снова». Читает
   /// новый `HomeScreen` после bootstrap-пересборки.
   /// Сброс к состоянию свежего процесса — между тест-файлами в общей сборке.
@@ -123,10 +127,16 @@ class WorkspaceController extends ChangeNotifier {
   ///
   /// VPN не останавливается: меняются настройки, а не слот. Поднятый
   /// `configDirty` заставляет новый `HomeScreen` пересобрать конфиг.
+  ///
+  /// Экраны поверх `HomeScreen` (Servers, Backup…) получили контроллеры
+  /// прежнего: их список устарел, а правки молча не пишутся (stale). Их
+  /// закрывает [onExternalRemount]. У загрузки слота хука нет: она идёт с
+  /// главного экрана и сама закрывает свой диалог прогресса.
   Future<void> remountAfterExternalWrite() async {
     await SettingsStorage.flushToDisk();
     SettingsStorage.markConfigDirty();
     await _reloadStateFromDisk();
+    onExternalRemount?.call();
     _generation++;
     notifyListeners();
   }

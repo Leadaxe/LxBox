@@ -28,6 +28,10 @@ Future<void> restoreFromContents(
 }) async {
   final result = await showImportPreview(context, contents);
   if (result == null) return; // cancelled
+  // §748 — remount закрывает экраны поверх главного, и [context] уходит:
+  // итог показывает корневой messenger, взятый заранее.
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
 
   final BackupApplyResult apply;
   try {
@@ -54,7 +58,6 @@ Future<void> restoreFromContents(
     await syncAutomationFromStorage();
     await onApplied();
   }
-  if (!context.mounted) return;
   // §607 — общий с главным экраном локализованный итог.
   final summary = restoreSummaryText(
     apply,
@@ -64,7 +67,7 @@ Future<void> restoreFromContents(
   // §748 — контроллеры главного экрана уже перечитаны (remount выше или
   // [onApplied]). «Restart now» остаётся: перезапуск процесса перечитывает
   // ещё и нативную сторону.
-  ScaffoldMessenger.of(context).showSnackBar(
+  messenger.showSnackBar(
     SnackBar(
       content: Text(summary),
       duration: const Duration(seconds: 6),

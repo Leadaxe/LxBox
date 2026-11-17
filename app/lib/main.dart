@@ -209,6 +209,11 @@ void main() async {
   } catch (_) {
     // Storage недоступен — остаётся дефолт (true).
   }
+  // §748 — сцену пересоздаёт импорт бэкапа: экраны поверх корня держат
+  // контроллеры прежнего HomeScreen (устаревший список, правки молча не
+  // пишутся), поэтому закрываются до пересоздания.
+  WorkspaceController.I.onExternalRemount =
+      () => _rootNavigatorKey.currentState?.popUntil((r) => r.isFirst);
   runApp(const LxBoxApp());
 }
 
@@ -398,6 +403,10 @@ class ThemeNotifier extends ChangeNotifier with WidgetsBindingObserver {
 
 final themeNotifier = ThemeNotifier();
 
+/// §748 — корневой навигатор: [WorkspaceController.onExternalRemount]
+/// закрывает экраны поверх `HomeScreen`.
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class LxBoxApp extends StatelessWidget {
   const LxBoxApp({super.key});
 
@@ -414,6 +423,7 @@ class LxBoxApp extends StatelessWidget {
         // LocaleController._applyLocale (dict-reload на каждую смену); отдельного
         // per-build присваивания активного локализатора не требуется.
         return MaterialApp(
+          navigatorKey: _rootNavigatorKey,
           title: 'L×Box',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: themeNotifier.seed),

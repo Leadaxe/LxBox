@@ -103,9 +103,18 @@ void main() {
     () async {
       final old = await initialController();
 
+      // Экраны поверх корня закрываются ДО пересоздания (их контроллеры
+      // устарели бы, а правки на них молча не писались бы).
+      final genAtHook = <int>[];
+      WorkspaceController.I.onExternalRemount = () =>
+          genAtHook.add(WorkspaceController.I.generation);
+      addTearDown(() => WorkspaceController.I.onExternalRemount = null);
+      final genBefore = WorkspaceController.I.generation;
+
       const importer = LxBackupImportService();
       await importer.apply(await importer.prepare(lxFile));
       await WorkspaceController.I.remountAfterExternalWrite();
+      expect(genAtHook, [genBefore], reason: 'хук один раз, до generation++');
 
       // Шаг 3 воспроизведения: мутация в списке Servers до перезапуска.
       await old.toggleAt(0);

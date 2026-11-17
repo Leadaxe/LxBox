@@ -516,6 +516,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   /// Показывает, что приедет, ДО применения: импорт заменяет правила целиком,
   /// и спрашивать после было бы поздно.
   Future<void> _onLxImport() async {
+    // §748 — после записи сцена пересоздаётся и этот экран закрывается:
+    // итог показывает корневой messenger, взятый заранее.
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
       final outcome = await pickFileSafely(
@@ -561,15 +564,17 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
         // посреди записи — часть уже легла на диск.
         await WorkspaceController.I.remountAfterExternalWrite();
       }
-      if (!mounted) return;
 
       // §641 — итог одной строкой: замена правил приёмника названа хвостом,
       // а не посчитана в «не применено».
-      showSnack(lxImportSnackText(
-        result.file,
-        appliedDirections: result.appliedDirections,
-        appliedSettings: result.appliedSettings,
-        appliedChains: result.appliedChains,
+      messenger.showSnackBar(SnackBar(
+        content: Text(lxImportSnackText(
+          result.file,
+          appliedDirections: result.appliedDirections,
+          appliedSettings: result.appliedSettings,
+          appliedChains: result.appliedChains,
+        )),
+        duration: const Duration(seconds: 4),
       ));
     } catch (e) {
       if (!mounted) return;
