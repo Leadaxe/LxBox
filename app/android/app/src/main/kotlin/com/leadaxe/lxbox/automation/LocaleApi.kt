@@ -2,6 +2,7 @@ package com.leadaxe.lxbox.automation
 
 import android.content.Context
 import android.os.Bundle
+import com.leadaxe.lxbox.vpn.AutomationCache
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -77,20 +78,18 @@ object LocaleApi {
 
     // ─── Cached node/group lists (для Spinner'а в edit-Activity) ─────────────────
 
-    private const val PREFS = "lxbox_automation"
-
     /// Список нод активной группы из native-кеша (зеркалится app'ом через
     /// `setAutomationActiveState`). Пустой если app ни разу не открывался /
     /// конфиг пуст → edit-Activity делает fallback на ручной ввод.
     fun cachedNodes(ctx: Context): List<String> =
-        readStringArray(ctx, "all_nodes")
+        readStringArray(ctx, AutomationCache.KEY_ALL_NODES)
 
     /// Список всех групп из native-кеша.
     fun cachedGroups(ctx: Context): List<String> =
-        readStringArray(ctx, "all_groups")
+        readStringArray(ctx, AutomationCache.KEY_ALL_GROUPS)
 
     private fun readStringArray(ctx: Context, key: String): List<String> {
-        val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val raw = AutomationCache.prefs(ctx)
             .getString(key, null) ?: return emptyList()
         return runCatching {
             val arr = JSONArray(raw)

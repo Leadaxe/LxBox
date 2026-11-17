@@ -24,6 +24,7 @@ import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
 import com.leadaxe.lxbox.vpn.ServiceNotification
 import com.leadaxe.lxbox.vpn.Taildrop
+import com.leadaxe.lxbox.vpn.UiLaunchRequests
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
 import com.leadaxe.lxbox.vpn.WifiHistoryBridge
@@ -336,13 +337,13 @@ class MainActivity : FlutterActivity() {
         // §654 C — тап по «Sign-in required»: Dart заберёт тег при старте или
         // возврате и откроет диалог челленджа этого узла.
         intent?.getStringExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)?.let { tag ->
-            BoxVpnService.openConnectOpenRequest = tag
+            UiLaunchRequests.openConnectOpenRequest = tag
             intent.removeExtra(ServiceNotification.EXTRA_OPENCONNECT_TAG)
         }
         // §707 — тап по уведомлению Taildrop: Dart заберёт тег и откроет
         // вкладку Network узла.
         intent?.getStringExtra(Taildrop.EXTRA_TAG)?.let { tag ->
-            BoxVpnService.taildropOpenRequest = tag
+            UiLaunchRequests.taildropOpenRequest = tag
             intent.removeExtra(Taildrop.EXTRA_TAG)
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return

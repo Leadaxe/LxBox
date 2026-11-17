@@ -74,7 +74,7 @@ import java.util.concurrent.atomic.AtomicReference
 /// **Эмиттеры** — по образцу `BoxService` core-log drainer: `LinkedBlockingQueue` + cap +
 /// drop-newest (не блокируем producer-thread ядра) + single Runnable + main-Handler + batch.
 ///
-/// Sink'и читаются из `BoxVpnService`-companion (`cc*Sink`, @Volatile) — инвариант §2.1:
+/// Sink'и читаются из `UiSinks` (`cc*Sink`, @Volatile) — инвариант §2.1:
 /// эмиттер живёт во Flutter-процессе.
 class BoxCommandClient {
 
@@ -609,7 +609,7 @@ class BoxCommandClient {
     private val taildropInboxClient = AtomicReference<CommandClient?>(null)
     private val taildropInboxSub = AtomicReference<TaildropInboxSubscription?>(null)
     private val taildropInboxGen = AtomicInteger(0)
-    private val taildropInboxEmitter = SnapshotEmitter { BoxVpnService.ccTaildropInboxSink }
+    private val taildropInboxEmitter = SnapshotEmitter { UiSinks.ccTaildropInboxSink }
 
     /// Новый подключённый клиент без подписок — под поток одной передачи
     /// (отправка, выгрузка файла), чтобы его закрытие не задевало другие.
@@ -803,7 +803,7 @@ class BoxCommandClient {
     private val openConnectClient = AtomicReference<CommandClient?>(null)
     private val openConnectSub = AtomicReference<OpenConnectStatusSubscription?>(null)
     private val openConnectGen = AtomicInteger(0)
-    private val openConnectEmitter = SnapshotEmitter { BoxVpnService.ccOpenConnectSink }
+    private val openConnectEmitter = SnapshotEmitter { UiSinks.ccOpenConnectSink }
     /// Последний снапшот endpoint'ов: Dart забирает его при подключении
     /// (висящий челлендж при открытии приложения).
     @Volatile private var openConnectEndpoints: List<Map<String, Any>> = emptyList()
@@ -1059,7 +1059,7 @@ class BoxCommandClient {
     private val tailscalePingClient = AtomicReference<CommandClient?>(null)
     private val tailscalePingSession = AtomicReference<TailscalePingSession?>(null)
     private val tailscalePingGen = AtomicInteger(0)
-    private val tailscalePingEmitter = SnapshotEmitter { BoxVpnService.ccTailscalePingSink }
+    private val tailscalePingEmitter = SnapshotEmitter { UiSinks.ccTailscalePingSink }
 
     fun startTailscalePing(tag: String, peerIP: String) {
         stopTailscalePing()
@@ -1111,7 +1111,7 @@ class BoxCommandClient {
     private val connTestClient = AtomicReference<CommandClient?>(null)
     private val connTestSession = AtomicReference<ConnectionTestSession?>(null)
     private val connTestGen = AtomicInteger(0)
-    private val connTestEmitter = EventEmitter { BoxVpnService.ccConnectionTestSink }
+    private val connTestEmitter = EventEmitter { UiSinks.ccConnectionTestSink }
 
     fun startConnectionTest(
         link: String,
@@ -1753,7 +1753,7 @@ class BoxCommandClient {
             runCatching {
                 if (gen != statusGen.get()) return  // устаревшее поколение
                 val m = message ?: return
-                if (BoxVpnService.ccStatusSink == null) return
+                if (UiSinks.ccStatusSink == null) return
                 val snap = HashMap<String, Any>(10)
                 snap["uplink"] = m.getUplink()
                 snap["downlink"] = m.getDownlink()
@@ -1777,7 +1777,7 @@ class BoxCommandClient {
             runCatching {
                 if (gen != screenGen.get()) return
                 val it = outbounds ?: return
-                if (BoxVpnService.ccOutboundsSink == null) return
+                if (UiSinks.ccOutboundsSink == null) return
                 val list = ArrayList<Map<String, Any>>()
                 while (it.hasNext()) {
                     val item = it.next()
@@ -1796,7 +1796,7 @@ class BoxCommandClient {
             runCatching {
                 if (gen != screenGen.get()) return
                 val it = groups ?: return
-                if (BoxVpnService.ccGroupsSink == null) return
+                if (UiSinks.ccGroupsSink == null) return
                 val list = ArrayList<Map<String, Any>>()
                 while (it.hasNext()) list.add(serializeGroup(it.next()))
                 groupsEmitter.offer(list)
@@ -1821,7 +1821,7 @@ class BoxCommandClient {
         override fun writeDNSQuery(query: DnsQuery?) {
             runCatching {
                 val q = query ?: return
-                if (BoxVpnService.ccDnsQueriesSink == null) return
+                if (UiSinks.ccDnsQueriesSink == null) return
                 // §180 — processInfo: атрибуция к приложению ИЗ ЯДРА (не connId-сшивка).
                 var pkg = ""
                 var processPath = ""
@@ -1971,7 +1971,7 @@ class BoxCommandClient {
             // случилось; §193 — re-emit при подписке отдаёт накопленное новому
             // подписчику (см. reEmitScreenConnections), закрывая потерю стартового
             // reset-снапшота (connections — single-shot, pull в ядре нет).
-            if (BoxVpnService.ccConnectionsSink == null) return
+            if (UiSinks.ccConnectionsSink == null) return
             connectionsEmitter.offer(serializeConnections(acc))
         }.onFailure { Log.w(TAG, "applyConnectionEvents failed: ${it.message}") }
     }
@@ -2058,14 +2058,14 @@ class BoxCommandClient {
 
     // ═══════════════════════ Emitters (по образцу core-log drainer) ═══════════════════════
 
-    private val statusEmitter = SnapshotEmitter { BoxVpnService.ccStatusSink }
-    private val outboundsEmitter = SnapshotEmitter { BoxVpnService.ccOutboundsSink }
-    private val groupsEmitter = SnapshotEmitter { BoxVpnService.ccGroupsSink }
-    private val connectionsEmitter = SnapshotEmitter { BoxVpnService.ccConnectionsSink }
+    private val statusEmitter = SnapshotEmitter { UiSinks.ccStatusSink }
+    private val outboundsEmitter = SnapshotEmitter { UiSinks.ccOutboundsSink }
+    private val groupsEmitter = SnapshotEmitter { UiSinks.ccGroupsSink }
+    private val connectionsEmitter = SnapshotEmitter { UiSinks.ccConnectionsSink }
     // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
-    private val dnsQueriesEmitter = EventEmitter { BoxVpnService.ccDnsQueriesSink }
+    private val dnsQueriesEmitter = EventEmitter { UiSinks.ccDnsQueriesSink }
     // §579 — состояние узлов Tailscale: снапшот, coalesce.
-    private val tailscaleEmitter = SnapshotEmitter { BoxVpnService.ccTailscaleSink }
+    private val tailscaleEmitter = SnapshotEmitter { UiSinks.ccTailscaleSink }
 
     /// Дросселированный эмиттер: queue + drop-newest + single Runnable + main-Handler + batch.
     /// Для status/outbounds/groups/connections эмитим ПОСЛЕДНИЙ снапшот (coalesce —

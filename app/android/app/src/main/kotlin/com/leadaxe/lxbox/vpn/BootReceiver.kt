@@ -97,17 +97,18 @@ class BootReceiver : BroadcastReceiver() {
         /// §279 — см. KEY_APP_LANGUAGE. Писать только через L10n.applySetting
         /// (pref + LocaleManager + relabel поверхностей одним путём).
         fun setAppLanguage(context: Context, value: String) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putString(KEY_APP_LANGUAGE, value).apply()
         }
 
         fun getAppLanguage(context: Context): String {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getString(KEY_APP_LANGUAGE, "system") ?: "system"
         }
 
-        /// Зеркало `boxvpn_boot` — для NativeCache (одноразовая чистка ключей
-        /// состояния, переехавших в кэш).
+        /// Зеркало `boxvpn_boot` — единственное место открытия файла (§740):
+        /// им пользуются все геттеры/сеттеры здесь и NativeCache (одноразовая
+        /// чистка ключей состояния, переехавших в кэш).
         internal fun prefs(context: Context) =
             context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
 
@@ -164,7 +165,7 @@ class BootReceiver : BroadcastReceiver() {
         ): Boolean {
             val before = taildropAutosaveOffTags(context)
             val newAutosaveOff = autosaveOff.toSet()
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit()
+            prefs(context).edit()
                 .putStringSet(KEY_TAILDROP_COMMANDS_OFF_TAGS, commandsOff.toSet())
                 .putStringSet(KEY_TAILDROP_AUTOSAVE_OFF_TAGS, newAutosaveOff)
                 .apply()
@@ -173,96 +174,96 @@ class BootReceiver : BroadcastReceiver() {
 
         /// Копия: множество из getStringSet менять нельзя.
         fun taildropCommandsOffTags(context: Context): Set<String> =
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .getStringSet(KEY_TAILDROP_COMMANDS_OFF_TAGS, null)?.toSet() ?: emptySet()
 
         fun taildropAutosaveOffTags(context: Context): Set<String> =
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .getStringSet(KEY_TAILDROP_AUTOSAVE_OFF_TAGS, null)?.toSet() ?: emptySet()
 
         /// §721 — зеркало var `appfunctions_enabled` (тумблер «AI assistant
         /// control»). Default false: пока Dart не включил, функции отказывают.
         fun setAppFunctionsEnabled(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_APPFUNCTIONS_ENABLED, enabled).apply()
         }
 
         fun isAppFunctionsEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_APPFUNCTIONS_ENABLED, false)
         }
 
         /// §707 итер. 9 — кнопки уведомления VPN, зеркало native_prefs.
         /// Default true. После записи уведомление обновляет вызывающий.
         fun setNotificationStop(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_NOTIFICATION_STOP, enabled).apply()
         }
 
         fun isNotificationStop(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_NOTIFICATION_STOP, true)
         }
 
         fun setNotificationRestart(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_NOTIFICATION_RESTART, enabled).apply()
         }
 
         fun isNotificationRestart(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_NOTIFICATION_RESTART, true)
         }
 
         fun setNotificationSend(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_NOTIFICATION_SEND, enabled).apply()
         }
 
         fun isNotificationSend(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_NOTIFICATION_SEND, true)
         }
 
         fun setMemoryLimit(context: Context, value: String) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putString(KEY_MEMORY_LIMIT, value).apply()
         }
 
         fun getMemoryLimit(context: Context): String {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getString(KEY_MEMORY_LIMIT, MEMORY_LIMIT_AUTO) ?: MEMORY_LIMIT_AUTO
         }
 
         fun setBackgroundMode(context: Context, mode: String) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putString(KEY_BACKGROUND_MODE, mode).apply()
         }
 
         fun getBackgroundMode(context: Context): String {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getString(KEY_BACKGROUND_MODE, BG_MODE_NEVER) ?: BG_MODE_NEVER
         }
 
         fun setEnabled(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_AUTO_START, enabled).apply()
         }
 
         fun isEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_AUTO_START, false)
         }
 
         fun setKeepOnExit(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_KEEP_ON_EXIT, enabled).apply()
         }
 
         fun isKeepOnExit(context: Context): Boolean {
             // §188 — дефолт ON (было false). keep-alive ожидаем пользователями
             // (VPN живёт при закрытии). Затрагивает существующих без явного ключа.
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_KEEP_ON_EXIT, true)
         }
 
@@ -270,12 +271,12 @@ class BootReceiver : BroadcastReceiver() {
         /// callback. Read by `BoxApplication.initialize` для `SetupOptions.debug`.
         /// Default false — opt-in для диагностики (сотни строк/мин на busy traffic).
         fun setCoreLogsEnabled(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_CORE_LOGS, enabled).apply()
         }
 
         fun isCoreLogsEnabled(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_CORE_LOGS, false)
         }
 
@@ -283,46 +284,46 @@ class BootReceiver : BroadcastReceiver() {
         /// `BoxService.writeDebugMessage`. Применяется на лету (volatile в
         /// BoxService), здесь — только persist для переживания рестарта.
         fun setCoreLogsVerbose(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_CORE_LOGS_VERBOSE, enabled).apply()
         }
 
         fun isCoreLogsVerbose(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_CORE_LOGS_VERBOSE, false)
         }
 
         /// §049 F15 fix: opt-in toggle для VPN bypass. Reference (`Settings.allowBypass`).
         /// Default false — strict tunnel.
         fun setAllowBypass(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_ALLOW_BYPASS, enabled).apply()
         }
 
         fun isAllowBypass(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_ALLOW_BYPASS, false)
         }
 
         /// §124 — см. KEY_AUTO_REDIRECT. Default false (strict / не-root безопасно).
         fun setAutoRedirect(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_AUTO_REDIRECT, enabled).apply()
         }
 
         fun isAutoRedirect(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_AUTO_REDIRECT, false)
         }
 
         /// §192 — зеркало has_tun из Dart (§189). Default true (см. KEY_HAS_TUN).
         fun setHasTun(context: Context, enabled: Boolean) {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            prefs(context)
                 .edit().putBoolean(KEY_HAS_TUN, enabled).apply()
         }
 
         fun hasTun(context: Context): Boolean {
-            return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+            return prefs(context)
                 .getBoolean(KEY_HAS_TUN, true)
         }
     }

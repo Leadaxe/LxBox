@@ -27,13 +27,36 @@ import kotlinx.coroutines.launch
  */
 class BoxApplication : Application() {
 
+    /**
+     * §740 — шаги разложены по сторонам будущего разделения процессов
+     * (сервис VPN / UI с Flutter-движком). Порядок вызовов — прежний, шаг в
+     * шаг; стороны чередуются, поэтому функций пять, а не три.
+     */
     override fun onCreate() {
         super.onCreate()
+        initCommon()
+        initServiceSideEarly()
+        initUiSide()
+        initCommonWifiCache()
+        initServiceSide()
+    }
+
+    /**
+     * Общее: нужно обеим сторонам. `instance` — опора компаньон-прокси
+     * (`BoxApplication.application`, системные сервисы).
+     */
+    private fun initCommon() {
         instance = this
 
         // Reference 1.13.11 (Application.kt:41) закомментировал:
 //        Seq.setContext(this)
+    }
 
+    /**
+     * Сервис: локаль ядра (до `Libbox.setup`) и ярлыки лаунчера (их
+     * действия — старт/стоп VPN без UI).
+     */
+    private fun initServiceSideEarly() {
         // setLocale обязательно ДО Libbox.setup'а — иначе sing-box error
         // messages не локализованы. Формат `xx_YY` (с подчёркиванием).
         //
@@ -52,17 +75,34 @@ class BoxApplication : Application() {
 
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
+    }
 
+    /**
+     * UI: наблюдатель Wi-Fi для истории сетей — включает и выключает его Dart
+     * (`setAutoRecordWifi`).
+     */
+    private fun initUiSide() {
         // §051 Phase 3 — singleton observer. start()/stop() driven by
         // `auto_record_wifi_history` storage flag. Dart запускает на
         // app init если flag true; toggle в Diagnostics дёргает на лету.
         wifiObserver = WifiNetworkObserver(this)
+    }
 
+    /**
+     * Общее: кэш Wi-Fi читает `WifiInfoReader` — и UI, и сервис.
+     */
+    private fun initCommonWifiCache() {
         // §569 — кэш Wi-Fi для API 31+ (NetworkCallback с
         // FLAG_INCLUDE_LOCATION_INFO). Колбэк регистрируется лениво, при
         // первом WifiInfoReader.read с пройденным preflight.
         wifiStateCache = WifiStateCache(this)
+    }
 
+    /**
+     * Сервис: Taildrop (входящие узлов, «Поделиться» / «Send to device»
+     * после падения) и `Libbox.setup` с барьером `libboxReady`.
+     */
+    private fun initServiceSide() {
         // §707 итер. 3 — принятое во входящие узлов с автосохранением (без
         // галки, до её включения, неудачи прошлых попыток) уходит в Downloads.
         // В фоне, одной очередью с другими разборами.

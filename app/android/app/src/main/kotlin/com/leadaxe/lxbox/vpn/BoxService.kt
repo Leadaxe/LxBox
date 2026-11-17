@@ -1215,7 +1215,7 @@ class BoxService(
         // на coreLog (или отписался), нет смысла гонять два regex (ansi-strip +
         // trace-фильтр) на каждой строке sing-box лога. Раньше оба regex
         // выполнялись до этой проверки и работа выбрасывалась впустую.
-        if (BoxVpnService.coreLogSink == null) return
+        if (UiSinks.coreLogSink == null) return
         val plain = ansiEscapeRe.replace(message, "")
         // §345 — в verbose-режиме TRACE/DEBUG проходят (диагностика on-demand);
         // back-pressure ниже (LOG_QUEUE_MAX, drop newest) защищает от потопа.
@@ -1235,7 +1235,7 @@ class BoxService(
     /// но без ANSI-strip и без фильтра TRACE/DEBUG: в стеках горутин эти
     /// слова не должны глушить запись.
     private fun appLogLine(text: String) {
-        if (BoxVpnService.coreLogSink == null) return
+        if (UiSinks.coreLogSink == null) return
         if (coreLogQueue.size >= LOG_QUEUE_MAX) {
             coreLogDrops.incrementAndGet()
             return
@@ -1280,7 +1280,7 @@ class BoxService(
     private val coreLogDrainer: Runnable by lazy {
         Runnable {
             drainerScheduled.set(false)
-            val sink = BoxVpnService.coreLogSink ?: run { coreLogQueue.clear(); return@Runnable }
+            val sink = UiSinks.coreLogSink ?: run { coreLogQueue.clear(); return@Runnable }
             val batch = ArrayList<String>(DRAIN_BATCH_MAX.coerceAtMost(64))
             var taken = 0
             while (taken < DRAIN_BATCH_MAX) {

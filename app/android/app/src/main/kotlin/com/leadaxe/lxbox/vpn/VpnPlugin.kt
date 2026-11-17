@@ -63,68 +63,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "goroutine", "profile", "heap", "allocs",
             "block", "mutex", "threadcreate",
         )
-
-        // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
-        // живёт вне Flutter-плагина). Заполняются в onAttachedToEngine,
-        // обнуляются в onDetachedFromEngine. null = Flutter-engine не активен.
-        @Volatile
-        private var bridgeChannel: MethodChannel? = null
-        @Volatile
-        private var appContext: Context? = null
-        private val bridgeHandler =
-            android.os.Handler(android.os.Looper.getMainLooper())
-
-        /// §047 incoming bridge: LxBoxIntentReceiver форвардит intent-action +
-        /// extras → Dart (`box_vpn_client` `automationAction` handler) → shared
-        /// action-handlers. Если engine не запущен — silently skip.
-        fun handleAutomationAction(name: String, args: Map<String, Any?>) {
-            val channel = bridgeChannel
-            if (channel == null) {
-                Log.w(TAG, "[automation] handleAutomationAction($name) — no Flutter engine, skip")
-                return
-            }
-            bridgeHandler.post {
-                runCatching {
-                    channel.invokeMethod(
-                        "automationAction",
-                        mapOf("name" to name, "args" to args),
-                    )
-                }.onFailure {
-                    Log.e(TAG, "[automation] invokeMethod(automationAction) failed", it)
-                }
-            }
-        }
-
-        /// Фича 478, ревью после v2.25.1 (M2) — сообщить Dart о нативном Stop
-        /// (`BoxVpnService.stop`): Dart гасит идущий прогон страховки. Имя —
-        /// `kVpnStopRequestedAction` в `automation_dispatcher.dart`. Нет
-        /// движка — нет и прогона, пропуск молча.
-        fun notifyStopRequested() = handleAutomationAction("vpn-stop-requested", emptyMap())
-
-        /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
-        /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
-        /// `com.leadaxe.lxbox.event.<action>`. Открыт всем подписчикам — события
-        /// не содержат секретов (только лейблы: теги нод, группы, статус); см.
-        /// §157 (permission-фильтр удалён вместе с нерабочей галкой).
-        fun sendAutomationBroadcast(action: String, extras: Map<String, Any?>) {
-            val ctx = appContext ?: return
-            val intent = Intent("com.leadaxe.lxbox.event.$action")
-            for ((k, v) in extras) {
-                when (v) {
-                    null -> {}
-                    is String -> intent.putExtra(k, v)
-                    is Boolean -> intent.putExtra(k, v)
-                    is Int -> intent.putExtra(k, v)
-                    is Long -> intent.putExtra(k, v)
-                    is Double -> intent.putExtra(k, v)
-                    else -> intent.putExtra(k, v.toString())
-                }
-            }
-            // setPackage намеренно не выставляем — broadcast открыт всем
-            // подписчикам (события без секретов, только лейблы).
-            ctx.sendBroadcast(intent)
-            Log.d(TAG, "[automation] emit $action (${extras.size} extras)")
-        }
     }
 
     private lateinit var methodChannel: MethodChannel
@@ -204,8 +142,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         methodChannel = MethodChannel(binding.binaryMessenger, METHOD_CHANNEL)
         methodChannel.setMethodCallHandler(this)
         // §047 — статические bridge-ссылки для LxBoxIntentReceiver.
-        bridgeChannel = methodChannel
-        appContext = context
+        AutomationBridge.bridgeChannel = methodChannel
+        AutomationBridge.appContext = context
 
         statusEventChannel = EventChannel(binding.binaryMessenger, STATUS_CHANNEL)
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -220,17 +158,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         })
 
         // §043: core log pump из sing-box. Sing-box логи приходят через
-        // PlatformInterface.writeDebugMessage в BoxVpnService → coreLogSink
-        // (Volatile companion field) → этот EventChannel → ClashLogPump в Dart.
+        // PlatformInterface.writeDebugMessage в BoxVpnService → UiSinks.coreLogSink
+        // (Volatile-поле) → этот EventChannel → ClashLogPump в Dart.
         coreLogEventChannel = EventChannel(binding.binaryMessenger, CORE_LOG_CHANNEL)
         coreLogEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
                 Log.d(TAG, "[vpn] coreLogEventChannel.onListen — sink installed")
-                BoxVpnService.coreLogSink = sink
+                UiSinks.coreLogSink = sink
             }
             override fun onCancel(args: Any?) {
                 Log.d(TAG, "[vpn] coreLogEventChannel.onCancel — sink cleared")
-                BoxVpnService.coreLogSink = null
+                UiSinks.coreLogSink = null
             }
         })
 
@@ -238,23 +176,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         // BoxCommandClient.handler пушит снапшоты в BoxVpnService.cc*Sink → сюда → Dart.
         ccStatusEventChannel = EventChannel(binding.binaryMessenger, CC_STATUS_CHANNEL)
         ccStatusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccStatusSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccStatusSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccStatusSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccStatusSink = null }
         })
         ccOutboundsEventChannel = EventChannel(binding.binaryMessenger, CC_OUTBOUNDS_CHANNEL)
         ccOutboundsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOutboundsSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccOutboundsSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccOutboundsSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccOutboundsSink = null }
         })
         ccGroupsEventChannel = EventChannel(binding.binaryMessenger, CC_GROUPS_CHANNEL)
         ccGroupsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccGroupsSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccGroupsSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccGroupsSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccGroupsSink = null }
         })
         ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
         ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
-                BoxVpnService.ccConnectionsSink = sink
+                UiSinks.ccConnectionsSink = sink
                 // §193 — connections single-shot: ядро шлёт reset-снапшот РОВНО
                 // один раз при подписке screenClient (pull в libbox нет). Новый
                 // Dart-подписчик (открытие Stats при уже живом screenClient) не
@@ -262,42 +200,42 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // аккумулятор сразу, чтобы Stats увидел текущие соединения.
                 BoxService.commandClient?.reEmitScreenConnections()
             }
-            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
+            override fun onCancel(args: Any?) { UiSinks.ccConnectionsSink = null }
         })
         // §180 — DNS-журнал из ядра (SPEC 018).
         ccDnsEventChannel = EventChannel(binding.binaryMessenger, CC_DNS_CHANNEL)
         ccDnsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccDnsQueriesSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccDnsQueriesSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccDnsQueriesSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccDnsQueriesSink = null }
         })
         // §579 — состояние узлов Tailscale (псевдо-направление NETWORKS).
         ccTailscaleEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_CHANNEL)
         ccTailscaleEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscaleSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTailscaleSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTailscaleSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccTailscaleSink = null }
         })
         // §581 — ответы проверки устройства Tailscale.
         ccTailscalePingEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_PING_CHANNEL)
         ccTailscalePingEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTailscalePingSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccTailscalePingSink = null }
         })
         ccConnectionTestEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTION_TEST_CHANNEL)
         ccConnectionTestEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionTestSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionTestSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccConnectionTestSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccConnectionTestSink = null }
         })
         // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
         // §707 — входящие Taildrop узла.
         ccTaildropInboxEventChannel = EventChannel(binding.binaryMessenger, CC_TAILDROP_INBOX_CHANNEL)
         ccTaildropInboxEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTaildropInboxSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTaildropInboxSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTaildropInboxSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccTaildropInboxSink = null }
         })
         ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
         ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOpenConnectSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccOpenConnectSink = null }
+            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccOpenConnectSink = sink }
+            override fun onCancel(args: Any?) { UiSinks.ccOpenConnectSink = null }
         })
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
@@ -330,18 +268,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         ccOpenConnectEventChannel.setStreamHandler(null) // §654
         ccTaildropInboxEventChannel.setStreamHandler(null) // §707
         statusSink = null
-        BoxVpnService.coreLogSink = null
-        BoxVpnService.ccStatusSink = null
-        BoxVpnService.ccOutboundsSink = null
-        BoxVpnService.ccGroupsSink = null
-        BoxVpnService.ccConnectionsSink = null
-        BoxVpnService.ccDnsQueriesSink = null // §180
-        BoxVpnService.ccTailscaleSink = null // §579
-        BoxVpnService.ccOpenConnectSink = null // §654
-        BoxVpnService.ccTaildropInboxSink = null // §707
+        UiSinks.coreLogSink = null
+        UiSinks.ccStatusSink = null
+        UiSinks.ccOutboundsSink = null
+        UiSinks.ccGroupsSink = null
+        UiSinks.ccConnectionsSink = null
+        UiSinks.ccDnsQueriesSink = null // §180
+        UiSinks.ccTailscaleSink = null // §579
+        UiSinks.ccOpenConnectSink = null // §654
+        UiSinks.ccTaildropInboxSink = null // §707
         // §047 — обнуляем bridge-ссылки (engine detached).
-        bridgeChannel = null
-        appContext = null
+        AutomationBridge.bridgeChannel = null
+        AutomationBridge.appContext = null
         runCatching { context.unregisterReceiver(statusReceiver) }
         pluginScope.cancel()
     }
@@ -831,7 +769,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val extras = (call.argument<Map<String, Any?>>("extras")
                     ?: emptyMap())
                 if (action.isNotEmpty()) {
-                    sendAutomationBroadcast(action, extras)
+                    AutomationBridge.sendAutomationBroadcast(action, extras)
                 }
                 result.success(true)
             }
@@ -845,18 +783,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val group = call.argument<String>("group")
                 val nodes = call.argument<List<String>>("nodes")
                 val groups = call.argument<List<String>>("groups")
-                val edit = context
-                    .getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
+                val edit = AutomationCache.prefs(context)
                     .edit()
-                    .putString("active_node", node)
-                    .putString("active_group", group)
+                    .putString(AutomationCache.KEY_ACTIVE_NODE, node)
+                    .putString(AutomationCache.KEY_ACTIVE_GROUP, group)
                 // Списки сериализуем как JSON-массив строк. null → не трогаем
                 // (caller мог обновить только активное состояние).
                 if (nodes != null) {
-                    edit.putString("all_nodes", org.json.JSONArray(nodes).toString())
+                    edit.putString(AutomationCache.KEY_ALL_NODES, org.json.JSONArray(nodes).toString())
                 }
                 if (groups != null) {
-                    edit.putString("all_groups", org.json.JSONArray(groups).toString())
+                    edit.putString(AutomationCache.KEY_ALL_GROUPS, org.json.JSONArray(groups).toString())
                 }
                 edit.apply()
                 result.success(true)
@@ -1203,8 +1140,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // получатель и число сообщений лент (текст не отдаётся).
             "taildropClipState" -> result.success(TaildropClip.state(context))
             "ccTakeTaildropOpenRequest" -> {
-                val tag = BoxVpnService.taildropOpenRequest
-                BoxVpnService.taildropOpenRequest = null
+                val tag = UiLaunchRequests.taildropOpenRequest
+                UiLaunchRequests.taildropOpenRequest = null
                 result.success(tag)
             }
             // §707 итер. 9 — производные множества итоговых тегов узлов с
@@ -1230,8 +1167,8 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(ok)
             }
             "ccTakeOpenConnectOpenRequest" -> {
-                val tag = BoxVpnService.openConnectOpenRequest
-                BoxVpnService.openConnectOpenRequest = null
+                val tag = UiLaunchRequests.openConnectOpenRequest
+                UiLaunchRequests.openConnectOpenRequest = null
                 result.success(tag)
             }
             "ccSubmitOpenConnectForm" -> {

@@ -212,50 +212,6 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 "applied=${applied.size} [${applied.joinToString(",")}] " +
                 "not_installed=${missing.size} [${missing.joinToString(",")}]"
 
-        /// §043: Sink для core logs от sing-box → Flutter EventChannel.
-        @Volatile
-        var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-
-        /// §122 Фаза 0 — sink'и нового CommandClient-канала (`BoxCommandClient`).
-        /// Инвариант §2.1: эмиттер живёт во Flutter-процессе (как `coreLogSink`).
-        @Volatile
-        var ccStatusSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccOutboundsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccGroupsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccConnectionsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §180 — DNS-журнал из ядра (SPEC 018). Батч-доставка списком CcDnsQuery.
-        @Volatile
-        var ccDnsQueriesSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §579 — состояние узлов Tailscale (`SubscribeTailscaleStatus`): снапшот
-        /// списком `{tag, backend_state, state_text}` на каждое обновление ядра.
-        @Volatile
-        var ccTailscaleSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
-        @Volatile
-        var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §687 — события теста соединения (`StartConnectionTest`): батчи
-        /// `{event: stage|result|error, …}`.
-        @Volatile
-        var ccConnectionTestSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`):
-        /// снапшот `{endpoints: [...], callback: {...}?}` на каждое обновление.
-        @Volatile
-        var ccOpenConnectSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §654 C — тап по уведомлению «Sign-in required»: тег узла, чей
-        /// челлендж показать. Dart забирает его на старте и при возврате.
-        @Volatile
-        var openConnectOpenRequest: String? = null
-        /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
-        @Volatile
-        var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §707 — тап по уведомлению Taildrop: тег узла, чью вкладку Network
-        /// открыть. Dart забирает его на старте и при возврате.
-        @Volatile
-        var taildropOpenRequest: String? = null
-
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
@@ -269,7 +225,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             // Идущий прогон страховки о них иначе не узнаёт и финальным
             // стартом поднимает туннель обратно; особенно в фазе тихого
             // цикла, где сервиса нет и ACTION_STOP принять некому.
-            VpnPlugin.notifyStopRequested()
+            AutomationBridge.notifyStopRequested()
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
