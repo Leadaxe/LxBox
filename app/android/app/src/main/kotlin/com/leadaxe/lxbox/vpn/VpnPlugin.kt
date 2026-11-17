@@ -198,7 +198,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // Dart-подписчик (открытие Stats при уже живом screenClient) не
                 // получает нового reset → пусто. Переэмитим накопленный
                 // аккумулятор сразу, чтобы Stats увидел текущие соединения.
-                BoxService.commandClient?.reEmitScreenConnections()
+                CoreSession.client?.reEmitScreenConnections()
             }
             override fun onCancel(args: Any?) { UiSinks.ccConnectionsSink = null }
         })
@@ -333,10 +333,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // §276 — map вместо голой строки: иначе UI, вернувшийся из фона
                 // после перехвата слота, потеряет revoked и покажет нейтральный
                 // Disconnected вместо «Taken by another VPN».
+                // §742 — один снимок: статус и метка из одной записи.
+                val st = TunnelState.snapshot
                 result.success(
                     mapOf(
-                        "status" to BoxVpnService.currentStatus.name,
-                        BoxVpnService.EXTRA_REVOKED to BoxVpnService.currentRevoked,
+                        "status" to st.status.name,
+                        BoxVpnService.EXTRA_REVOKED to st.revoked,
                     )
                 )
             }
@@ -350,7 +352,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // swipe). 0 = не запущен / только что стартовал. Dart на cold-
                 // start вычисляет честный connectedSince = now - uptime, вместо
                 // обнуления на «сейчас». Монотонные часы (elapsedRealtime).
-                val started = BoxVpnService.tunnelStartedElapsedMs
+                val started = TunnelState.startedElapsedMs
                 val uptime = if (started > 0L) SystemClock.elapsedRealtime() - started else 0L
                 result.success(uptime)
             }
@@ -514,7 +516,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // §069: runtime applied value (от последнего establish()), в отличие
             // от persisted getAllowBypass() который меняется до VPN reload.
             "getCurrentSessionAllowBypass" -> {
-                result.success(BoxVpnService.currentSessionAllowBypass)
+                result.success(TunnelState.sessionAllowBypass)
             }
             "quitApp" -> {
                 // §043 follow-up: завершить процесс целиком, чтобы при следующем
@@ -832,42 +834,42 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // пустой UI. Идемпотентно при первом старте. Профайлер: чистая
             // остановка осиротевшего клиента (буфер в Dart потерян by design).
             "ccResyncForReopen" -> {
-                BoxService.commandClient?.apply {
+                CoreSession.client?.apply {
                     resyncForReopen()
                     disconnectProfiler()
                 }
                 result.success(true)
             }
             "ccConnectScreen" -> {
-                BoxService.commandClient?.connectScreen(); result.success(true)
+                CoreSession.client?.connectScreen(); result.success(true)
             }
             "ccDisconnectScreen" -> {
-                BoxService.commandClient?.disconnectScreen(); result.success(true)
+                CoreSession.client?.disconnectScreen(); result.success(true)
             }
             "ccConnectProfiler" -> {
-                BoxService.commandClient?.connectProfiler(); result.success(true)
+                CoreSession.client?.connectProfiler(); result.success(true)
             }
             "ccDisconnectProfiler" -> {
-                BoxService.commandClient?.disconnectProfiler(); result.success(true)
+                CoreSession.client?.disconnectProfiler(); result.success(true)
             }
             // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
             // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
             // §579 — подписка SubscribeTailscaleStatus. Старт стрима — gRPC,
             // поэтому на Dispatchers.IO; ответ сразу (данные придут стримом).
             "ccStartTailscaleStatus" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscaleStatus() }
                 result.success(cc != null)
             }
             "ccStopTailscaleStatus" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
                 result.success(true)
             }
             // §581 — exit node на ходу и выход из аккаунта: блокирующий gRPC
             // на Dispatchers.IO; ответ — null (успех) или текст ошибки ядра.
             "ccSetTailscaleExitNode" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("stable_id") ?: ""
                 pluginScope.launch {
@@ -881,7 +883,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // map записи, null — пропуск тика, ядро без метода — error
             // `unimplemented` (Dart останавливает опрос).
             "ccGetTailscaleStatus" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
@@ -900,7 +902,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccTailscaleLogout" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val err = withContext(Dispatchers.IO) {
@@ -913,7 +915,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // null; отказ ядра → PlatformException с кодом как у
             // ccSetEndpointEnabled.
             "ccTailscaleLogin" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val key = call.argument<String>("auth_key") ?: ""
                 pluginScope.launch {
@@ -932,20 +934,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStartTailscalePing" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val ip = call.argument<String>("peer_ip") ?: ""
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscalePing(tag, ip) }
                 result.success(cc != null)
             }
             "ccStopTailscalePing" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
                 result.success(true)
             }
             // §687 — тест соединения: события идут в EventChannel connection_test.
             "ccStartConnectionTest" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val link = call.argument<String>("link") ?: ""
                 val pkg = call.argument<String>("package_name") ?: ""
                 val depth = call.argument<Int>("depth") ?: 0
@@ -954,7 +956,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopConnectionTest" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
                 result.success(true)
             }
@@ -962,23 +964,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // отмена, слушатель SSO. Блокирующий gRPC — на Dispatchers.IO;
             // ответ — null (успех) или текст ошибки.
             "ccGetOpenConnectStatus" -> {
-                result.success(BoxService.commandClient?.openConnectSnapshot())
+                result.success(CoreSession.client?.openConnectSnapshot())
             }
             // §707 — Taildrop: входящие узла, сохранение, удаление, отправка
             // из строки пира. Блокирующий gRPC — на Dispatchers.IO.
             "ccStartTaildropInbox" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTaildropInbox(tag) }
                 result.success(cc != null)
             }
             "ccStopTaildropInbox" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
                 result.success(true)
             }
             "ccTaildropDelete", "ccTaildropCancelReceiving", "ccTaildropMarkRead" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val name = call.argument<String>("name") ?: ""
                 val sender = call.argument<String>("sender_id") ?: ""
@@ -1102,7 +1104,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
             // на диске (каталог узла — из последнего собранного конфига).
             "ccTaildropInboxSnapshot" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 if (cc == null || tag.isEmpty()) {
                     result.success(null)
@@ -1172,7 +1174,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(tag)
             }
             "ccSubmitOpenConnectForm" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 val raw = call.argument<List<Any?>>("values") ?: emptyList()
@@ -1189,7 +1191,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCancelOpenConnectChallenge" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 pluginScope.launch {
@@ -1200,7 +1202,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStartOpenConnectCallback" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 val port = call.argument<Int>("port") ?: 8020
@@ -1213,11 +1215,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStopOpenConnectCallback" -> {
-                BoxService.commandClient?.stopOpenConnectCallback()
+                CoreSession.client?.stopOpenConnectCallback()
                 result.success(true)
             }
             "ccCancelPing" -> {
-                BoxService.commandClient?.cancelPing(); result.success(true)
+                CoreSession.client?.cancelPing(); result.success(true)
             }
             // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
             // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
@@ -1225,14 +1227,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // возврат из фона — поднимаем status(NORMAL)+screen(если refs>0).
             "ccSetStatusFast" -> {
                 val fast = call.argument<Boolean>("fast") ?: false
-                BoxService.commandClient?.setStatusFast(fast); result.success(true)
+                CoreSession.client?.setStatusFast(fast); result.success(true)
             }
             "ccPauseClients" -> {
-                BoxService.commandClient?.apply { pauseStatus(); pauseScreen() }
+                CoreSession.client?.apply { pauseStatus(); pauseScreen() }
                 result.success(true)
             }
             "ccResumeClients" -> {
-                BoxService.commandClient?.apply { resumeStatus(); resumeScreen() }
+                CoreSession.client?.apply { resumeStatus(); resumeScreen() }
                 result.success(true)
             }
             // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
@@ -1241,7 +1243,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // приложение в ANR. Выносим на Dispatchers.IO; result.success обратно
             // на main (pluginScope = Dispatchers.Main).
             "ccUrlTestOutbound" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
                 val tag = call.argument<String>("tag") ?: ""
                 val link = call.argument<String>("link") ?: ""
@@ -1255,7 +1257,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // 058). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound:
             // на main thread обмен с телом ответа = гарантированный ANR.
             "ccGetUrlViaOutbound" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc == null) { result.success(mapOf("error" to "not connected")); return }
                 val tag = call.argument<String>("tag") ?: ""
                 val link = call.argument<String>("link") ?: ""
@@ -1272,7 +1274,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // §308 — групповой URLTest (force-тест всех членов + переселект в
             // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
             "ccUrlTestGroup" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 if (cc == null) { result.success(false); return }
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
@@ -1337,7 +1339,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Dart getRules превращает null в пустой список (диагностика —
             // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
             "ccGetRules" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getRules() }
                     result.success(r)
@@ -1347,7 +1349,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (не-STARTED/нет клиента) → Dart различает от пустого списка и не
             // трогает state. Закрывает потерянный стартовый push (pull-vs-push).
             "ccGetGroups" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getGroups() }
                     result.success(r)
@@ -1358,7 +1360,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // SubscribeOutbounds их не несут). null = не смогли прочитать.
             // Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccGetOutbounds" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getOutbounds() }
                     result.success(r)
@@ -1373,14 +1375,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
             // Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccGetDnsGroups" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
                     result.success(r)
                 }
             }
             "ccGetRunningConfig" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
                     result.success(r)
@@ -1446,7 +1448,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
             // затираем null на emptyList — различение критично (§209).
             "ccGetPool" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
@@ -1454,7 +1456,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccSelectOutbound" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val group = call.argument<String>("group") ?: ""
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
@@ -1467,7 +1469,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (not_found / invalid_argument / failed_precondition / unavailable
             // / error). Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccSetEndpointEnabled" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 val enabled = call.argument<Boolean>("enabled") ?: true
                 pluginScope.launch {
@@ -1488,7 +1490,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (not_found / invalid_argument / failed_precondition /
             // unavailable / unimplemented / error).
             "ccGetWireGuardStatus" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
@@ -1504,7 +1506,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCloseConnection" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 val id = call.argument<String>("id") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.closeConnection(id) ?: false }
@@ -1512,7 +1514,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCloseConnections" -> {
-                val cc = BoxService.commandClient
+                val cc = CoreSession.client
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.closeConnections() ?: false }
                     result.success(r)
@@ -1902,7 +1904,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// деталь недоступна — считаем чужим (консервативно: лишний вопрос юзеру
     /// безопаснее молчаливого отзыва чужого туннеля).
     private fun isForeignVpnActive(): Boolean {
-        if (BoxVpnService.currentStatus != VpnStatus.Stopped) return false
+        if (TunnelState.status != VpnStatus.Stopped) return false
         val cm = BoxApplication.connectivity
         return try {
             val n = cm.activeNetwork ?: return false

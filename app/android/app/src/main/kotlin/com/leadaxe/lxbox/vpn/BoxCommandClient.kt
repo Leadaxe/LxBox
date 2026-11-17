@@ -76,7 +76,21 @@ import java.util.concurrent.atomic.AtomicReference
 ///
 /// Sink'и читаются из `UiSinks` (`cc*Sink`, @Volatile) — инвариант §2.1:
 /// эмиттер живёт во Flutter-процессе.
-class BoxCommandClient {
+///
+/// §742 — клиент `command.sock` не знает о сервисе: уведомления и журнал
+/// приложения приходят через [Host] (реализацию даёт `BoxService`), а
+/// предупреждения общей полосы — через [laneWarningSink].
+class BoxCommandClient(private val host: Host) {
+
+    /// §742 — то, что клиенту нужно от стороны, которая его создала.
+    interface Host {
+        /// Уведомление «Sign-in required» для openconnect-endpoint'а [tag].
+        fun showSignIn(tag: String)
+        /// Снять уведомление «Sign-in required» для [tag].
+        fun cancelSignIn(tag: String)
+        /// WARN-строка в журнал приложения (AppLog).
+        fun logWarning(text: String)
+    }
 
     companion object {
         private const val TAG = "BoxCommandClient"
@@ -108,10 +122,16 @@ class BoxCommandClient {
             "lxbox-cc",
             onSlow = { msg ->
                 Log.e(TAG, "[cc §732] $msg")
-                BoxService.appLogWarning("[cc §732] $msg")
+                laneWarningSink?.invoke("[cc §732] $msg")
             },
             onError = { label, t -> Log.w(TAG, "[cc §732] $label failed: ${t.message}") },
         )
+
+        /// §742 — приёмник WARN-строк полосы [lane] (она одна на процесс, без
+        /// экземпляра клиента). Назначает `BoxService` вместе со своим `current`
+        /// и снимает вместе с ним; null — сервиса нет, строка только в logcat.
+        @Volatile
+        internal var laneWarningSink: ((String) -> Unit)? = null
     }
 
     /// §732 — пауза реконнекта statusClient: 0,5 → 8 с, сброс на успехе.
@@ -353,7 +373,7 @@ class BoxCommandClient {
             // §732 — первый сбой серии — в журнал приложения: дамп покажет,
             // что клиент не достучался до командного сервера и почему.
             if (statusBackoff.firstFailure()) {
-                BoxService.appLogWarning("[cc §732] status client cannot connect: ${it.message}")
+                host.logWarning("[cc §732] status client cannot connect: ${it.message}")
             }
             scheduleReconnect(delayMs) { if (tunnelAlive && !statusPaused) connectStatus() }
         }
@@ -847,7 +867,7 @@ class BoxCommandClient {
         disconnectClient(openConnectClient, "stopOpenConnectStatus")
         stopOpenConnectCallback()
         for (tag in openConnectNotified.keys.toList()) {
-            ServiceNotification.cancelSignIn(BoxApplication.application, tag)
+            host.cancelSignIn(tag)
         }
         openConnectNotified.clear()
         if (hadSub || openConnectEndpoints.isNotEmpty()) {
@@ -896,7 +916,6 @@ class BoxCommandClient {
     /// Уведомление «Sign-in required» на новый челлендж, снятие — когда его
     /// нет; слушатель SSO гаснет, когда его челлендж исчез или сменился.
     private fun syncOpenConnectSideEffects(endpoints: List<Map<String, Any>>) {
-        val ctx = BoxApplication.application
         val pending = HashMap<String, String>()
         for (e in endpoints) {
             val tag = e["tag"] as? String ?: continue
@@ -906,13 +925,13 @@ class BoxCommandClient {
         for ((tag, id) in pending) {
             if (openConnectNotified[tag] != id) {
                 openConnectNotified[tag] = id
-                ServiceNotification.showSignIn(ctx, tag)
+                host.showSignIn(tag)
             }
         }
         for (tag in openConnectNotified.keys.toList()) {
             if (!pending.containsKey(tag)) {
                 openConnectNotified.remove(tag)
-                ServiceNotification.cancelSignIn(ctx, tag)
+                host.cancelSignIn(tag)
             }
         }
         openConnectCallback.get()?.let { cb ->

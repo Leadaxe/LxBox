@@ -104,7 +104,7 @@ class VpnWatchdogReceiver : BroadcastReceiver() {
             Log.d(TAG, "[vpn §428] alarm fired, VPN not desired — ignore")
             return
         }
-        val status = BoxVpnService.currentStatus
+        val status = TunnelState.status
         if (status != VpnStatus.Stopped) {
             // Процесс жив (тикер не успел из-за Doze) — просто переставить.
             Log.d(TAG, "[vpn §428] alarm fired, service alive (status=${status.name}) — re-arm")

@@ -172,8 +172,8 @@ class TaildropClipActivity : Activity() {
         if (refreshing) return
         refreshing = true
         Thread {
-            val cc = BoxService.commandClient
-            val r = if (BoxVpnService.currentStatus != VpnStatus.Started || cc == null) {
+            val cc = CoreSession.client
+            val r = if (TunnelState.status != VpnStatus.Started || cc == null) {
                 TaildropClip.targets(null, emptySet())
             } else {
                 val snapshot = runCatching { cc.tailscaleSnapshot(SNAPSHOT_TIMEOUT_MS) }.getOrNull()

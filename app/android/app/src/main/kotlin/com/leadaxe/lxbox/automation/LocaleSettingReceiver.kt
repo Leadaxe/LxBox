@@ -9,6 +9,7 @@ import com.leadaxe.lxbox.MainActivity
 import com.leadaxe.lxbox.vpn.AutomationBridge
 import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxVpnService
+import com.leadaxe.lxbox.vpn.TunnelState
 import com.leadaxe.lxbox.vpn.VpnStatus
 
 /// §047 Шаг 2 — setting-плагин (Locale/Tasker «Action → Plugin → L×Box»).
@@ -57,7 +58,7 @@ class LocaleSettingReceiver : BroadcastReceiver() {
 
     /// Тот же toggle-путь, что у raw-receiver Шага 1 (§032 consent-flow).
     private fun handleToggle(context: Context) {
-        if (BoxVpnService.currentStatus == VpnStatus.Started) {
+        if (TunnelState.status == VpnStatus.Started) {
             BoxVpnService.stop(context)
             return
         }

@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.leadaxe.lxbox.vpn.AutomationCache
-import com.leadaxe.lxbox.vpn.BoxVpnService
+import com.leadaxe.lxbox.vpn.TunnelState
 import com.leadaxe.lxbox.vpn.VpnStatus
 
 /// §047 Шаг 2 — condition-плагин (Locale/Tasker «State → Plugin → L×Box»).
@@ -14,7 +14,7 @@ import com.leadaxe.lxbox.vpn.VpnStatus
 /// **ordered-broadcast result code**: SATISFIED / UNSATISFIED / UNKNOWN.
 ///
 /// Отвечать обязаны **синхронно** — Flutter-engine может спать. VPN up/down
-/// читаем из [BoxVpnService.currentStatus] (companion @Volatile, всегда жив).
+/// читаем из [TunnelState.status] (companion @Volatile, всегда жив).
 /// Активную ноду/группу — из native-кеша `lxbox_automation` prefs (Dart
 /// зеркалит туда при смене через `setAutomationActiveState`).
 class LocaleConditionReceiver : BroadcastReceiver() {
@@ -51,7 +51,7 @@ class LocaleConditionReceiver : BroadcastReceiver() {
     private fun evaluate(context: Context, check: String, equals: String?): Int {
         val prefs = AutomationCache.prefs(context)
         return when (check) {
-            "vpn-up" -> satisfied(BoxVpnService.currentStatus == VpnStatus.Started)
+            "vpn-up" -> satisfied(TunnelState.status == VpnStatus.Started)
             "active-node" -> matchCached(prefs.getString(AutomationCache.KEY_ACTIVE_NODE, null), equals)
             "active-group" -> matchCached(prefs.getString(AutomationCache.KEY_ACTIVE_GROUP, null), equals)
             else -> LocaleApi.RESULT_CONDITION_UNKNOWN

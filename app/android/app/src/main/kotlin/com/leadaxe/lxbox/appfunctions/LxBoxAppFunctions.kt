@@ -13,6 +13,7 @@ import com.leadaxe.lxbox.vpn.BootReceiver
 import com.leadaxe.lxbox.vpn.BoxApplication
 import com.leadaxe.lxbox.vpn.BoxVpnService
 import com.leadaxe.lxbox.vpn.ConfigManager
+import com.leadaxe.lxbox.vpn.TunnelState
 import com.leadaxe.lxbox.vpn.VpnStatus
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
@@ -48,11 +49,11 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
         BoxApplication.initialize(ctx)
         val needsConsent = BootReceiver.hasTun(ctx) && VpnService.prepare(ctx) != null
         val decision = AppFunctionsLogic.decideStart(
-            status = BoxVpnService.currentStatus,
+            status = TunnelState.status,
             needsConsent = needsConsent,
             hasConfig = AppFunctionsLogic.hasConfig(ConfigManager.load()),
         )
-        Log.d(TAG, "startVpn: ${decision::class.simpleName}, status=${BoxVpnService.currentStatus}")
+        Log.d(TAG, "startVpn: ${decision::class.simpleName}, status=${TunnelState.status}")
         when (decision) {
             AppFunctionsLogic.StartDecision.AlreadyRunning -> return current()
             AppFunctionsLogic.StartDecision.NoPermission ->
@@ -73,8 +74,8 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
     @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
     suspend fun stopVpn(): VpnState {
         ensureEnabled()
-        Log.d(TAG, "stopVpn: status=${BoxVpnService.currentStatus}")
-        if (BoxVpnService.currentStatus == VpnStatus.Stopped) return current()
+        Log.d(TAG, "stopVpn: status=${TunnelState.status}")
+        if (TunnelState.status == VpnStatus.Stopped) return current()
         BoxVpnService.stop(applicationContext)
         return awaitSettled(VpnStatus.Stopped)
     }
@@ -95,7 +96,7 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
     }
 
     private fun current(): VpnState =
-        VpnState(AppFunctionsLogic.statusValue(BoxVpnService.currentStatus))
+        VpnState(AppFunctionsLogic.statusValue(TunnelState.status))
 
     /// Ждать цели или выхода из переходного состояния, не дольше
     /// [AppFunctionsLogic.SETTLE_TIMEOUT_MS]; вернуть фактическое состояние.
@@ -103,7 +104,7 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
         var seenTransient = false
         withTimeoutOrNull(AppFunctionsLogic.SETTLE_TIMEOUT_MS) {
             while (true) {
-                val s = BoxVpnService.currentStatus
+                val s = TunnelState.status
                 if (AppFunctionsLogic.isTransient(s)) seenTransient = true
                 if (AppFunctionsLogic.isSettled(s, target, seenTransient)) break
                 delay(AppFunctionsLogic.POLL_INTERVAL_MS)

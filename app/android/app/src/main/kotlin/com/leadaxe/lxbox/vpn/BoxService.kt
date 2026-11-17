@@ -72,14 +72,6 @@ class BoxService(
         /// selector'ов после Started, прежде чем читать getGroups().
         private const val NOTIFICATION_SNAPSHOT_DELAY_MS = 3000L
 
-        /// §122 Фаза 0 — статическая ссылка на активный `BoxCommandClient`, чтобы
-        /// `VpnPlugin` (Flutter-процесс) дёргал императивы (urlTestOutbound/getRules/
-        /// selectOutbound/closeConnection) и lifecycle (screen/profiler connect/disconnect).
-        /// @Volatile: пишется из service-потока, читается из Flutter MethodChannel-потока.
-        @Volatile
-        var commandClient: BoxCommandClient? = null
-            private set
-
         /// §707 итер. 4 — работающий сервис: строка в журнал приложения
         /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
         @Volatile
@@ -88,6 +80,21 @@ class BoxService(
         /// WARN-строка в AppLog; сервиса нет — только logcat у вызывающего.
         fun appLogWarning(text: String) {
             current?.appLogLine("WARN $text")
+        }
+
+        /// §742 — приёмник WARN-строк полосы `BoxCommandClient.lane`: прежний
+        /// `appLogWarning` (сервиса нет — молчим). Ставится и снимается вместе
+        /// с `current`.
+        private val laneWarningSink: (String) -> Unit = { text -> appLogWarning(text) }
+
+        /// §742 — зависимости `BoxCommandClient` от сервиса: уведомления
+        /// «Sign-in required» (контекст приложения) и журнал приложения.
+        private val commandClientHost = object : BoxCommandClient.Host {
+            override fun showSignIn(tag: String) =
+                ServiceNotification.showSignIn(BoxApplication.application, tag)
+            override fun cancelSignIn(tag: String) =
+                ServiceNotification.cancelSignIn(BoxApplication.application, tag)
+            override fun logWarning(text: String) = appLogWarning(text)
         }
 
         /// §732 — полоса для pause/wake/rebind ядра. Эти вызовы синхронно
@@ -461,7 +468,7 @@ class BoxService(
             runCatching { service.unregisterReceiver(receiver) }
             receiverRegistered = false
         }
-        if (BoxVpnService.currentStatus != VpnStatus.Stopped) {
+        if (TunnelState.status != VpnStatus.Stopped) {
             BoxVpnService.setCurrentStatus(VpnStatus.Stopped)
             runCatching { LxBoxTileService.refreshTile(service.applicationContext) }
                 .onFailure { Log.w(TAG, "refreshTile in onDestroy failed: ${it.message}") }
@@ -533,10 +540,13 @@ class BoxService(
     private fun closeCommandServerAtomic(reason: String, trace: StopTrace? = null) {
         // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
         // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
-        runCatching { commandClient?.shutdownAll() }
+        runCatching { CoreSession.client?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
-        commandClient = null
-        if (current === this) current = null
+        CoreSession.close()
+        if (current === this) {
+            current = null
+            BoxCommandClient.laneWarningSink = null
+        }
         val cs = commandServer.getAndSet(null) ?: return
 
         // §330 — `close()` идёт ПЕРЕД `closeService()`, а не после. Причина: на
@@ -728,9 +738,10 @@ class BoxService(
         // и Started: command.sock существует только когда сервер запущен. statusClient
         // always-on (watchdog + скорость); screen/profiler — по сигналам из Dart.
         runCatching {
-            val cc = BoxCommandClient()
-            commandClient = cc
+            val cc = BoxCommandClient(commandClientHost)
+            CoreSession.open(cc)
             current = this
+            BoxCommandClient.laneWarningSink = laneWarningSink
             cc.startStatus()
             // §654 C — статус openconnect (второй фактор / SSO): подписка, если
             // в конфиге есть такой endpoint; Dart для этого не нужен.
@@ -747,7 +758,7 @@ class BoxService(
             // Dart-источник авторитетнее (знает selectedGroup, ловит и смены).
             if (status != VpnStatus.Started) return@launch
             if (ConfigManager.notificationText.isNotEmpty()) return@launch
-            val label = commandClient?.selectedNodeLabel(ConfigManager.load())
+            val label = CoreSession.client?.selectedNodeLabel(ConfigManager.load())
             if (label.isNullOrEmpty()) return@launch
             ConfigManager.setNotificationText(label)
             withContext(Dispatchers.Main) {
@@ -1072,7 +1083,7 @@ class BoxService(
                 .onSuccess {
                     // §654 C — после reload прежний стрим статуса мог
                     // закончиться молча, а состав endpoint'ов — смениться.
-                    runCatching { commandClient?.syncOpenConnectStatus(config) }
+                    runCatching { CoreSession.client?.syncOpenConnectStatus(config) }
                     // §707 итер. 7 — узел с Allow Taildrop появился или
                     // пропал: пункты и кнопка уведомления — следом.
                     runCatching {

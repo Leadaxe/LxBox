@@ -33,7 +33,7 @@ import kotlinx.coroutines.runBlocking
 /// (`Libbox.setup` — один на процесс) → два CommandServer одновременно
 /// невозможны. Поэтому:
 ///  - probe стартует ТОЛЬКО при выключенном VPN (гейт по
-///    `BoxService.commandClient == null`);
+///    `!CoreSession.isUp`);
 ///  - старт VPN всегда приоритетнее: `BoxService` зовёт [stop] перед своим
 ///    `startCommandServer()` (закрывает забытую/висящую сессию).
 ///
@@ -92,7 +92,7 @@ object ProbeSession : CommandServerHandler {
         // поднимает узлы) был null. Проба, стартовавшая в это окно, заново
         // создавала command.sock (сокет VPN-сервера терял имя → его клиенты
         // не подключались) и переписывала сетевой монитор службы на свой scope.
-        if (BoxService.commandClient != null || BoxVpnService.currentStatus != VpnStatus.Stopped) {
+        if (CoreSession.isUp || TunnelState.status != VpnStatus.Stopped) {
             return startResult("VPN is running — test uses the live tunnel instead")
         }
         stopInternal("restart")
@@ -234,7 +234,7 @@ object ProbeSession : CommandServerHandler {
             // службы: туннель стартовал бы, но смены сети (Wi-Fi ↔
             // мобильная) до перезапуска VPN не видел. Страховка ко второму
             // гейту в [start]: с ним проба в Starting не рождается.
-            if (probeMayStopMonitor(BoxService.commandClient != null, BoxVpnService.currentStatus)) {
+            if (probeMayStopMonitor(CoreSession.isUp, TunnelState.status)) {
                 runCatching { runBlocking { DefaultNetworkMonitor.stop() } }
             }
         }

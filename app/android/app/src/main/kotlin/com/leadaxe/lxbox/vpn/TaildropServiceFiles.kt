@@ -265,7 +265,7 @@ object TaildropServiceFiles {
         val candidates = items.filter { isCandidate(spec, it.name) }
         if (candidates.isEmpty()) return emptySet()
         val app = ctx.applicationContext
-        val cc = if (viaCore) BoxService.commandClient else null
+        val cc = if (viaCore) CoreSession.client else null
         var senders: Map<String, Pair<String, String>>? = null
         var own: Set<String>? = null
         val handled = LinkedHashSet<String>()

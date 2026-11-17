@@ -146,7 +146,7 @@ object Taildrop {
         quiet: Boolean = false,
         onDone: SendDone? = null,
     ): Boolean {
-        val cc = BoxService.commandClient
+        val cc = CoreSession.client
         if (cc == null || items.isEmpty()) {
             closeAll(items)
             return false
@@ -631,7 +631,7 @@ object Taildrop {
         return try {
             name in TaildropServiceFiles.process(
                 ctx, tag, listOf(TaildropServiceFiles.Incoming(name, File(dir, name))),
-                viaCore = BoxService.commandClient != null,
+                viaCore = CoreSession.isUp,
             )
         } finally {
             inFlight.remove(key)
@@ -651,7 +651,7 @@ object Taildrop {
     /// с открытием файла; неудача — уведомление «принят» с кнопками и
     /// причиной, файл остаётся во входящих. Блокирующий — звать с IO.
     internal fun saveFromNotification(ctx: Context, id: Int, note: CoreNote.Received, text: NoteText) {
-        if (BoxService.commandClient == null) {
+        if (!CoreSession.isUp) {
             runCatching { notificationManager(ctx).cancel(id) }
             return
         }
@@ -677,7 +677,7 @@ object Taildrop {
     /// Delete / Cancel из уведомления. Без работающего ядра уведомление
     /// просто снимается.
     internal fun deleteFromNotification(ctx: Context, id: Int, note: CoreNote.Received, text: NoteText) {
-        val cc = BoxService.commandClient
+        val cc = CoreSession.client
         val err = cc?.taildropDelete(note.tag, note.name)
         if (cc == null || err == null) {
             runCatching { notificationManager(ctx).cancel(id) }
@@ -688,7 +688,7 @@ object Taildrop {
     }
 
     internal fun cancelReceivingFromNotification(ctx: Context, id: Int, note: CoreNote.Receiving) {
-        BoxService.commandClient?.taildropCancelReceiving(note.tag, note.senderId, note.name)
+        CoreSession.client?.taildropCancelReceiving(note.tag, note.senderId, note.name)
         // Ядро само снимает «идёт приём» по концу приёма; снимаем и здесь —
         // без ядра снимать больше некому.
         runCatching { notificationManager(ctx).cancel(id) }
@@ -778,7 +778,7 @@ object Taildrop {
         target: Uri?,
         saved: AtomicReference<Uri?>?,
     ): String? {
-        val cc = BoxService.commandClient ?: return L10n.str(ctx, R.string.taildrop_reason_vpn_off)
+        val cc = CoreSession.client ?: return L10n.str(ctx, R.string.taildrop_reason_vpn_off)
         val client = cc.newCallClient() ?: return L10n.str(ctx, R.string.taildrop_reason_vpn_off)
         val dir = File(ctx.cacheDir, "taildrop-save").apply { mkdirs() }
         val tmp = File(dir, UUID.randomUUID().toString())
@@ -895,8 +895,8 @@ object Taildrop {
     private fun sweepLocked(ctx: Context, beforeCoreStart: Boolean) {
         val all = taildropDirectories(ConfigManager.load())
         if (all.isEmpty()) return
-        val viaCore = BoxService.commandClient != null
-        if (!viaCore && !beforeCoreStart && BoxVpnService.currentStatus != VpnStatus.Stopped) return
+        val viaCore = CoreSession.isUp
+        if (!viaCore && !beforeCoreStart && TunnelState.status != VpnStatus.Stopped) return
         // §707 итер. 4 — служебные файлы раньше автосохранения, у всех узлов
         // с включённым Taildrop. Ядра нет — отправителя нет, разрешение не
         // находится (§5): команды не выполняются, файл удаляется.

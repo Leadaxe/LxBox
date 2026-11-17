@@ -68,7 +68,7 @@ class LxBoxTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val cur = BoxVpnService.currentStatus
+        val cur = TunnelState.status
         Log.d(TAG, "onClick — currentStatus=${cur.name}")
         when (cur) {
             VpnStatus.Stopped -> {
@@ -139,10 +139,10 @@ class LxBoxTileService : TileService() {
     }
 
     /// `override` — если передан, рисуем именно его (optimistic flip
-    /// в onClick). Иначе берём реальный `BoxVpnService.currentStatus`.
+    /// в onClick). Иначе берём реальный `TunnelState.status`.
     private fun renderTile(override: VpnStatus? = null) {
         val tile = qsTile ?: return
-        val effective = override ?: BoxVpnService.currentStatus
+        val effective = override ?: TunnelState.status
         // §279 — subtitle/label через L10n в момент рендера (без кэша).
         val (state, subtitle) = when (effective) {
             VpnStatus.Started ->

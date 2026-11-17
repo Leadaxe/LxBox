@@ -38,8 +38,8 @@ class TaildropShareActivity : Activity() {
             finish()
             return
         }
-        val cc = BoxService.commandClient
-        if (BoxVpnService.currentStatus != VpnStatus.Started || cc == null) {
+        val cc = CoreSession.client
+        if (TunnelState.status != VpnStatus.Started || cc == null) {
             message(L10n.str(this, R.string.taildrop_need_vpn))
             return
         }

@@ -130,7 +130,7 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
     /// consent: если он уже дан — стартуем напрямую; иначе открываем
     /// MainActivity с extra (тот же путь, что Quick Settings tile §032).
     private fun handleToggle(context: Context) {
-        if (BoxVpnService.currentStatus == VpnStatus.Started) {
+        if (TunnelState.status == VpnStatus.Started) {
             BoxVpnService.stop(context)
             return
         }

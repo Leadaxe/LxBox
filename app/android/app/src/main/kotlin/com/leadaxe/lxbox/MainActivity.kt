@@ -24,6 +24,7 @@ import com.leadaxe.lxbox.vpn.PermissionUtils
 import com.leadaxe.lxbox.vpn.QuickShortcuts
 import com.leadaxe.lxbox.vpn.ServiceNotification
 import com.leadaxe.lxbox.vpn.Taildrop
+import com.leadaxe.lxbox.vpn.TunnelState
 import com.leadaxe.lxbox.vpn.UiLaunchRequests
 import com.leadaxe.lxbox.vpn.VpnPlugin
 import com.leadaxe.lxbox.vpn.VpnStatus
@@ -347,7 +348,7 @@ class MainActivity : FlutterActivity() {
             intent.removeExtra(Taildrop.EXTRA_TAG)
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
-        Log.d(TAG, "handleQuickAction action=$action currentStatus=${BoxVpnService.currentStatus.name}")
+        Log.d(TAG, "handleQuickAction action=$action currentStatus=${TunnelState.status.name}")
         // `extras.action` ставится только из tile или shortcut'а — поэтому
         // если мы здесь, мы пришли не через обычный launcher-tap. Закрываемся
         // после обработки, чтобы юзер вернулся на хоум.
@@ -363,7 +364,7 @@ class MainActivity : FlutterActivity() {
                 if (finishAfterConsent) finish()
             }
             ACTION_TOGGLE -> {
-                val s = BoxVpnService.currentStatus
+                val s = TunnelState.status
                 if (s == VpnStatus.Started) {
                     BoxVpnService.stop(applicationContext)
                     if (finishAfterConsent) finish()
