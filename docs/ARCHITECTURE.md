@@ -1817,7 +1817,9 @@ tunnel (the probe, `formatConfig`, `checkConfig`, `pprofProfile`, the first `get
 an installed build — the version string is then cached in `lxbox_native_cache`). A `:bg` process
 raised for a setting, the tile or a receiver does not load the core. One exception: a non-empty
 crash file at `:bg` start loads the core at once, so that `Libbox.setup` archives the report for
-the Dart banner and `CrashRecovery` cleans the caches.
+the Dart banner and `CrashRecovery` cleans the caches. The core's `tempPath` is its own
+directory `cacheDir/core-tmp`: that cleanup runs under a live window and must not touch the
+temporary files of Flutter and the plugins or `bg-xfer`.
 
 #### `:ui` → `:bg`: a call with a reply
 
@@ -1846,7 +1848,9 @@ which keeps the order of the Dart calls (`setHasTun` → `startVPN`, `saveConfig
   back to a synchronous call on a thread of its own.
 
 **Large data does not go through Binder** (the limit is about 1 MB): arguments and synchronous
-replies above 256 KB travel as a file in `cacheDir/bg-xfer` (a config sent for a check), replies
+replies above 256 KB travel as a file in `cacheDir/bg-xfer` (a config sent for a check; the
+sender deletes the file when the call is over, and files older than ten minutes are swept at
+process start), replies
 of long calls travel through the pipe and have no such limit. The saved config is written and
 read by `:ui` itself as a file (`ConfigFile`, atomic: a temporary file plus rename); after a
 write it calls `configSaved` and `:bg` drops the cache of `ConfigManager`.
@@ -1896,7 +1900,9 @@ token's death (`UiPresence`) and so learns about a killed `:ui` without polling.
 the owner process, `seq` — the write number in it). `TunnelState` in `:bg` is the single owner
 (§742); `:ui` keeps a copy written only by the status receiver and by the snapshot request
 (`tunnelSnapshot`, on engine attach and on every `getVpnStatus` — the broadcast is not sticky).
-The copy takes a snapshot only when its mark is newer (`TunnelState.acceptMirror`). A changed
+The copy takes a snapshot only when its mark is newer (`TunnelState.acceptMirror`). The
+`revoked` mark (§276, “taken by another VPN”) is also kept in `lxbox_native_cache`, so a new
+`:bg` process still reports it until the next tunnel start. A changed
 `epoch` means `:bg` was restarted: `VpnPlugin` opens the event channel again and repeats its
 subscriptions. Nothing in the window depends on the copy except the reply of `getVpnStatus`
 when the call fails.
@@ -1957,17 +1963,29 @@ before starting its own command server.
   the core lazily, on the first need.
 - **The exit boundary** (`BgLifecycle.enter` / `dying`). The decision to end and the entry of a
   window call are serialized by one lock: either the call entered first and cancelled the exit,
-  or the decision is made and the call is not executed at all — it waits for the process to
-  die. The window's provider connection is *unstable*
+  or the decision is made and the call is not executed at all — the provider answers
+  `BG_EXITING` and `BgClient` repeats the call until it lands in the new process (up to ten
+  times, about 3 s). There are no half-executed calls and no error reaches Dart. A start sent
+  right after a stop therefore either cancels the exit (the status is no longer `Stopped`, or a
+  start is on its way) or is repeated into the new process; a start that comes as an Intent
+  (the tile, a receiver) makes the system start the process. `:bg` does not end while replies
+  of long calls are still unwritten in the event channel.
+- **A dead process.** The window's provider connection is *unstable*
   (`acquireUnstableContentProviderClient`; with a stable one the system kills the client of a
-  dead provider), so the call gets a `DeadObjectException` and `BgClient` repeats it into the
-  new process. There are no half-executed calls and no error reaches Dart. A start sent right
-  after a stop therefore either cancels the exit (the status is no longer `Stopped`, or a start
-  is on its way) or is repeated into the new process; a start that comes as an Intent (the
-  tile, a receiver) makes the system start the process. `:bg` does not end while replies of
-  long calls are still unwritten in the event channel.
-- **`quitApp`**: `:bg` stops the tunnel, drops “VPN desired” and the watchdog alarm, then ends;
-  `:ui` closes its activities and ends. Settings read once per process (`core_logs_enabled`,
+  dead provider). A call sent to a process that is already gone gets a `DeadObjectException`
+  and is repeated too. The same exception means a process that crashed in the middle of the
+  call, and the two cannot be told apart, so a repeat may execute a method twice: harmless for
+  settings, commands guarded by the tunnel status and reads; the methods whose double
+  execution the user would see (`taildropSave`, `taildropSendUris`, `ccTaildropSendBytes`) are
+  not repeated after it and fail instead.
+- **Attaching again.** The end of the event channel, or a newer start mark of `:bg` in a
+  snapshot, makes `VpnPlugin` attach again. If the process changes while an attach is running,
+  the attach is repeated when it finishes; if `:bg` does not answer, it is retried with a
+  growing pause (six times). A late broadcast with an older start mark is ignored.
+- **`quitApp`**: the window first asks `:bg` to drop “VPN desired” and the watchdog alarm
+  (`quitPrepare`) and closes its activities only after that is confirmed — otherwise the
+  watchdog would raise the VPN again; then `:bg` stops the tunnel, stops accepting calls and
+  ends, and `:ui` ends without making further calls (a late one would start a new `:bg`). Settings read once per process (`core_logs_enabled`,
   `memory_limit`) therefore apply from the next tunnel start.
 
 **A start on its way.** Between `startForegroundService` and `onStartCommand` the tunnel is still
