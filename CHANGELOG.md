@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.25.23] — 2026-11-17
+
 ### Changed
 
 - **Comments in a server's JSON are kept ([task 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).** A server pasted or edited as JSON keeps its `//`, `/* */` and `#` comments: the Source tab shows the text as typed after pasting, saving and restoring a backup, and the «Comments were removed.» message is gone. Comments are skipped only when the app reads the JSON; the same server with and without comments is still one server in a backup. A pasted whole config keeps only its nodes, and that text is rebuilt without comments, as before.
