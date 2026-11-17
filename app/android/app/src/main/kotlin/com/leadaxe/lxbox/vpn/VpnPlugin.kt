@@ -56,6 +56,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val TAILDROP_SAVE_CODE = 26 // §707
         private const val VPN_REQUEST_CODE = 24
 
+        /// §747 — повторы подключения к `:bg`, если он не ответил.
+        private const val ATTACH_RETRIES = 6
+        private const val ATTACH_RETRY_MS = 500L
+        private const val ATTACH_RETRY_MAX_MS = 8_000L
+
         /// §747 — Binder-метка живого процесса окна: `:bg` вешает на неё
         /// `linkToDeath`. Одна на процесс.
         private val uiToken = android.os.Binder()
@@ -126,6 +131,12 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     /// Идёт подключение к `:bg` ([attachToBg]): второе не начинается.
     private var attaching = false
+
+    /// Пока шло подключение, процесс `:bg` снова сменился: повторить.
+    private var reattachNeeded = false
+
+    /// Подряд неудавшихся подключений (`:bg` не ответил).
+    private var attachFailures = 0
 
     /// §747 — подписи уведомления, которые Dart передал `:bg` (метод → его
     /// аргументы): `:bg` держит их в памяти, и после его перезапуска окно
@@ -230,31 +241,64 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// заново передаётся всё, что `:bg` держит в памяти от окна: слушаемые
     /// потоки данных и подписи уведомления. Dart этого не замечает.
     private fun attachToBg() {
-        if (attaching) return
+        if (attaching) {
+            // Подключение уже идёт, а процесс `:bg` снова оказался другим
+            // (канал оборвался, пока мы подключались): по окончании повторить,
+            // иначе окно осталось бы без потоков данных до следующей смены
+            // процесса.
+            reattachNeeded = true
+            return
+        }
         attaching = true
+        reattachNeeded = false
         val ctx = context
         val streams = listening.toList()
         val labels = notificationLabels.toMap()
         BgClient.onLane {
-            BgClient.connect(
+            val connected = BgClient.connect(
                 ctx, uiToken,
                 onFrame = { stream, payload -> onFrame(stream, payload) },
                 onLost = { onBgLost() },
             )
-            for (name in streams) {
-                BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false)
-            }
-            for ((method, args) in labels) BgClient.callOr(ctx, method, args, true)
-            val wire = fetchTunnelWire()
-            BgClient.onMain {
-                attaching = false
-                if (wire != null && attached) {
-                    // Метка запуска этого процесса — от самого подключения:
-                    // повторно подключаться из-за неё не нужно.
-                    bgEpoch = wire.epoch
-                    applyTunnelWire(wire)
+            var wire: TunnelState.Wire? = null
+            if (connected) {
+                for (name in streams) {
+                    BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false)
                 }
+                for ((method, args) in labels) BgClient.callOr(ctx, method, args, true)
+                wire = fetchTunnelWire()
             }
+            BgClient.onMain { attachFinished(connected, wire) }
+        }
+    }
+
+    /// Главный поток. Итог подключения к `:bg`: принять снимок; если процесс
+    /// за время подключения сменился или `:bg` не ответил — подключиться
+    /// снова (при отказе — с растущей паузой и не бесконечно).
+    private fun attachFinished(connected: Boolean, wire: TunnelState.Wire?) {
+        attaching = false
+        if (!attached) return
+        val ok = connected && wire != null
+        if (wire != null) {
+            // Метка запуска процесса, к которому подключились. Если по
+            // broadcast'у уже видели метку новее — подключились к прежнему.
+            val seen = bgEpoch
+            if (seen != null && seen > wire.epoch) reattachNeeded = true
+            applyTunnelWire(wire)
+        }
+        when {
+            reattachNeeded -> attachToBg()
+            !ok -> {
+                attachFailures++
+                if (attachFailures > ATTACH_RETRIES) {
+                    Log.e(TAG, "[bg] cannot attach to the service process — giving up after $ATTACH_RETRIES retries")
+                    return
+                }
+                val delay = (ATTACH_RETRY_MS shl (attachFailures - 1)).coerceAtMost(ATTACH_RETRY_MAX_MS)
+                Log.w(TAG, "[bg] attach failed (connected=$connected) — retry $attachFailures in ${delay}ms")
+                mainHandler.postDelayed({ if (attached && !attaching) attachToBg() }, delay)
+            }
+            else -> attachFailures = 0
         }
     }
 
@@ -293,14 +337,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         (BgClient.call(context, "tunnelSnapshot") as? Map<*, *>)?.let { BgEvents.wireOf(it) }
     }.getOrNull()
 
-    /// Главный поток. Принять снимок в копию состояния окна. Сменилась метка
-    /// запуска `:bg` — процесс новый: он не знает ни об окне, ни о его
-    /// подписках.
+    /// Главный поток. Принять снимок в копию состояния окна. Метка запуска
+    /// `:bg` новее виденной — процесс новый: он не знает ни об окне, ни о его
+    /// подписках, нужно подключиться заново. Снимок со старой меткой
+    /// (запоздавший broadcast прежнего процесса) копия отбрасывает, и
+    /// переподключения он не вызывает — оно оборвало бы идущие долгие вызовы.
     private fun applyTunnelWire(w: TunnelState.Wire) {
-        TunnelState.acceptMirror(w)
+        val accepted = TunnelState.acceptMirror(w)
         val prev = bgEpoch
-        bgEpoch = w.epoch
-        if (prev != null && prev != w.epoch) {
+        if (prev == null || w.epoch > prev) bgEpoch = w.epoch
+        if (accepted && prev != null && w.epoch > prev && !attaching) {
             Log.i(TAG, "[bg] service process restarted — re-attaching")
             attachToBg()
         }
