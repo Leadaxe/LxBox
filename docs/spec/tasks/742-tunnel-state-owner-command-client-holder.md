@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress |
+| **Статус** | Done — код, чекер и документация в develop; эмулятор ОК (7 сценариев), телефон не проверен |
 | **Дата** | 2026-11-17 |
 | **Повод** | Слово владельца 17.11.2026: «делай пункты 1 и 2 и подумай, где улучшить» — продолжение [740](740-architecture-revision-process-boundary.md), раздел «Не делается» |
 | **Связанные** | [740](740-architecture-revision-process-boundary.md), [122F — CommandClient](122F-commandclient-migration/), [732 — вызовы ядра с главного потока](732-main-thread-core-calls-off-main.md), [ARCHITECTURE → Process boundary](../../ARCHITECTURE.md#process-boundary-vpn-service-side-vs-ui-side) |
@@ -137,3 +137,24 @@ Kotlin (`app/android/app/src/main/kotlin`):
 - [ARCHITECTURE.md](../../ARCHITECTURE.md) — раздел «Process boundary»
   (владельцы состояния и клиента, сторож), схема «Class layout»
 - `CHANGELOG.md` — none
+
+## Итог
+
+- **A.** `vpn/TunnelState.kt`: снимок `Snapshot` в одном `@Volatile` поле, запись
+  `@Synchronized`. Четыре поля companion удалены, читатели (17 файлов) переведены.
+  `VpnPlugin.getVpnStatus` берёт статус и `revoked` одним чтением снимка.
+  Unit-тест `TunnelStateTest` — 5 случаев.
+- **B.** `vpn/CoreSession.kt`; поле `BoxService.commandClient` удалено.
+  `BoxCommandClient(host)` — интерфейс `Host` реализует `BoxService`;
+  предупреждения полосы идут через `BoxCommandClient.laneWarningSink`. В
+  `BoxCommandClient.kt` нет ссылок на `BoxService`, `BoxVpnService`,
+  `ServiceNotification`.
+- **C.** `app/tool/arch/boundary_check.dart` (+ `src/boundary_scan.dart`, тест,
+  README), шаг «Architecture boundaries» в джобе `checks`. Десять правил, на
+  дереве после A и B — 0 нарушений. Исключение сверх спеки: `EventSink` как тип
+  разрешён ещё в `BoxCommandClient.kt` (эмиттеры держат sink).
+- **Эмулятор** (Android 16, arm64, сборка из b1e84331): холодный старт, старт
+  VPN с данными ядра на экране, аптайм после закрытия активити (продолжился),
+  остановка из приложения, повторный старт, остановка из уведомления — без
+  ошибок в logcat. Не проверено: смерть процесса UI при живом сервисе (процесс
+  один), уведомление Sign-in у openconnect, телефоны.

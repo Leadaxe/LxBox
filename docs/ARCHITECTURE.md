@@ -1078,7 +1078,7 @@ vpn/BoxCommandClient.kt      # §122 — the UI↔core control channel through t
                              #   statusClient/screenClient/profilerClient; the addCommand subscription plus the write* commands
                              #   (§163/§164, the setStatusInterval power model). It replaced Clash HTTP
 vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface side (the thin §049 split):
-                             #   the companion holds the service state statics (currentStatus, …; see “Process boundary”);
+                             #   service commands (Intents) in the companion; tunnel state lives in TunnelState (§742);
                              #   openTun (Builder.establish, allowBypass §069, the per-app routes); it forwards into BoxService
                              #   §119: libbox calls openTun ONLY when a tun inbound exists
                              #   (with vpn_mode=proxy and a config without a tun there is no openTun, no establish and no VPN slot)
@@ -1122,7 +1122,7 @@ vpn/PermissionUtils.kt · Extensions.kt  # the SDK-gated permission check; small
 automation/                  # the §047 Locale/Tasker plugin (FIRE_SETTING/QUERY_CONDITION) — see ../docs/AUTOMATION.md
 automation/LocaleApi.kt              #   the twofortyfouram standard's constants plus JSON bundle (de)serialization
 automation/LocaleSettingReceiver.kt  #   FIRE_SETTING → the shared action handlers (start/stop/toggle directly)
-automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → currentStatus and the active cache → a result code (SATISFIED)
+automation/LocaleConditionReceiver.kt#   QUERY_CONDITION → TunnelState.status and the active cache → a result code (SATISFIED)
 automation/LocaleQuickActionActivity.kt # a one-tap Start/Stop/Toggle (Theme.NoDisplay, a headless setResult plus finish)
 automation/LocaleSettingEditActivity.kt # the “Custom…” edit screen: a RadioGroup of commands plus a selector
 automation/LocaleConditionEditActivity.kt # the condition edit screen (VPN up / active node= / active group=)
@@ -1721,7 +1721,7 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 │    the §316 banner in Dart, from the archive │    10 × lxbox/cc/*) — §740          │
 │  • Libbox.setup(SetupOptions) async     │  │ • registers AutomationBridge       │
 │  • libboxReady : CompletableDeferred    │  │ • getVpnStatus reads               │
-│  • Singleton WifiNetworkObserver        │  │   BoxVpnService.currentStatus      │
+│  • Singleton WifiNetworkObserver        │  │   TunnelState.snapshot (§742)      │
 │  • Singleton WifiStateCache (§569)      │  │                                    │
 │  • §740 onCreate split by side          │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
@@ -1779,10 +1779,18 @@ without changing behavior; this section is the map for that work.
   the `VpnWatchdog` alarm, the outgoing automation broadcasts.
 
 **Still shared process memory (the debt before a split):**
-- the `BoxVpnService` companion: `currentStatus` (25 qualified reads in 14 files),
-  `currentRevoked`, `tunnelStartedElapsedMs`, `currentSessionAllowBypass`, `live`,
+- `TunnelState` (§742) — the single owner of the tunnel state: one immutable `Snapshot(status,
+  revoked, startedElapsedMs, sessionAllowBypass)` in one `@Volatile` field, written only by the
+  service (`BoxVpnService.setCurrentStatus`, `openTun`, `onDestroy`), read by both sides. After a
+  split the UI process keeps its own copy fed from `BROADCAST_STATUS`; today the broadcast carries
+  only `status` and `revoked`, so `startedElapsedMs` and `sessionAllowBypass` still need a carrier;
+- the `BoxVpnService` companion keeps the service mechanics only: `live`,
   `stopCompleter` / `stopReceiverAlive`;
-- `BoxService.commandClient` — read by both sides (56 references in 6 files);
+- `CoreSession` (§742) — the holder of the live `BoxCommandClient`: opened and closed by
+  `BoxService`, read by both sides (`VpnPlugin` RPC, Taildrop, `ProbeSession`); `isUp` is the
+  “core is running” test. `BoxCommandClient` itself no longer references the service: sign-in
+  notifications and warnings go through its `Host` interface, implemented by `BoxService` — the
+  client depends only on libbox, `UiSinks` and `Host`, so it can move to the UI process as is;
 - `UiSinks` — the service (`BoxService` core log) and `BoxCommandClient` write into Flutter `EventSink`s;
 - `AutomationBridge` — the service (`BoxVpnService.stop()`, the receivers) calls the UI's `MethodChannel`;
 - `ConfigManager`'s in-memory `cachedConfig` and the notification labels (`notificationTitle`, …);
@@ -1805,10 +1813,19 @@ without changing behavior; this section is the map for that work.
 5. Prefs go through the file's single access point (`BootReceiver.prefs()`, `NativeCache`, `AutomationCache`).
 6. A new `BoxApplication.onCreate` step goes into the function of its side.
 
-**Next steps (not done; task 740 “Не делается”):** a `ServiceState` facade over `currentStatus`
-and the other statics; a `CommandClientRef` provider instead of `BoxService.commandClient`;
-cutting `VpnPlugin.onMethodCall` into handlers; a `CoreControl` owner for the process-global
-`Libbox.*` calls; `ConfigManager.cachedConfig`; then the split itself.
+**The rules are enforced** by `app/tool/arch/boundary_check.dart` (the `checks` CI job, §742):
+no `VpnPlugin` references outside `VpnPlugin.kt`/`MainActivity.kt`, `EventSink` fields only in
+the allowed files, `getSharedPreferences(` only in the three access points, no `BoxService.`
+in the UI files beyond a frozen list (`coreLogsVerbose`, `doForceStop`). The same checker guards
+the Dart layer direction and freezes the list of UI files that call the bridge directly. An
+exception is added in the checker itself, with a reason.
+
+**Next steps (not done):** the UI side creating its own `BoxCommandClient` on the status event
+instead of receiving the service's one (changes the moment of connection — needs phones);
+carrying `startedElapsedMs` / `sessionAllowBypass` over the broadcast; cutting
+`VpnPlugin.onMethodCall` into handlers; a `CoreControl` owner for the process-global `Libbox.*`
+calls; `ConfigManager.cachedConfig`; `coreLogsVerbose` and `doForceStop` called from the plugin;
+then the split itself.
 
 ### Structured Concurrency
 
@@ -2008,7 +2025,7 @@ The tunnel's model: **`BoxVpnService` is an Android foreground service that live
 
 #### The pull-sync mechanics
 
-The source of truth is `BoxVpnService.companion.currentStatus: VpnStatus` (`@Volatile`, updated on every change).
+The source of truth is `TunnelState.status: VpnStatus` (one `@Volatile` snapshot, replaced on every change; §742).
 
 ```
 HomeController.init()
