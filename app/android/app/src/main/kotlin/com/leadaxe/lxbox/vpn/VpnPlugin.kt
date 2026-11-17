@@ -793,6 +793,62 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 com.leadaxe.lxbox.appfunctions.AppFunctionsGate.setEnabled(context, enabled)
                 result.success(true)
             }
+            // §750 — индекс ассистента (сводка от Dart) и операции ассистента
+            // для Debug API. Тумблер «AI assistant control» здесь НЕ
+            // проверяется: у Debug API свой доступ. Ошибка операции — успех с
+            // `{error: {code, message}}`, не `result.error`.
+            "setAssistantIndex" -> {
+                val json = call.argument<String>("json") ?: ""
+                val appContext = context
+                pluginScope.launch {
+                    withContext(Dispatchers.IO) {
+                        com.leadaxe.lxbox.appfunctions.AssistantIndex.save(appContext, json)
+                    }
+                    result.success(true)
+                }
+            }
+            "assistantOverview" -> assistantCall(result) {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.overview(it)
+            }
+            "assistantListExits" -> {
+                val direction = call.argument<String>("direction") ?: ""
+                val query = call.argument<String>("query")
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.listExits(it, direction, query)
+                }
+            }
+            "assistantCheckUrl" -> {
+                val url = call.argument<String>("url") ?: ""
+                val app = call.argument<String>("app")
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.checkUrl(it, url, app)
+                }
+            }
+            "assistantCheckExit" -> {
+                val direction = call.argument<String>("direction") ?: ""
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.checkExit(it, direction)
+                }
+            }
+            "assistantFindApps" -> {
+                val query = call.argument<String>("query") ?: ""
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.findApps(it, query)
+                }
+            }
+            "assistantAppRoute" -> {
+                val app = call.argument<String>("app") ?: ""
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.appRoute(it, app)
+                }
+            }
+            "assistantSelectExit" -> {
+                val direction = call.argument<String>("direction") ?: ""
+                val exit = call.argument<String>("exit") ?: ""
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.selectExit(it, direction, exit)
+                }
+            }
             "sendAutomationBroadcast" -> {
                 val action = call.argument<String>("action") ?: ""
                 @Suppress("UNCHECKED_CAST")
@@ -1615,6 +1671,27 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
 
             else -> result.notImplemented()
+        }
+    }
+
+    /// §750 — операция ассистента для Debug API: исполняется off-main
+    /// (операции сами уходят на Dispatchers.IO), ответ — на главном. Ошибка
+    /// операции → `{error: {code, message}}` успехом; прочий сбой — код
+    /// `core_error`.
+    private fun assistantCall(result: MethodChannel.Result, op: suspend (Context) -> Any?) {
+        val appContext = context
+        pluginScope.launch {
+            val reply: Any? = try {
+                op(appContext)
+            } catch (e: com.leadaxe.lxbox.appfunctions.AssistantError) {
+                mapOf("error" to mapOf("code" to e.code, "message" to (e.message ?: "")))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.w(TAG, "assistant call failed: ${t.javaClass.simpleName}")
+                mapOf("error" to mapOf("code" to "core_error", "message" to "Internal error."))
+            }
+            result.success(reply)
         }
     }
 

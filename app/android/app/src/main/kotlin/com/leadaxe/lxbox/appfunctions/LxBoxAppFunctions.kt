@@ -4,8 +4,12 @@ import android.net.VpnService
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.appfunctions.AppFunctionDeclaration
+import androidx.appfunctions.AppFunctionAppUnknownException
 import androidx.appfunctions.AppFunctionDisabledException
 import androidx.appfunctions.AppFunctionElementNotFoundException
+import androidx.appfunctions.AppFunctionInvalidArgumentException
+import androidx.appfunctions.AppFunctionLimitExceededException
+import androidx.appfunctions.AppFunctionNotSupportedException
 import androidx.appfunctions.AppFunctionPermissionRequiredException
 import androidx.appfunctions.AppFunctionService
 import androidx.appfunctions.AppFunctionServiceEntryPoint
@@ -89,6 +93,176 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
         return current()
     }
 
+    // ═══════════════════════ §750 ассистент: чтения и действия над ядром ═══════════════════════
+    // Исполнитель — [AssistantCore] (общий с методами канала Debug API).
+    // `AssistantError` → наследник `AppFunctionException` ([assistant]).
+
+    /**
+     * Returns an overview of the L×Box network setup: the tunnel state, the
+     * default route, the routing directions with their selected exits, and the
+     * private network connections with their states.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun getNetworkOverview(): NetworkOverview {
+        ensureEnabled()
+        val m = assistant { AssistantCore.overview(applicationContext) }
+        return NetworkOverview(
+            vpnStatus = m.str("vpn_status"),
+            defaultRoute = m.str("default_route"),
+            directions = m.maps("directions").map {
+                DirectionInfo(
+                    tag = it.str("tag"),
+                    name = it.str("name"),
+                    exitCount = it.int("exit_count"),
+                    currentExit = it.str("current_exit"),
+                )
+            },
+            connections = m.maps("connections").map {
+                ConnectionInfo(
+                    id = it.str("id"),
+                    name = it.str("name"),
+                    type = it.str("type"),
+                    enabled = it.bool("enabled"),
+                    state = it.str("state"),
+                )
+            },
+        )
+    }
+
+    /**
+     * Lists the exits of a routing direction.
+     *
+     * @param direction The direction identifier or name.
+     * @param query Text to look for in exit names, ignoring case; all exits when empty.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun listExits(direction: String, query: String?): ExitList {
+        ensureEnabled()
+        val m = assistant { AssistantCore.listExits(applicationContext, direction, query) }
+        return ExitList(
+            direction = m.str("direction"),
+            exits = m.strs("exits"),
+            total = m.int("total"),
+            truncated = m.bool("truncated"),
+        )
+    }
+
+    /**
+     * Checks whether an address opens through the running VPN and reports the
+     * failed step and the route taken. Does not start the VPN.
+     *
+     * @param url The address to check; https is assumed when the scheme is missing.
+     * @param appPackage The package name of the app whose routing rules apply; none when empty.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun checkUrl(url: String, appPackage: String?): UrlCheckReport {
+        ensureEnabled()
+        val m = assistant { AssistantCore.checkUrl(applicationContext, url, appPackage) }
+        val route = m.sub("route")
+        return UrlCheckReport(
+            outcome = m.str("outcome"),
+            failedStage = m.str("failed_stage"),
+            error = m.str("error"),
+            httpStatus = m.int("http_status"),
+            elapsedMs = m.int("elapsed_ms"),
+            route = RouteInfo(
+                direction = route.str("direction"),
+                exit = route.str("exit"),
+                direct = route.bool("direct"),
+                blocked = route.bool("blocked"),
+            ),
+            findings = m.strs("findings"),
+            advice = m.str("advice"),
+        )
+    }
+
+    /**
+     * Checks the actual exit of a routing direction: the public IP address and
+     * its country.
+     *
+     * @param direction The direction identifier or name.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun checkExit(direction: String): ExitCheck {
+        ensureEnabled()
+        val m = assistant { AssistantCore.checkExit(applicationContext, direction) }
+        return ExitCheck(
+            outcome = m.str("outcome"),
+            country = m.str("country"),
+            ip = m.str("ip"),
+            exit = m.str("exit"),
+            error = m.str("error"),
+        )
+    }
+
+    /**
+     * Finds installed apps by a part of the app name or package name, up to 10.
+     *
+     * @param query At least 2 characters of the app name or package name, ignoring case.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun findApps(query: String): List<AppMatch> {
+        ensureEnabled()
+        val list = assistant { AssistantCore.findApps(applicationContext, query) }
+        return list.map { AppMatch(packageName = it.str("package"), label = it.str("label")) }
+    }
+
+    /**
+     * Returns how the saved routing rules route an app.
+     *
+     * @param appPackage The app package name.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun getAppRoute(appPackage: String): AppRoute {
+        ensureEnabled()
+        val m = assistant { AssistantCore.appRoute(applicationContext, appPackage) }
+        return AppRoute(
+            app = m.str("app"),
+            target = m.str("target"),
+            targetName = m.str("target_name"),
+            ruleName = m.str("rule_name"),
+            conditional = m.bool("conditional"),
+        )
+    }
+
+    /**
+     * Selects an exit in a routing direction of the running VPN. The selection
+     * lasts until the VPN restarts.
+     *
+     * @param direction The direction identifier or name.
+     * @param exit The exact exit name from the list of exits.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun selectExit(direction: String, exit: String): ExitSelection {
+        ensureEnabled()
+        val m = assistant { AssistantCore.selectExit(applicationContext, direction, exit) }
+        return ExitSelection(
+            direction = m.str("direction"),
+            exit = m.str("exit"),
+            changed = m.bool("changed"),
+        )
+    }
+
+    /// Исполнить операцию ассистента: холодный процесс → инициализация
+    /// (ConfigManager читает файл через BoxApplication); `AssistantError` →
+    /// наследник `AppFunctionException` по коду.
+    private suspend fun <T> assistant(block: suspend () -> T): T {
+        BoxApplication.initialize(applicationContext)
+        try {
+            return block()
+        } catch (e: AssistantError) {
+            Log.d(TAG, "assistant error: ${e.code}")
+            val msg = e.message ?: ""
+            throw when (e.code) {
+                AssistantError.NOT_FOUND -> AppFunctionElementNotFoundException(msg)
+                AssistantError.INVALID_ARGUMENT -> AppFunctionInvalidArgumentException(msg)
+                AssistantError.BUSY -> AppFunctionLimitExceededException(msg)
+                AssistantError.VPN_OFF, AssistantError.NO_INDEX -> AppFunctionNotSupportedException(msg)
+                else -> AppFunctionAppUnknownException(msg)
+            }
+        }
+    }
+
     private fun ensureEnabled() {
         if (!BootReceiver.isAppFunctionsEnabled(applicationContext)) {
             throw AppFunctionDisabledException(AppFunctionsLogic.MSG_DISABLED)
@@ -117,3 +291,16 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
         const val TAG = "LxBoxAppFunctions"
     }
 }
+
+// §750 — разбор Map-ответа [AssistantCore] (ключи snake_case) в типы схемы.
+private fun Map<String, Any?>.str(key: String): String = this[key] as? String ?: ""
+private fun Map<String, Any?>.int(key: String): Int = (this[key] as? Number)?.toInt() ?: 0
+private fun Map<String, Any?>.bool(key: String): Boolean = this[key] as? Boolean ?: false
+@Suppress("UNCHECKED_CAST")
+private fun Map<String, Any?>.sub(key: String): Map<String, Any?> =
+    this[key] as? Map<String, Any?> ?: emptyMap()
+@Suppress("UNCHECKED_CAST")
+private fun Map<String, Any?>.maps(key: String): List<Map<String, Any?>> =
+    (this[key] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
+private fun Map<String, Any?>.strs(key: String): List<String> =
+    (this[key] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()

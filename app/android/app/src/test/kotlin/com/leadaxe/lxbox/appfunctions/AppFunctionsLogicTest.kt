@@ -55,7 +55,12 @@ class AppFunctionsLogicTest {
     @Test
     fun functionIdsNameTheDeclaringClass() {
         assertEquals(
-            listOf("startVpn", "stopVpn", "getVpnStatus").map {
+            listOf(
+                "startVpn", "stopVpn", "getVpnStatus",
+                // §750
+                "getNetworkOverview", "listExits", "checkUrl", "checkExit",
+                "findApps", "getAppRoute", "selectExit",
+            ).map {
                 "com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions#$it"
             },
             AppFunctionsLogic.FUNCTION_IDS,

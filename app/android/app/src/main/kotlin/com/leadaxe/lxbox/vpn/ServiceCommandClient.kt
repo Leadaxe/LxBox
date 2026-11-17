@@ -157,6 +157,56 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
         return out.get()
     }
 
+    // ═══════════════════════ §750 ассистент ═══════════════════════
+    // Чтения и действия ассистента над работающим ядром без Flutter (функции
+    // AppFunctions и методы канала `assistant*`). Тот же unary-клиент сервисной
+    // роли; блокирующие вызовы — звать вне main.
+
+    /// Дерево групп (форма `serializeGroup`). null — не прочитали.
+    fun groups(): List<Map<String, Any>>? = getGroupsVia(ensurePingClient())
+
+    /// Тег → `endpointState` (ядро SPEC 097: заполнено только у WG/AWG).
+    /// Тот же RPC `GetOutbounds`, что у клиента UI (§535). null — не прочитали.
+    fun endpointStates(): Map<String, String>? {
+        val client = ensurePingClient() ?: return null
+        return runCatching {
+            val out = HashMap<String, String>()
+            val it = client.getOutbounds()
+            while (it.hasNext()) {
+                val item = it.next() ?: continue
+                val tag = item.tag ?: continue
+                out[tag] = item.endpointState ?: ""
+            }
+            out
+        }.getOrElse {
+            Log.d(TAG, "endpointStates unavailable: ${it.message}")
+            null
+        }
+    }
+
+    /// Выбор узла [tag] в селекторе [group]. `null` — успех, иначе текст ошибки.
+    fun selectOutbound(group: String, tag: String): String? {
+        val client = ensurePingClient() ?: return "no command client"
+        return runCatching { client.selectOutbound(group, tag); null }
+            .getOrElse { Log.w(TAG, "selectOutbound failed: ${it.message}"); it.message ?: "failed" }
+    }
+
+    /// §392 — GET через узел/группу [tag] (ядро SPEC 058), тело ответа.
+    /// Неудача ядра приходит исключением (обёртка libbox), её текст — в
+    /// `error`; не-2xx — результат со статусом. ГРАБЛЯ: у `GetURLResult`
+    /// геттеры без `get`-префикса.
+    fun getUrlViaOutbound(tag: String, link: String, timeoutMs: Int, maxBytes: Int, userAgent: String): Map<String, Any> {
+        val client = ensurePingClient() ?: return mapOf("error" to "command client not connected")
+        return runCatching {
+            val r = client.getURLViaOutbound(tag, link, timeoutMs, maxBytes, userAgentHeaders(userAgent))
+            mapOf(
+                "status" to r.status(),
+                "content" to (r.content() ?: ""),
+                "error" to "",
+            )
+        }.getOrElse { mapOf("error" to (it.message ?: "getURLViaOutbound failed")) }
+    }
+
     // ═══════════════════════ §654 OpenConnect status ═══════════════════════
     // Подписка `SubscribeOpenConnectStatus` на ОТДЕЛЬНОМ клиенте (как Tailscale).
     // Держит её натив, не Dart: челлендж второго фактора приходит сразу после
