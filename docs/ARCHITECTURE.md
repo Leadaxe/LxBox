@@ -1768,7 +1768,9 @@ AppFunctions, the notification) and a UI process (`MainActivity` + the Flutter e
 `VpnPlugin`) is a possible future, not current work. The probe of 2026-11-10 (emulator): a libbox
 `CommandClient` in a second process connects to `files/command.sock` with no core changes —
 the `status` and `groups` streams were checked, nothing else. Moving the UI out
-(`MainActivity` into `:ui`) is cheaper than moving the service. Task 740 prepared the seam
+(`MainActivity` into `:ui`) is cheaper than moving the service; the owner fixed this direction on
+2026-11-17: if the split is done, the window goes to `:ui` and the service stays in the main
+process (whether to split at all is not decided). Task 740 prepared the seam
 without changing behavior; this section is the map for that work.
 
 | Side | Classes |
