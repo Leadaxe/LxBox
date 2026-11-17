@@ -278,6 +278,23 @@ void main() {
     expect(c.text, '{\n  "a": 1\n}');
   });
 
+  // §749 — JSON, начинающийся с комментария: Format есть и снимает его.
+  for (final lead in ['// note', '/* note */', '# note']) {
+    testWidgets('Format: JSON с ведущим «$lead»', (tester) async {
+      final c = await pumpField(tester, '$lead\n{"a": 1}');
+      await openMenu(tester);
+      expect(find.byKey(formatBtn), findsOneWidget);
+      await tester.tap(find.byKey(formatBtn));
+      await tester.pumpAndSettle();
+      expect(find.text('Comments will be removed'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('lx-code-editor-format-confirm')),
+      );
+      await tester.pumpAndSettle();
+      expect(c.text, '{\n  "a": 1\n}');
+    });
+  }
+
   // §649 — кнопка переноса строк у просмотрщика JSON с липкими заголовками.
   const wrapBtn = ValueKey('lx-code-editor-wrap');
   String? wrapTooltip(WidgetTester tester) =>

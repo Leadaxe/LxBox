@@ -121,6 +121,16 @@ int _stringEnd(String text, int start) {
   return -1;
 }
 
+/// §749 — первый значащий символ текста: ведущие пробелы, BOM и комментарии
+/// (`//`, `/* */`, `#`) пропускаются тем же сканером, что у правки тега.
+/// `''` — текст пуст или из одних комментариев. Определение языка редактора
+/// ([detectCodeLanguage]) по нему узнаёт JSON с пометкой автора в начале.
+String jsonLeadChar(String text) {
+  final body = text.startsWith('\uFEFF') ? text.substring(1) : text;
+  final i = _skipBlank(body, 0);
+  return i < body.length ? body[i] : '';
+}
+
 /// Первый значащий символ с позиции [i]: пробелы и комментарии пропускаются.
 int _skipBlank(String text, int i) {
   while (i < text.length) {
