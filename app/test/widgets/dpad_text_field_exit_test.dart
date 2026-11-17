@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/widgets/dpad_radio_group.dart';
 import 'package:lxbox/widgets/dpad_text_field_exit.dart';
 
 void main() {
@@ -202,5 +203,72 @@ void main() {
     await tester.pump();
     await key(tester, LogicalKeyboardKey.arrowDown);
     expect(top.hasPrimaryFocus, isFalse);
+  });
+
+  // OpenConnect: поле отпечатка лежит внутри DpadRadioGroup — шорткаты
+  // группы ближе к фокусу и раньше съедали стрелки целиком.
+  group('поле внутри DpadRadioGroup', () {
+    late FocusNode radio, inner, after;
+    late TextEditingController innerCtrl;
+
+    Future<void> pumpGroup(WidgetTester tester) async {
+      radio = FocusNode(debugLabel: 'radio');
+      inner = FocusNode(debugLabel: 'inner');
+      after = FocusNode(debugLabel: 'after');
+      innerCtrl = TextEditingController(text: 'sha');
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => DpadTextFieldExit(child: child!),
+          home: Scaffold(
+            body: Column(
+              children: [
+                DpadRadioGroup<String>(
+                  groupValue: 'a',
+                  onChanged: (_) {},
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        focusNode: radio,
+                        value: 'a',
+                        title: const Text('a'),
+                      ),
+                      TextField(focusNode: inner, controller: innerCtrl),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  focusNode: after,
+                  onPressed: () {},
+                  child: const Text('after'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('↓ из поля уходит к элементу после группы', (tester) async {
+      await pumpGroup(tester);
+      await focusAt(tester, inner, innerCtrl, 1);
+      await key(tester, LogicalKeyboardKey.arrowDown);
+      expect(after.hasPrimaryFocus, isTrue);
+    });
+
+    testWidgets('← внутри текста двигает каретку', (tester) async {
+      await pumpGroup(tester);
+      await focusAt(tester, inner, innerCtrl, 2);
+      await key(tester, LogicalKeyboardKey.arrowLeft);
+      expect(inner.hasPrimaryFocus, isTrue);
+      expect(innerCtrl.selection.baseOffset, 1);
+    });
+
+    testWidgets('стрелки на радио по-прежнему двигают фокус', (tester) async {
+      await pumpGroup(tester);
+      radio.requestFocus();
+      await tester.pump();
+      await key(tester, LogicalKeyboardKey.arrowDown);
+      expect(inner.hasPrimaryFocus, isTrue);
+    });
   });
 }

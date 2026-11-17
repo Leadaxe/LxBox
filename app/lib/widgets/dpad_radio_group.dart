@@ -29,19 +29,15 @@ class DpadRadioGroup<T> extends StatelessWidget {
   final Widget child;
 
   /// Стрелки — переход фокуса, а не выбор соседнего пункта.
-  static const arrowsMoveFocus = <ShortcutActivator, Intent>{
-    SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(
-      TraversalDirection.up,
-    ),
-    SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(
-      TraversalDirection.down,
-    ),
-    SingleActivator(LogicalKeyboardKey.arrowLeft): DirectionalFocusIntent(
-      TraversalDirection.left,
-    ),
-    SingleActivator(LogicalKeyboardKey.arrowRight): DirectionalFocusIntent(
-      TraversalDirection.right,
-    ),
+  static const _arrowsMoveFocus = <ShortcutActivator, Intent>{
+    SingleActivator(LogicalKeyboardKey.arrowUp):
+        _GroupArrowIntent(TraversalDirection.up),
+    SingleActivator(LogicalKeyboardKey.arrowDown):
+        _GroupArrowIntent(TraversalDirection.down),
+    SingleActivator(LogicalKeyboardKey.arrowLeft):
+        _GroupArrowIntent(TraversalDirection.left),
+    SingleActivator(LogicalKeyboardKey.arrowRight):
+        _GroupArrowIntent(TraversalDirection.right),
   };
 
   @override
@@ -49,7 +45,44 @@ class DpadRadioGroup<T> extends StatelessWidget {
     return RadioGroup<T>(
       groupValue: groupValue,
       onChanged: onChanged,
-      child: Shortcuts(shortcuts: arrowsMoveFocus, child: child),
+      child: Shortcuts(
+        shortcuts: _arrowsMoveFocus,
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            _GroupArrowIntent: _GroupArrowAction(),
+          },
+          child: child,
+        ),
+      ),
     );
+  }
+}
+
+class _GroupArrowIntent extends Intent {
+  const _GroupArrowIntent(this.direction);
+
+  final TraversalDirection direction;
+}
+
+/// §746 — внутри группы бывают поля ввода (OpenConnect: поле отпечатка под
+/// пунктом «Закреплённый отпечаток»). Обычный `DirectionalFocusIntent` поле
+/// глушит, и стрелки съедались целиком — ни выхода, ни каретки. Поэтому при
+/// фокусе в поле действие выключено: клавиша идёт выше — `RadioGroup` её
+/// пропускает (фокус не на радио), и решает общий слой `DpadTextFieldExit`
+/// (каретка или выход на краю).
+class _GroupArrowAction extends Action<_GroupArrowIntent> {
+  @override
+  bool isEnabled(_GroupArrowIntent intent) {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return true;
+    return context.widget is! EditableText &&
+        context.findAncestorWidgetOfExactType<EditableText>() == null;
+  }
+
+  @override
+  void invoke(_GroupArrowIntent intent) {
+    final context = FocusManager.instance.primaryFocus?.context;
+    if (context == null) return;
+    Actions.maybeInvoke(context, DirectionalFocusIntent(intent.direction));
   }
 }
