@@ -93,22 +93,25 @@ Platform directly — only through the controllers.
 │  a presenter/VM. Subscribed through AnimatedBuilder/ListenableBuilder.│
 ├──────────────────────────────────────────────────────────────────────┤
 │  STATE   lib/controllers — ChangeNotifier brokers                     │
-│  HomeController  — VPN/CommandClient/nodes/ping/heartbeat (split into  │
-│                    parts: config_io · heartbeat · ping_orchestration)  │
-│  SubscriptionController — entries, fetch, generateConfig (+ part)       │
+│  HomeController  — VPN/CommandClient/nodes/ping/heartbeat (part mixins:│
+│    config_io · heartbeat · ping_orchestration · dependency_health ·    │
+│    node_selection)                                                     │
+│  SubscriptionController — entries, fetch, generateConfig (+ parts:     │
+│    folder_ops · link_notice · node_budget_ops · subscription_entry)    │
 │  view-models: NodeFilterViewModel · CustomRuleEditController           │
 │  An immutable HomeState + copyWith (the _unset sentinel) + ParsedConfig│
 ├──────────────────────────────────────────────────────────────────────┤
 │  SERVICES   lib/services · lib/models · lib/config                     │
 │  Parser v2 (parser/) · Builder (builder/) · subscription/ ·            │
 │  settings_storage/ · traffic_profiler/ · debug/ (HTTP Debug API) ·     │
-│  vpn/cc_channel (libbox CommandClient) · app_log ·                     │
+│  dns/ · chains/ · probe/ · lx_backup (+ parts) · app_log ·             │
 │  the caches (AppInfoCache·HttpCache) ·                                 │
 │  ConfigNode/ParsedConfig (§091).                                        │
 │  Sealed models: NodeSpec · SingboxEntry · CustomRule · ValidationIssue.│
 ├──────────────────────────────────────────────────────────────────────┤
 │  PLATFORM / NATIVE                                                      │
-│  Dart: vpn/box_vpn_client — MethodChannel + status/coreLog Stream.      │
+│  Dart: vpn/box_vpn_client — MethodChannel + status/coreLog Stream;      │
+│  vpn/cc_channel — libbox CommandClient; vpn/platform_channels — names. │
 │  Kotlin: VpnPlugin (the bridge) → BoxVpnService (Android VpnService) + │
 │  BoxService (libbox runtime, §049-split) + DefaultNetworkMonitor        │
 │  (§087 network-reset) + LocalResolver + WifiInfoReader.                │
@@ -130,12 +133,38 @@ snapshot plus `stage()` over the DNS section, leaving the screen thin), and
 auth-force and `has_tun`-mirror invariants for the UI **and** for Debug). The typed storage models are the sealed `DnsServerRef` and `DnsRuleRef` (§294).
 The full invariant plus the strangler plan is in `docs/spec/tasks/291F-layered-architecture-facades/`.
 
-**Known layer violations (debt, no user-visible effect; audit 591, 2026-10-13):**
-`services/dns/dns_controller.dart` and `services/debug/handlers/chains.dart` import
-from `screens/` (the DNS server resolver of the DNS screen; the chain form validation,
-hop candidates and hop targets of the chain editor). They are recorded here rather than
-fixed: the owner's rule is not to touch what works; a fix moves those pure helpers down
-to `services/` without changing behavior.
+The native side has a second boundary, between the VPN service and the UI — see
+[Process boundary: VPN service side vs UI side](#process-boundary-vpn-service-side-vs-ui-side).
+
+**Known layer violations (debt, no user-visible effect; audit 591, re-checked in task 740,
+2026-11-17).** Task 740 removed the two recorded ones (`dns_controller` and
+`debug/handlers/chains` importing `screens/`): the pure helpers moved down
+(`services/dns/dns_server_resolver.dart` + `resolved_server.dart`, `services/chains/`,
+`models/outbound_option.dart`, `services/parser/parse_env_snapshot.dart`), the UI helpers
+moved up (`widgets/ui_helpers.dart`, `app_theme_seed.dart`, `template_aware_state.dart`,
+`home_return_observer.dart`; the `NodeSortMode` icons are the `NodeSortModeIcon` extension
+in `screens/home/widgets/nodes_header.dart`, so `models/home_state.dart` no longer imports
+`material`). What remains:
+
+- `services/` → `screens/`: one import — `services/debug/handlers/taildrop.dart` →
+  `screens/node_settings/exit_node_store.dart`. Nothing in `services/` or `models/`
+  imports `widgets/`.
+- `services/` → `controllers/`: 16 imports in 12 files — `debug/` (`context`,
+  `debug_registry`, the `folders`/`nodes`/`subs`/`core_reject`/`chains` handlers, the
+  `subs` serializer), `core_reject/core_reject_{host,runner}`, `subscription/auto_updater`,
+  `direction_mutations`. Some only use `SubscriptionEntry`, a type declared in the
+  controller's library.
+- `models/` ↔ `services/` is a cycle inside one layer (43 imports from `models/` in 22 files,
+  344 the other way).
+- `vpn/` → `services/`: `cc_channel.dart` imports `app_log`, `selector_info`,
+  `diagnostics/connection_test`; `box_vpn_client.dart` imports `app_log` and
+  `l10n/app_language_reconcile`.
+- **“The UI never touches Platform directly” is not what the code does:** 28 files under
+  `screens/` and `widgets/` import `vpn/box_vpn_client` or `vpn/cc_channel` directly. This is
+  a recorded divergence between the rule and the code; whether to add facades or to relax
+  the rule is the owner's decision.
+
+They are recorded here rather than fixed: the owner's rule is not to touch what works.
 
 **The event brokers (push, bottom-up):** §122 moved the UI's control channel onto the
 libbox **CommandClient** (a server-stream push instead of Timer polling). The push channels:
@@ -174,20 +203,34 @@ Large files are decomposed through `part` or `mixin` (the same library, so libra
 access is preserved) or by extracting widget subtrees. The documented large exceptions
 (where a split would add risk without benefit):
 
-| File | Lines (2026-09-30) | Why it stays whole |
+| File | Lines (2026-11-17) | Why it stays whole |
 |---|---|---|
-| `services/traffic_profiler.dart` (+ `traffic_profiler/internal.dart`, `models.dart`) | 873 | A stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract; the models and internals are already split out. |
-| `models/custom_rule.dart` | 1232 | Sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
-| `android/.../VpnPlugin.kt` | 1561 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files. |
+| `services/traffic_profiler.dart` (+ `traffic_profiler/internal.dart`, `models.dart`) | 896 | A stateful singleton: receiving the CC connections and DNS streams, diffing snapshots, confidence and the dual SSE fan-out — all through shared private state and one `ChangeNotifier` contract; the models and internals are already split out. |
+| `models/custom_rule.dart` | 1423 | Sealed into `Inline`/`Srs`/`Preset`; the size is inherent to three structurally different kinds. |
+| `services/settings_storage.dart` (+ 11 parts) | 1374 | A facade of thin delegates; the domains already live in `settings_storage/*.dart` (reviewed in task 740, left whole). |
+| `vpn/box_vpn_client.dart` (+ `method_names`, `timeouts`, `models` parts) | 1121 | A thin typed facade, one method per native call (reviewed in task 740; only `MemoryInfo`/`CoreCheck` moved to the `models` part). |
+| `android/.../VpnPlugin.kt` | 2106 | One `MethodCallHandler` contract; splitting it would scatter the channel contract across files (cutting `onMethodCall` into handlers is a listed next step of task 740). |
 
-The list above is the set of *reviewed* exceptions, not the set of large files.
-Nothing enforces the principle: as of 2026-09-30, 23 Dart files under `app/lib`
+**Reviewed and split in task 740 (2026-11-17):** `services/lx_backup.dart` 4891 → 1041
+(+ `lx_backup/{constants,models,export,decode_0x,decode_10,merge}.dart` by stage);
+`controllers/subscription_controller.dart` 4002 → 3000 (+ `folder_ops.dart` with
+`_FolderOpsMixin`, `link_notice.dart`); `controllers/home_controller.dart` 2235 → 2029
+(+ `_DependencyHealthMixin`, `_NodeSelectionMixin`); `vpn/cc_channel.dart` 2192 → 958
+(the DTOs into `cc_channel/models_{tailscale,status,traffic,probe}.dart`, the native
+method names into `cc_channel/method_names.dart`). The status automaton of
+`HomeController` and the CRUD/fetch/build core of `SubscriptionController` stay in
+the main files on purpose.
+
+The table is the set of *reviewed* exceptions, not the set of large files.
+Nothing enforces the principle: as of 2026-11-17, 33 of the 609 Dart files under `app/lib`
 exceed 1000 lines (`find app/lib -name '*.dart' | xargs wc -l | sort -rn`), the
-largest being `services/lx_backup.dart` (4493), `services/parser/engine/interpreter.dart`
-(4181), `controllers/subscription_controller.dart` (3582),
-`services/contract/body_sanitizer.dart` (2831), `controllers/home_controller.dart`
-(2037) and `services/parser/engine/emitter.dart` (2012). None of them has been
-reviewed against the principle; they are debt, not documented exceptions.
+largest being `services/parser/engine/interpreter.dart` (4446),
+`services/contract/body_sanitizer.dart` (3088), `controllers/subscription_controller.dart`
+(3000), `services/parser/engine/emitter.dart` (2031), `controllers/home_controller.dart`
+(2029), `widgets/tailscale_network_tab.dart` (1851), `screens/folder_detail_screen.dart`
+(1848), `services/builder/build_config.dart` (1764), `services/parser/json_parsers.dart`
+(1744) and `models/node_spec.dart` (1743). Apart from the files named above, none has
+been reviewed against the principle; they are debt, not documented exceptions.
 
 ### ConfigNode / ParsedConfig (§091 — implemented)
 
@@ -197,7 +240,7 @@ isMarkedDetour, detourRefCount, raw, transportLabel, securityLabel}>`,
 It is parsed once per change of `configRaw` (the `HomeState.configModel` field);
 the pings are a separate dynamic layer, joined at render time (`NodeViewItem`).
 Membership of a subscription is a **prefix filter** over the emitted tag
-(`home/subscription_lookup.dart`), with no membership in node lists. That removed a whole
+(`screens/home/source_lookup.dart`), with no membership in node lists. That removed a whole
 class of “the UI reverse-parses the display tag” bugs (§077/§079/§080).
 
 `transportLabel` and `securityLabel` (§102/§103) are eager labels for a node's subtitle
@@ -599,6 +642,8 @@ In sing-box 1.12 a DNS server of type `https` or `tls` addressed by hostname req
 
 The structure after §089: thin screens with `<screen>/` subfolders, controllers split into
 parts, and the large services separated by responsibility through `part`s. The per-file roles follow.
+The tree describes the structure and the key files, not every file (609 Dart files under
+`app/lib` as of 2026-11-17); a directory listed here holds more files than it names.
 
 ### `app/lib/`
 
@@ -616,11 +661,18 @@ box_vpn_client.dart          # BoxVpnClient.I — a typed wrapper over the
                              #   timeout-wrapped + safe-default; onStatusChanged stream
 box_vpn_client/method_names.dart  # part: _Methods — a mirror of when(call.method) from VpnPlugin.kt
 box_vpn_client/timeouts.dart      # part: _Timeouts — per-method Duration (status 3s, start 30s…)
+box_vpn_client/models.dart        # part (§740): MemoryInfo, CoreCheck
 cc_channel.dart              # §122 CcChannel.instance — the Dart client of the libbox CommandClient (it replaced
                              #   ClashApiClient): push streams for status/outbounds/groups/connections/dns (§180)
                              #   over the EventChannel lxbox/cc/* plus the imperatives (urlTestOutbound, getRules,
                              #   the getGroups unary pull, selectOutbound, closeConnection); the fan-out goes through
                              #   a broadcast (ONE native sink per channel, the §122 sink-leak guard)
+cc_channel/method_names.dart # part (§740): _CcMethods — the 57 native method names CcChannel calls
+cc_channel/models_*.dart     # parts (§740): the DTOs — tailscale · status · traffic · probe
+cc_openconnect.dart          # §654 C the models of the lxbox/cc/openconnect stream (endpoints, pending challenge)
+platform_channels.dart       # §141 PlatformChannels — every MethodChannel/EventChannel name plus the Sora
+                             #   editor viewType and channel prefix (§740: moved here from services/)
+pprof_profile.dart           # §207 PprofProfile — one pprof profile: native pathAndQuery, file name, UI label
 ```
 
 #### `config/`
@@ -672,7 +724,9 @@ debug_entry.dart             # DebugEntry plus DebugSource/Level/Filter (a unifi
 home_state.dart              # immutable HomeState + copyWith; configModel: ParsedConfig (§091,
                              #   re-parsed on a configRaw change); NodeSortMode (default/latency/name/
                              #   manual — §100: manual in the carousel and the menu, the mode plus the manual order
-                             #   persisted in settings_storage); memoized sortedNodes
+                             #   persisted in settings_storage); memoized sortedNodes; no Flutter
+                             #   import (the sort-mode icons are NodeSortModeIcon in screens/home/widgets/nodes_header.dart)
+outbound_option.dart         # §740 OutboundOption — an outbound tag or the reject sentinel for OutboundPicker
 config_node.dart             # §091 ConfigNode plus ParsedConfig — the structural metadata of the assembled
                              #   config's nodes (type/section/detour/isMarkedDetour/detourRefCount/raw);
                              #   the §102/§103 eager transportLabel/securityLabel (the transport slot plus
@@ -699,11 +753,18 @@ home_controller/config_io.dart          # part _ConfigIoMixin: load/saveParsedCo
 home_controller/heartbeat.dart          # part _HeartbeatMixin: a watchdog over the silence of the CommandClient status stream
                              #   (§122, with no HTTP polling) plus dead-tunnel detection
 home_controller/ping_orchestration.dart # part _PingMixin: single/group/mass URLTest, ten workers, epoch cancellation
+home_controller/dependency_health.dart  # part _DependencyHealthMixin (§740): the §355 detour graph of the active config
+home_controller/node_selection.dart     # part _NodeSelectionMixin (§740): node/group selection, pull-to-refresh of groups
 subscription_controller.dart            # the subscriptions: List<ServerList>, add/remove/rename/toggle/move
                                         #   (§098 drag-reorder), fetch, buildConfig; §101 — rehydrationDone
                                         #   (fixing the startup race between rehydrate and bootstrap) plus an empty-fetch guard
                                         #   (an HTTP 200 with 0 nodes does not wipe the cached ones)
 subscription_controller/subscription_entry.dart # part SubscriptionEntry: a ChangeNotifier wrapper over an immutable ServerList
+subscription_controller/folder_ops.dart  # part _FolderOpsMixin (§740): folder and member operations (§234), WARP node generation
+subscription_controller/link_notice.dart # part (§740): NodeLinkSubject, NodeLinkNotice
+subscription_controller/node_budget_ops.dart # part: the §714 node budget
+subscription_controller/cache_rehydrate.dart · core_reject_ops.dart
+                                         # own libraries: §652 rehydrate from cache in an isolate · feature 478 verdicts
 ```
 
 #### `screens/` — the UI (a thin screen plus its subfolder)
@@ -721,8 +782,8 @@ home/node_actions.dart          # the node's long-press actions; §099 — the c
 home/home_menus.dart            # showSortOptionsMenu (+ Custom/manual §100) + showPingSettings
 home/home_dialogs.dart          # the top-level dialog and snackbar functions (update/permission/battery/revoked)
 home/restore_backup.dart        # empty-state quick-restore flow (SAF)
-home/subscription_lookup.dart   # the §091 prefix filter: a node belongs to a subscription ⇔ its tag
-                                #   starts with '$prefix '; it replaced the §077 reverse map over node lists
+home/source_lookup.dart         # the §091/§235 prefix filter: which sources (subscriptions, folders) own a
+                                #   display tag; it replaced the §077 reverse map over node lists
 home/direction_filters.dart     # §083 an immutable snapshot of a direction's match filters (plus the §103 variants)
 home/filter_widgets.dart        # the filter chip and row widgets (the §095 viz-toggle chips, the §096 NegateToggle)
 home/widgets/                   # node_list · home_controls · home_drawer (the nav hub) · nodes_header ·
@@ -732,7 +793,8 @@ home/widgets/                   # node_list · home_controls · home_drawer (the
 routing_screen.dart          # the routing config (598 lines) plus LazyPersistMixin and _RoutingSrsCacheMixin (a part)
 routing_screen/                 # widgets/ (custom_rule/preset_catalog/route_final/routing_group/srs_status) + menus
 dns_settings_tab.dart        # the DNS tab of Routing (§655; was the DNS Settings screen) plus DnsTabWrites;
-                             #   dns_settings_screen/ holds the editors, dns_server_resolver and widgets/
+                             #   dns_settings_screen/ holds the editors and widgets/ (the server resolver
+                             #   moved to services/dns/ in §740)
 custom_rule_edit_screen.dart # CustomRule editor (456) + custom_rule_edit/ (edit_controller, tabs/, sections/, widgets/)
 subscription_detail_screen.dart # a subscription's details (431 lines, a TabController) plus widgets/ (settings/source/meta)
 subscriptions_screen.dart    # the subscription list (445 lines) plus widgets/ and the helpers (clipboard/paste/share/context)
@@ -849,7 +911,7 @@ builder/                     # NodeSpec + template → sing-box config
   if_engine.dart             #   the §120 typed template engine: var substitution plus the #if construct
   preset_expand.dart         #   expandPreset (CustomRulePreset → fragments, @var) + mergeFragments (§033);
                              #   §265: the globalVars parameter — ref-vars {"ref":…} take their value from the global scope
-  normalize_pinned_presets.dart   #   §264 the pinned presets are normalised to the start of the storage order
+  rule_order.dart            #   §370 the sparse `num` axis that orders all rules (replaced the §264 `pinned` presets)
   rule_set_registry.dart     #   the registry of route.rule_set plus route.rules; it enforces tag uniqueness
   validator.dart             #   validateConfig: dangling refs, empty urltest → ValidationResult
   post_steps.dart            #   a barrel (part): the post-processing steps below
@@ -924,7 +986,6 @@ storage_migration/           # §439 — the 2.23.2 form → contract 1.0 record
   legacy_autogroup.dart      #   the frozen autogroup:// reader: members keyed by identity → pairs (migration and 0.x import)
 node_link_address.dart       # §439 node addresses of containers (raw tags) for the registry and the pickers
 lx_backup_slice.dart         # §439 the LX Backup 1.0 slice table: contract / setting / runtime per record key; declared = LxBox field of contract 1.0.1
-nav/home_return_observer.dart          # a global NavigatorObserver (§076): a rebuild on returning home
 app_log.dart                 # AppLog ChangeNotifier-singleton: per-source ring buffers + persistent warn/error (§043)
 app_info_cache.dart          # AppInfoCache — a session cache of AppInfo by package plus a revision ValueNotifier
 json_clone.dart              # deepCopyJson/deepCloneJson/deepEqualsJson (§089 P6 — shared by the builder and backup)
@@ -953,7 +1014,6 @@ l10n/                        # the §279/§285 localization subsystem (see the L
   locale_controller.dart     #   LocaleController — the owner of the locale-switch pipeline plus the dictionary
   template_overlay.dart      #   TemplateOverlay.apply/extract — the pre-parse overlay of the template
   app_language_reconcile.dart#   the three-way reconciliation between LocaleManager and storage (Android 13+)
-  template_aware_state.dart  #   a mixin: re-reading the template in didChangeDependencies on a locale change
 project_links.dart           # §362 — the single source of the project's links plus the @placeholders
 install_source.dart          # §390 — the install channel (github/play/fdroid): a dart-define, otherwise
                              #   by installingPackageName. It decides the updateUrl (where to send the user for an update)
@@ -962,9 +1022,23 @@ support/                     # the §105/§356/§357 support feed plus the activ
   support_nav.dart           #   the §357 pseudo-protocol lxbox://action:payload (route:/add:)
   support_state.dart         #   persisting the support state (SupportState.I): read/baseline/snooze
   active_time_tracker.dart   #   the usage counter: the §187 native uptime plus the legacy wall clock
-platform_channels.dart       # §141 — the MethodChannel/EventChannel names (a single source across Dart and Kotlin)
 process_name.dart            # §154 — resolving a package to a process name (the profiler's attribution)
 profile_dump_writer.dart     # §207 — serializing a pprof dump (goroutine/CPU) to disk
+lx_backup.dart               # LX Backup: the entry into parsing, the import-target filter, shared coercions
+lx_backup/                   # §740 parts by stage: constants · models · export · decode_0x · decode_10 · merge
+# Subdirectories not itemised above, one line each:
+chains/                      # §393 C the pure chain-editor helpers: form validation, hop candidates, hop targets (§740)
+core_reject/                 # feature 478 — parsing the core's start refusal, the verdict, the retry runner
+diagnostics/                 # §687 the connection test model, node diagnostics, the §725 Path MTU probe
+dns/                         # DnsController facade, LX Backup dns section, server resolver and holds (§740)
+mixins/                      # §704 mixins: path language, apply to the final config, preview, suggestions
+probe/                       # §393/§296 ProbeController and the probe runner, layered chain probe
+tailscale_state/             # §445 the index of Tailscale state directories (tailscale_state.json)
+transfer/                    # §622 phone → TV settings transfer: code, envelope, sender, receiver
+vpn_settings/                # §293 VpnSettingsFacade — the single point applying the VPN mode
+wireguard/                   # §623 WG/AWG masquerade in the source text, WG INI export
+workspaces/                  # §417 Workspaces: named copies of the app state (store + controller)
+parser/parse_env_snapshot.dart # §740 ParseEnvSnapshot — the main isolate's parse singletons handed to a worker
 ```
 
 #### `widgets/` — the cross-screen widgets
@@ -976,8 +1050,11 @@ node_view_item.dart          # NodeViewItem — an immutable view row (static me
 emoji_picker_button.dart     # §094 — the emoji palette popup (node_settings, the add-server wizard)
 reorder_grab_strip.dart      # §098 — one grab strip for drag-reorder (the routing and DNS rules ·
                              #   subscriptions · the node list in manual-sort mode, §098/§100)
-outbound_picker.dart · template_var_list.dart · core_logs_hint_banner.dart ·
+outbound_picker.dart · template_var_list.dart ·
 wifi_entry.dart · wifi_manual_add_dialog.dart · wifi_permission_dialog.dart · wifi_saved_picker_sheet.dart
+ui_helpers.dart · app_theme_seed.dart · template_aware_state.dart · home_return_observer.dart
+                             # §740 moved up from services/: snackbar helpers, the §735 theme seed,
+                             #   the template re-read mixin on a locale change, the §076 NavigatorObserver
 ```
 
 ### `app/android/app/src/main/kotlin/com/leadaxe/lxbox/`
@@ -987,22 +1064,30 @@ MainActivity.kt              # a FlutterActivity: it registers VpnPlugin; the /u
                              #   VPN-consent flow; QS-tile/shortcut quick actions
 editor/SoraEditorPlatformView.kt # §624 — the native code editor (sora-editor) as a platform view behind
                              #   every JSON field; the factory is registered in MainActivity; see “Native code editor”
-vpn/VpnPlugin.kt             # the Flutter plugin (1084 lines, see the Overview): the MethodCallHandler for every /method;
-                             #   the status and coreLog EventChannel sinks; the §122 cc methods (ccConnectScreen/
-                             #   ccUrlTestOutbound/ccGetGroups/…) + lxbox/cc/* EventChannel sinks;
-                             #   the statusReceiver bridge; app-icon encoding
+vpn/VpnPlugin.kt             # the Flutter plugin (2106 lines): the MethodCallHandler for every /method;
+                             #   the status/coreLog/lxbox/cc/* EventChannels (it sets and clears the UiSinks);
+                             #   the §122 cc methods (ccConnectScreen/ccUrlTestOutbound/ccGetGroups/…);
+                             #   the statusReceiver bridge; app-icon encoding; registers in AutomationBridge
+vpn/UiSinks.kt               # §740 the Flutter-engine EventSinks (coreLogSink + 10 cc*Sink); UI side, written
+                             #   by BoxService and BoxCommandClient — see “Process boundary”
+vpn/UiLaunchRequests.kt      # §740 openConnectOpenRequest / taildropOpenRequest: MainActivity writes, VpnPlugin reads
+vpn/AutomationBridge.kt      # §740 the §047 seam into Dart: handleAutomationAction, notifyStopRequested,
+                             #   sendAutomationBroadcast; VpnPlugin sets/clears its channel on attach/detach
+vpn/AutomationCache.kt       # §740 the single access point of the lxbox_automation prefs file
 vpn/BoxCommandClient.kt      # §122 — the UI↔core control channel through the libbox CommandClient:
                              #   statusClient/screenClient/profilerClient; the addCommand subscription plus the write* commands
                              #   (§163/§164, the setStatusInterval power model). It replaced Clash HTTP
 vpn/BoxVpnService.kt         # the Android VpnService plus the PlatformInterface side (the thin §049 split):
-                             #   §122 — it owns the cc*Sinks (status/outbounds/groups/connections/dns §180 push);
+                             #   the companion holds the service state statics (currentStatus, …; see “Process boundary”);
                              #   openTun (Builder.establish, allowBypass §069, the per-app routes); it forwards into BoxService
                              #   §119: libbox calls openTun ONLY when a tun inbound exists
                              #   (with vpn_mode=proxy and a config without a tun there is no openTun, no establish and no VPN slot)
                              #   The foreground/protect/override paths are tun-agnostic, so proxy mode is config-only and Kotlin is untouched
 vpn/BoxService.kt            # CommandServerHandler — it owns the libbox runtime (fileDescriptor/commandServer)
                              #   AtomicReference, serviceScope); startSingbox/doStop/serviceReload; setStatus broadcast
-vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singletons wifiObserver, wifiStateCache
+vpn/BoxApplication.kt        # Application: async Libbox.setup (libboxReady barrier); singletons wifiObserver, wifiStateCache;
+                             #   §740 onCreate = initCommon · initServiceSideEarly · initUiSide · initCommonWifiCache ·
+                             #   initServiceSide (the old step order; the sides interleave, hence five functions)
 vpn/CrashRecovery.kt         # §334 — “the previous run crashed” (a non-empty CrashReport-lxbox.log in
                              #   tempPath). The detection must run STRICTLY before Libbox.setup, which archives it
 vpn/PlatformInterfaceWrapper.kt # libbox PlatformInterface: localDNS→LocalResolver, findConnectionOwner, readWIFIState
@@ -1014,7 +1099,18 @@ vpn/PathMtuProbe.kt          # §725 channel path_mtu: one ICMP echo with DF on 
 vpn/ConfigManager.kt         # file-based config store (filesDir) + notificationTitle
 vpn/ServiceNotification.kt   # the foreground-service notification (typed SPECIAL_USE on API 34+); the §182 action buttons
 vpn/VpnStatus.kt             # the Stopped/Starting/Started/Stopping enum (the native side of the status)
-vpn/BootReceiver.kt          # the BOOT_COMPLETED auto-start plus the SharedPreferences native toggles
+vpn/BootReceiver.kt          # the BOOT_COMPLETED auto-start plus the boxvpn_boot mirror (every access through prefs())
+vpn/NativeCache.kt           # §707 Kotlin's own cache, the lxbox_native_cache prefs file
+vpn/VpnWatchdog.kt           # §428 the dead-hand alarm that restarts a tunnel whose process died
+vpn/ProbeSession.kt          # §236 a headless probe: a temporary CommandServer plus a tun-less config while the VPN is off
+vpn/Taildrop*.kt             # §707 Taildrop: sending, receiving into Downloads, notifications, service files,
+                             #   the Share and Send-clipboard activities (TaildropClip holds the clipboard feeds)
+vpn/StopTrace.kt · SerialLane.kt · CacheDbLockRetry.kt · L10n.kt · LocaleChangedReceiver.kt ·
+  NotificationButtons.kt · OpenConnectCallbackServer.kt
+                             # §668 stop trace · §732 ordered core calls · §703 cache.db retry · §279 native locale ·
+                             #   §707 notification buttons · §654 C SSO loopback listener
+LanTransferSender.kt         # §622 sending settings to a TV past our own tunnel
+appfunctions/                # §721 Android AppFunctions: startVpn/stopVpn/getVpnStatus behind a toggle
 vpn/LxBoxTileService.kt      # the QS tile toggle (§032) with optimistic rendering
 vpn/QuickShortcuts.kt        # dynamic launcher shortcuts (Connect/Disconnect)
 vpn/LxBoxIntentReceiver.kt   # the §047 raw broadcast API: nine incoming actions, an optional permission gate, setEnabled
@@ -1212,9 +1308,17 @@ L×Box's state lives in two places with different semantics:
    what Kotlin chose or remembered by itself and the user never configured.
    Kotlin writes and reads it, Dart does not know about it, it is not backed
    up. A broken or empty file is an empty cache.
-4. `shared_prefs/` holds exactly two files: `boxvpn_boot` and
-   `lxbox_native_cache`. A new key for Kotlin is a line in the key list of the
-   mirror or of the cache, not a new `getSharedPreferences`.
+4. Kotlin opens exactly three files in `shared_prefs/`, each through one access
+   point (§740): `boxvpn_boot` (`BootReceiver.prefs()` — the settings mirror,
+   Dart writes, Kotlin reads), `lxbox_native_cache` (`NativeCache` — Kotlin
+   writes and reads) and `lxbox_automation` (`AutomationCache` — the §047 cache
+   of the active node/group and the node/group lists: Dart pushes it through
+   `setAutomationActiveState`, the Locale receivers and edit screens read it
+   while the engine may be asleep; runtime state, not a setting). The fourth file,
+   `FlutterSharedPreferences`, belongs to Dart's `shared_preferences` plugin and is
+   read only for the one-time move of the theme key (§707 iter. 9). A new key for
+   Kotlin is a line in the key list of one of these files, not a new
+   `getSharedPreferences`.
 5. Dart's state and caches (`sub_cache/`, logs, `support_state.json`) are
    files of their own and do not go into the JSON.
 
@@ -1337,8 +1441,10 @@ SharedPreferences (Android), shared_prefs/:
     ├── clip_tag, clip_peer, clip_name   #   the last recipient of the Send window
     └── vpn_desired, sticky_restart_count, sticky_restart_window_start,
         last_pushed_locale, shortcut_relabel_pending
+└── lxbox_automation                     # AutomationCache (§047): Dart pushes, the Locale plugin reads
+    └── active_node, active_group, all_nodes, all_groups   # runtime state, not settings, not backed up
 
-lxbox_automation, FlutterSharedPreferences — reviewed separately.
+FlutterSharedPreferences — the Dart plugin's file, read once for the legacy theme key.
 ```
 
 ##### The three storage levels of the native prefs
@@ -1488,10 +1594,10 @@ HomeController/UI                    Sing-box (Go goroutines)
        │ AppLog.I.info(...)                    │ writeDebugMessage(line)
        │   source: app                         │   ↓
        │                              [PlatformInterface override]
-       │                              BoxVpnService.writeDebugMessage:
+       │                              BoxService.writeDebugMessage:
        │                                ├─ strip ANSI escapes
        │                                ├─ skip TRACE/DEBUG (volume reduction)
-       │                                └─ coreLogSink.success(msg)  ← main thread post
+       │                                └─ UiSinks.coreLogSink.success  ← main thread post
        │                                       │
        │                              EventChannel "lxbox/coreLog"
        │                                       │
@@ -1524,7 +1630,7 @@ HomeController/UI                    Sing-box (Go goroutines)
 ```
 
 **Key design rules:**
-- `coreLogSink` (a volatile companion field in `BoxVpnService`) receives the sing-box callbacks from any thread.
+- `UiSinks.coreLogSink` (a volatile field, §740; it lived in the `BoxVpnService` companion before) is fed from `BoxService.writeDebugMessage`, which the core calls from any thread; `VpnPlugin` sets and clears the sink.
 - `EventChannel.EventSink.success()` requires the **main thread**, so we dispatch through `coreLogMainHandler`.
 - Forwarding is gated by the `Libbox.setup(SetupOptions{debug: ...})` flag (read from the `BootReceiver` prefs).
 
@@ -1610,13 +1716,14 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 ┌─────────────────────────────────────────┐  ┌────────────────────────────────────┐
 │ BoxApplication : Application            │  │ VpnPlugin : MethodCallHandler      │
 │  • onCreate (registered in Manifest)    │  │  • setMethodCallHandler            │
-│  • §334 CrashRecovery ← STRICTLY BEFORE setup │ • EventChannel sinks (status/log) │
-│    one event, two subscribers: the cleanup here, │ • the static currentStatus mirror │
-│    the §316 banner in Dart, from the archive │  (read synchronously by HomeController) │
-│  • Libbox.setup(SetupOptions) async     │  │                                    │
-│  • libboxReady : CompletableDeferred    │  │                                    │
-│  • Singleton WifiNetworkObserver        │  │                                    │
+│  • §334 CrashRecovery ← STRICTLY BEFORE setup │ • its own statusSink (status_events) │
+│    one event, two subscribers: the cleanup here, │ • sets/clears UiSinks (coreLog,   │
+│    the §316 banner in Dart, from the archive │    10 × lxbox/cc/*) — §740          │
+│  • Libbox.setup(SetupOptions) async     │  │ • registers AutomationBridge       │
+│  • libboxReady : CompletableDeferred    │  │ • getVpnStatus reads               │
+│  • Singleton WifiNetworkObserver        │  │   BoxVpnService.currentStatus      │
 │  • Singleton WifiStateCache (§569)      │  │                                    │
+│  • §740 onCreate split by side          │  │                                    │
 └─────────────────────────────────────────┘  └────────────────────────────────────┘
                                                            │ start/stop intent
                                                            ▼
@@ -1645,6 +1752,64 @@ In the §049 audit we ported the pattern from the SagerNet reference (`bg/BoxSer
 
 **Why the split:** before §049 `BoxVpnService` implemented both `PlatformInterface` and `CommandServerHandler`.
 
+### Process boundary: VPN service side vs UI side
+
+**Today the app is one process** (no `android:process` in the manifest). Splitting it into a
+VPN service process (`BoxVpnService`/`BoxService`/libbox, the tile, auto-start, the receivers,
+AppFunctions, the notification) and a UI process (`MainActivity` + the Flutter engine +
+`VpnPlugin`) is a possible future, not current work. The probe of 2026-11-10 (emulator): a libbox
+`CommandClient` in a second process connects to `files/command.sock` with no core changes —
+the `status` and `groups` streams were checked, nothing else. Moving the UI out
+(`MainActivity` into `:ui`) is cheaper than moving the service. Task 740 prepared the seam
+without changing behavior; this section is the map for that work.
+
+| Side | Classes |
+|---|---|
+| **Service** | `BoxVpnService`, `BoxService`, `PlatformInterfaceWrapper`, `DefaultNetworkMonitor`, `ServiceNotification`, `BootReceiver`, `VpnWatchdog`, `LxBoxTileService`, `QuickShortcuts`, `LxBoxIntentReceiver`, `automation/Locale*Receiver`, `appfunctions/`, Taildrop receiving (`Taildrop` inbox and notifications) |
+| **UI** | `MainActivity`, `VpnPlugin`, `UiSinks`, `UiLaunchRequests`, the Sora editor (`editor/`), `WifiNetworkObserver` / `WifiHistoryBridge` |
+| **Boundary** | `BoxCommandClient` (created by the service, serves the UI sinks), `ProbeSession`, `PathMtuProbe`, `AutomationBridge` (the seam itself) |
+
+**Already process-safe:**
+- commands to the service — Intents/broadcasts with `setPackage`: `ACTION_START`, `ACTION_STOP`,
+  `ACTION_FORCE_STOP`, `ACTION_RELOAD`, `ACTION_RESET_NETWORK`, `ACTION_CLEAR_DNS_CACHE`,
+  `ACTION_RECONNECT`, `ACTION_UPDATE_NOTIFICATION`, `ACTION_CLEAR_STALE_NOTIFICATION`
+  (`BoxVpnService` companion);
+- `BROADCAST_STATUS` (service → `VpnPlugin.statusReceiver`) and the notification's `PendingIntent`s;
+- the `command.sock` socket (CommandClient), the files (`singbox_config.json`, `cache.db`, …),
+  the `VpnWatchdog` alarm, the outgoing automation broadcasts.
+
+**Still shared process memory (the debt before a split):**
+- the `BoxVpnService` companion: `currentStatus` (25 qualified reads in 14 files),
+  `currentRevoked`, `tunnelStartedElapsedMs`, `currentSessionAllowBypass`, `live`,
+  `stopCompleter` / `stopReceiverAlive`;
+- `BoxService.commandClient` — read by both sides (56 references in 6 files);
+- `UiSinks` — the service (`BoxService` core log) and `BoxCommandClient` write into Flutter `EventSink`s;
+- `AutomationBridge` — the service (`BoxVpnService.stop()`, the receivers) calls the UI's `MethodChannel`;
+- `ConfigManager`'s in-memory `cachedConfig` and the notification labels (`notificationTitle`, …);
+- the process-global `Libbox.*` calls from `VpnPlugin` (`setQuicGSODisabled`/`setQuicECNDisabled`,
+  `reloadSetupOptions`, `setLocale` via `L10n`, pprof via `PProfClient`) — they act on the Go runtime
+  of the calling process;
+- `SharedPreferences` — each process keeps its own in-memory copy, so the settings mirror would stop
+  being instant across the boundary;
+- `Taildrop.inFlight` and the sweep locks, `TaildropClip.feeds`;
+- `BoxApplication.onCreate` runs in every process — hence its steps are already split by side
+  (`initCommon` · `initServiceSideEarly` · `initUiSide` · `initCommonWifiCache` · `initServiceSide`).
+
+**Rules for new code (normative):**
+1. Flutter engine objects (`EventSink`, `MethodChannel`) live only in `UiSinks` / `AutomationBridge`,
+   never in a service companion.
+2. The service side does not reference `VpnPlugin`.
+3. A new command to the service is an Intent/broadcast, not a static method call.
+4. New service state the UI needs goes through the status broadcast or the CommandClient, not a new
+   static field.
+5. Prefs go through the file's single access point (`BootReceiver.prefs()`, `NativeCache`, `AutomationCache`).
+6. A new `BoxApplication.onCreate` step goes into the function of its side.
+
+**Next steps (not done; task 740 “Не делается”):** a `ServiceState` facade over `currentStatus`
+and the other statics; a `CommandClientRef` provider instead of `BoxService.commandClient`;
+cutting `VpnPlugin.onMethodCall` into handlers; a `CoreControl` owner for the process-global
+`Libbox.*` calls; `ConfigManager.cachedConfig`; then the split itself.
+
 ### Structured Concurrency
 
 ```
@@ -1665,7 +1830,10 @@ BoxService (per instance, recreated with every new BoxVpnService)
 
 ### Channel Contract
 
-The three Flutter–Android channels live in `VpnPlugin.kt`:
+The three Flutter–Android channels below are registered in `VpnPlugin.kt` (the `lxbox/cc/*`
+EventChannels too); the sinks of `lxbox/coreLog` and `lxbox/cc/*` are held in `UiSinks.kt`
+(§740), the `status_events` sink in `VpnPlugin` itself. The Dart names are in
+`vpn/platform_channels.dart`:
 
 | Channel | Type | Direction |
 |---|---|---|
@@ -1893,7 +2061,7 @@ Tabs that depend on a global toggle in the settings (core_logs_enabled, the VPN 
 
 Two patterns: a **contextual banner** (a state-dependent hint) and an **overflow item** (state-independent).
 
-- **Statistics → Live and Per-app → the contextual `CoreLogsHintBanner`** ([core_logs_hint_banner.dart](../app/lib/widgets/core_logs_hint_banner.dart))
+- *The Statistics `CoreLogsHintBanner` was removed in §605 (the profiler no longer reads the core log).*
 - **Routing → Tunnel apps → ⋮ → “VPN settings (Core)”** → `SettingsScreen(initialTab: 1)`. State-independent. |
 - **Drawer → Debug → ⋮ → “Diagnostics settings”** → `AppSettingsScreen(initialTab: 3)` — a fast path (tabs: 0 General, 1 Appearance, 2 Subscriptions, 3 Diagnostics, 4 Automation; §541). |
 
@@ -1922,6 +2090,9 @@ Five independent `CommandClient`s decouple the update rates and the lifecycles.
 A subscription in the gomobile facade is `CommandClientOptions.addCommand(int)` plus the `CommandClientHandler` callbacks.
 
 ### The Dart layer (`CcChannel`)
+
+`vpn/cc_channel.dart` is the singleton channel; its DTOs are `part`s in `vpn/cc_channel/models_{tailscale,status,traffic,probe}.dart`
+and the native method names are `_CcMethods` in `vpn/cc_channel/method_names.dart` (§740).
 
 Push streams over the `lxbox/cc/*` EventChannel (`status` · `outbounds` · `groups` · `connections` · `dns`):
 
@@ -2001,7 +2172,7 @@ translator-guide — [`l10n.md`](l10n.md).
 | `assets/l10n/<tag>/ui.json` | The natural-key dictionary, one per language: `englishKey → { value: String\|pluralObj, special: … }` |
 | `lib/services/l10n/locale_controller.dart` | `LocaleController` — the **sole owner** of the locale-switch pipeline |
 | `lib/services/l10n/template_overlay.dart` | The pre-parse overlay of `wizard_template.json`'s display text (see [TEMPLATE.md](TEMPLATE.md#localizing-the-display-text--the-l10n-overlay-279)) |
-| `lib/services/l10n/template_aware_state.dart` | A mixin: it refetches template-derived state in `didChangeDependencies` |
+| `lib/widgets/template_aware_state.dart` | A mixin: it refetches template-derived state in `didChangeDependencies` |
 | `lib/services/l10n/app_language_reconcile.dart` | The three-way reconciliation with `LocaleManager` (Android 13+) |
 | `lib/models/ui_msg.dart` | The sealed `UiMsg` — stored errors and statuses as typed values |
 | `app/tool/l10n/` | Four CI checkers (`--strict` on every PR): ui_check, template_check, hardcoded_check, kotlin_check |
@@ -2190,14 +2361,14 @@ LxBox is a monolith, but architecturally it holds several self-contained layers 
 
 | Files | Lines |
 |---|---|
-| `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions}.kt` | ~3000 |
-| `app/lib/vpn/box_vpn_client.dart` | ~600 |
-| `app/lib/models/{tunnel_status, background_mode, app_info}.dart` | ~150 |
+| `app/android/.../vpn/{BoxApplication, BoxVpnService, BoxService, PlatformInterfaceWrapper, VpnPlugin, ConfigManager, ServiceNotification, VpnStatus, DefaultNetworkMonitor, DefaultNetworkListener, LocalResolver, BootReceiver, Extensions, UiSinks, UiLaunchRequests, AutomationBridge}.kt` | ~6050 |
+| `app/lib/vpn/box_vpn_client.dart` (+ `box_vpn_client/` parts) + `vpn/platform_channels.dart` | ~1480 |
+| `app/lib/models/{tunnel_status, background_mode, app_info}.dart` | ~230 |
 
 **The public API surface:** `BoxVpnClient.I` (see the [Dart `BoxVpnClient` API surface](#dart-boxvpnclient-api-surface) section).
 
 **The coupling with LxBox (to be broken before extraction):**
-- **The channel names are hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`.
+- **The channel names are hardcoded** — `com.leadaxe.lxbox/methods`, `com.leadaxe.lxbox/status_events`, `lxbox/coreLog`. On the Dart side they live in one registry next to the bridge (`vpn/platform_channels.dart`, §141/§740, including the Sora editor's viewType and channel prefix), so the Dart part moves with Layer 1; on the Kotlin side they are still literals (`VpnPlugin` constants, `MainActivity`, `PathMtuProbe.CHANNEL`, `SoraEditorPlatformView`) under the `com.leadaxe.lxbox` namespace.
 - **The SharedPreferences keys are hardcoded** — `boxvpn_boot.{auto_start_vpn, keep_vpn_on_exit, background_mode, core_logs_enabled, …}`.
 - **The notification icon and channel name** — `ServiceNotification.kt` references `R.drawable.ic_notification`.
 - **The manifest declarations** — the package must **document** the permissions it requires.
@@ -2213,8 +2384,8 @@ LxBox is a monolith, but architecturally it holds several self-contained layers 
 
 | Files | Lines |
 |---|---|
-| `app/android/.../BoxCommandClient.kt` | ~native |
-| `app/lib/vpn/cc_channel.dart` | ~700 |
+| `app/android/.../BoxCommandClient.kt` | ~2130 |
+| `app/lib/vpn/cc_channel.dart` (958; + `cc_channel/` parts: method names and DTOs) + `cc_openconnect.dart` | ~2490 |
 
 **The coupling with LxBox:** **medium**. The Dart side is generic (push streams plus unary RPC over an EventChannel).
 

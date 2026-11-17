@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress |
+| **Статус** | Done — код и документация в develop; на устройстве не проверялось (перенос кода) |
 | **Дата** | 2026-11-17 |
 | **Повод** | Слово владельца 17.11.2026: давно не было архитектурной ревизии; привести код и `ARCHITECTURE.md` в соответствие, готовясь к будущему разделению на два процесса (сервис VPN и Dart-UI). Само разделение сейчас не делается. |
 | **Связанные** | [089 — cohesion over line count](089-deep-refactor-no-monsters.md), [291F — фасады слоёв](291F-layered-architecture-facades/), [122F — CommandClient](122F-commandclient-migration/), [707 — где живут настройки](707-taildrop-send-receive-files.md), аудит 591 |
@@ -162,8 +162,48 @@
 - Поведенческой проверки на устройстве не требуется по построению (перенос
   кода); сборка APK — CI.
 
+## Итог
+
+- **A. Kotlin.** `UiSinks` (`coreLogSink` + 10 `cc*Sink`), `UiLaunchRequests`,
+  `AutomationBridge` (`handleAutomationAction`, `notifyStopRequested`,
+  `sendAutomationBroadcast`; сервисная сторона больше не зовёт статику
+  `VpnPlugin`), `AutomationCache` — единая точка `lxbox_automation`;
+  `BootReceiver` ходит через свой `prefs()`. `getSharedPreferences` в Kotlin —
+  3 вызова (по одному на файл). `BoxApplication.onCreate` разложен на функции
+  сторон, порядок шагов прежний.
+- **B. Мост `vpn/`.** `cc_channel.dart` 2192 → 958 строк + `cc_channel/models_{tailscale,status,traffic,probe}.dart`
+  и `cc_channel/method_names.dart` (`_CcMethods`, 57 имён);
+  `MemoryInfo`/`CoreCheck` → `box_vpn_client/models.dart` (`box_vpn_client.dart`
+  1181 → 1121); `PlatformChannels` → `vpn/platform_channels.dart` с viewType и
+  префиксом канала Sora.
+- **C. Слои.** `dns_server_resolver`, `resolved_server` → `services/dns/`; три
+  `chain_*` → `services/chains/`; `OutboundOption` → `models/`;
+  `ParseEnvSnapshot` → `services/parser/`; `ui_helpers`, `app_theme_seed`,
+  `template_aware_state`, `home_return_observer` → `widgets/` (каталог
+  `services/nav` исчез); иконки `NodeSortMode` → `NodeSortModeIcon` в UI.
+  Остаток долга (импорт `services` → `screens` в `debug/handlers/taildrop`, 16
+  импортов `services` → `controllers`, цикл `models` ↔ `services`, 28 UI-файлов
+  с прямым вызовом моста) записан в `ARCHITECTURE.md`.
+- **D.** `services/lx_backup.dart` 4891 → 1041 строка + 6 `part`-файлов по стадиям.
+- **E.** `subscription_controller.dart` 4002 → 3000 (+ `folder_ops.dart`,
+  `link_notice.dart`); `home_controller.dart` 2235 → 2029 (+
+  `dependency_health.dart`, `node_selection.dart`).
+- **F.** `ARCHITECTURE.md`: раздел «Process boundary: VPN service side vs UI
+  side», нарушения слоёв, таблица крупных файлов, «The source tree», три файла
+  prefs; `STORAGE.md` — число файлов prefs.
+
+Отступления от плана:
+
+- `BoxApplication.onCreate` — пять функций (`initCommon`, `initServiceSideEarly`,
+  `initUiSide`, `initCommonWifiCache`, `initServiceSide`) вместо трёх: стороны
+  чередуются, а порядок шагов менять нельзя.
+- «Неиспользуемые» импорты контроллера в `services/debug` оказались
+  используемыми (`SubscriptionEntry`) и остались.
+- Набор общих помощников в главном `lx_backup.dart` шире запланированного:
+  декодер 1.0 переиспользует части декодера 0.x.
+
 ## Docs to update
 
-- эта задача
-- [ARCHITECTURE.md](../../ARCHITECTURE.md) — пакет F
+- эта задача ✓
+- [ARCHITECTURE.md](../../ARCHITECTURE.md) — пакет F ✓
 - `CHANGELOG.md` — none (пользователю не видно)

@@ -175,7 +175,8 @@ Context.filesDir/                           # native `files/` = Dart getApplicat
     ├── <url.hashCode>
     └── <url.hashCode>.headers
 
-Android SharedPreferences (shared_prefs/):  # two files, boxvpn_boot and lxbox_native_cache —
+Android SharedPreferences (shared_prefs/):  # three Kotlin files, boxvpn_boot, lxbox_native_cache and
+                                            #   lxbox_automation (plus Flutter's own file) —
                                             #   see ARCHITECTURE §5 "Persistent storage"
 ```
 
