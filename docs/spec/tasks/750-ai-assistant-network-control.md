@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft — спека, ждёт ответа владельца по разделу «Открытые вопросы» |
+| Status | In progress — решения владельца 17.11.2026 в разделе «Решения владельца» |
 | Start date | 2026-11-17 |
 | Source | Решение владельца 17.11.2026: развить управление сетью через ИИ-ассистента (три класса задач: «почему не открывается», «пусти приложение через выход/страну», «подключи к рабочей сети») |
 | Related specs | §721 (AppFunctions: старт/стоп/статус, тумблер «AI assistant control»), §687 (URL Check), §047 (Automation API), §747 (два процесса `:ui`/`:bg`), §712 (`package_name_regex`), §715 (значок пула = флаг в имени узла), фича `014-AUTOMATION` |
@@ -92,339 +92,294 @@ maxBytes, userAgent)` возвращает тело; первый чекер с�
 (требование Google Play к AppFunctions). Для этой задачи владелец решил
 иначе — раздел «Что видит ассистент».
 
+## Решения владельца (17.11.2026)
+
+1. **Страна выхода.** «Разве ИИ по имени не сможет легко предположить
+   страны? в имени же обычно подписки кодируют или флагом или названием.
+   кроме того есть диагностика». Своего признака страны и разбора имён в
+   приложении нет; ассистент получает имена выходов как есть и сам решает,
+   какие из них нужная страна; фактический выход подтверждает проверка
+   выхода. Запрет §721 на имена узлов в ответах для этой задачи снят.
+2. **Не узкие функции, а возможности Debug API.** «Зачем мы делаем эти
+   лишние функции, почему мы не можем просто Debug API функционал дать?
+   setAppRoute это же убожество какое-то, а если я хочу чтобы этот телеграм
+   работал через vpn1 только на wifi?» Отдельной функции «маршрут
+   приложения» нет: ассистент получает шлюз к обработчикам Debug API и сам
+   собирает правило с любыми условиями (приложение, Wi-Fi, тип сети, домены).
+3. **Dart-часть не в памяти.** «Дать ошибку или поднять самим». Шлюз сам
+   открывает окно L×Box и ждёт готовности; если Android не дал открыть —
+   ошибка агенту и уведомление.
+4. **Подтверждение изменений** — решение исполнителя, владелец может
+   отменить: каждое изменение не подтверждается, но изменения через шлюз
+   разрешает отдельный тумблер, выключенный по умолчанию.
+
 ## Solution
 
-### Функции ассистента
+### Два слоя
 
-Все — в `LxBoxAppFunctions` (тот же сервис, одна точка входа), все под
-тумблером «AI assistant control» (`ensureEnabled()` первой строкой, в схеме
-`isEnabled = false`, идентификаторы добавляются в
-`AppFunctionsLogic.FUNCTION_IDS`). Старые `startVpn` / `stopVpn` /
-`getVpnStatus` не меняются.
+- **Нативные функции** — исполняются всегда, окно L×Box не нужно: старт,
+  стоп и статус VPN (§721), обзор сети, список выходов, проверка адреса,
+  проверка выхода, смена выхода, поиск приложения.
+- **Шлюз к Debug API** — две функции: `getApiHelp` и `callApi`. Всё, что
+  умеет разрешённая часть Debug API (правила, Направления, источники,
+  действия), ассистент вызывает сам. Исполняет Dart, поэтому нужна живая
+  Dart-часть приложения (см. «Когда Dart-часть не в памяти»).
 
-| Функция | Параметры | Ответ | Меняет |
-|---------|-----------|-------|--------|
-| `getNetworkOverview` | — | `NetworkOverview` | нет |
-| `listExits` | `direction: String`, `query: String?` | `ExitList` | нет |
-| `checkUrl` | `url: String`, `appPackage: String?` | `UrlCheckReport` | нет |
-| `checkExit` | `direction: String` | `ExitCheck` | нет |
-| `findApps` | `query: String` | `List<AppMatch>` (до 10) | нет |
-| `getAppRoute` | `appPackage: String` | `AppRoute` | нет |
-| `selectExit` | `direction: String`, `exit: String` | `ExitSelection` | выбор узла в работающем ядре |
-| `setAppRoute` | `appPackage: String`, `target: String`, `exitFilter: String?` | `ChangeRequest` | сохранённую конфигурацию |
-| `setConnectionEnabled` | `connectionId: String`, `enabled: Boolean` | `ChangeRequest` | сохранённую конфигурацию |
+Новая возможность пишется один раз как маршрут Debug API и доступна обоим:
+ассистенту на устройстве и агенту с компьютера.
 
-**`getNetworkOverview`** — одно чтение вместо пяти:
+### Функции ассистента (AppFunctions)
 
-- `vpnStatus` — как в `VpnState`;
-- `directions[]`: `tag` (`vpn-1`…), `name` (подпись пользователя),
-  `exitCount` (число выходов), `currentExit` (имя выбранного сейчас выхода;
-  пусто, если туннель остановлен);
-- `connections[]`: `id`, `name`, `type` (`wireguard` / `amneziawg` /
-  `openvpn` / `openconnect` / `tailscale`), `enabled`, `state` (`up` /
-  `connecting` / `down` / `disabled` / `unknown`; при остановленном туннеле —
-  `down` либо `disabled`);
-- `defaultRoute` — куда идёт трафик без правила (`route.final`): тег
-  Направления, `direct` или `block`.
+Все — в `LxBoxAppFunctions`, все под тумблером «AI assistant control»
+(`ensureEnabled()` первой строкой, в схеме `isEnabled = false`,
+идентификаторы — в `AppFunctionsLogic.FUNCTION_IDS`). `startVpn` / `stopVpn`
+/ `getVpnStatus` не меняются.
 
-**`listExits`** — имена выходов Направления, как они записаны (с флагом и
-названием). `query` — подстрока без учёта регистра; ответ: `exits[]` (до 200
-имён), `total`, `truncated`. Страну и город по именам определяет сам
-ассистент; приложение имена не разбирает.
+| Функция | Параметры | Ответ | Исполняет |
+|---------|-----------|-------|-----------|
+| `getNetworkOverview` | — | `NetworkOverview` | натив |
+| `listExits` | `direction: String`, `query: String?` | `ExitList` | натив |
+| `checkUrl` | `url: String`, `appPackage: String?` | `UrlCheckReport` | натив |
+| `checkExit` | `direction: String` | `ExitCheck` | натив |
+| `findApps` | `query: String` | `List<AppMatch>` (до 10) | натив |
+| `selectExit` | `direction: String`, `exit: String` | `ExitSelection` | натив |
+| `getApiHelp` | — | `ApiHelp` | Dart |
+| `callApi` | `method: String`, `path: String`, `body: String?` | `ApiResponse` | Dart |
 
-**`checkUrl`** — запускает проверку §687 на глубину `http`, с `fresh = true`,
-от имени приложения `appPackage` (если задан — путь пройдёт по правилам этого
-приложения). Ждёт итог не дольше 20 с. Ответ:
+**`getNetworkOverview`**: `vpnStatus`; `directions[]` — `tag`, `name`
+(подпись пользователя), `exitCount`, `currentExit` (пусто при остановленном
+туннеле); `connections[]` — `id`, `name`, `type` (`wireguard` / `amneziawg`
+/ `openvpn` / `openconnect` / `tailscale`), `enabled`, `state` (`up` /
+`connecting` / `idle` / `needs_login` / `down` / `disabled` / `unknown`; у
+OpenVPN всегда `unknown` — снимка состояния у натива нет); `defaultRoute` —
+куда идёт трафик без правила.
+
+**`listExits`**: имена выходов Направления, как они записаны (с флагом и
+названием). `direction` — тег или подпись. `query` — подстрока без учёта
+регистра; ответ: `exits[]` (до 200), `total`, `truncated`.
+
+**`checkUrl`** — проверка §687 на глубину `http`, `fresh = true`, от имени
+приложения `appPackage`, если задан. Ждёт итог до 20 с. Ответ:
 
 - `outcome`: `ok` / `failed` / `vpn_off` / `busy` / `timeout`;
-- `failedStage`: `dns` / `route` / `tunnel` / `connect` / `tls` / `http` /
-  пусто — класс стадии, на которой сбой (сопоставление `kind` стадии ядра с
-  классом — таблица в коде; неизвестный `kind` → `connect`);
-- `error` — текст ошибки ядра по упавшей стадии (обрезан до 200 знаков);
+- `failedStage`: `dns` / `route` / `tunnel` / `connect` / `tls` / `http` —
+  класс стадии, на которой сбой (по стадии `root_cause`; неизвестный `kind`
+  → `connect`);
+- `error` — текст ошибки ядра (одной строкой, до 200 знаков);
 - `httpStatus`, `elapsedMs`;
-- `route`: `direction` (тег), `exit` (имя узла, через который пошёл запрос),
-  `direct: Boolean`, `blocked: Boolean` — чем закончился выбор маршрута;
-- `findings[]` — коды находок ядра (`excluded_from_vpn`, `fakeip_*`,
-  `quic_rejected`, `reality_not_recognized`, …);
-- `advice` — одно-два предложения «что сделать», из постоянной таблицы
-  приложения по паре (`failedStage`, находки). Примеры: `vpn_off` — «The VPN
-  is off. Start it and repeat the check.»; `dns` — «The name does not
-  resolve. Check the DNS servers in L×Box or try another exit.»; `route` +
-  `blocked` — «A routing rule blocks this address.»; `tunnel`/`connect` через
-  Направление — «The exit server does not respond. Switch to another exit.»; `tls` — «The site refuses the secure connection through this
-  exit. Try another exit or a direct route.»; `http` 4xx/5xx — «The site
-  answered with an error itself; the network path works.»
+- `route`: `direction` (`outbound` стадии `route`; если правило ведёт прямо
+  в узел — тег узла), `exit` (по цепочке стадий `group` → `selected`, иначе
+  subject первой стадии `dial`), `direct`, `blocked`;
+- `findings[]` — коды находок ядра;
+- `advice` — одно-два предложения «что сделать» из таблицы приложения.
 
-При остановленном туннеле проверка не запускается и VPN сам не включается:
-`outcome = vpn_off` с советом. Включать VPN — отдельное действие ассистента
-(`startVpn`).
+При остановленном туннеле проверка не запускается и VPN не включается:
+`outcome = vpn_off`.
 
 **`checkExit`** — фактический выход Направления: GET
-`https://1.1.1.1/cdn-cgi/trace` через `direction` (§392), из ответа берутся
-две строки. Ответ: `outcome` (`ok` / `failed` / `vpn_off`), `country`
-(`loc=`, двухбуквенный код), `ip` (`ip=`), `exit` (имя выбранного узла),
-`error`. Так ассистент после переключения убеждается, что страна выхода та,
-которую просили, — и отвечает на «какой у меня сейчас IP».
+`https://1.1.1.1/cdn-cgi/trace` через `direction` (§392). Ответ: `outcome`
+(`ok` / `failed` / `vpn_off`), `country` (`loc=`), `ip` (`ip=`), `exit`,
+`error`.
 
 **`findApps`** — поиск установленного приложения по подстроке названия или
-имени пакета (без регистра): `package`, `label`. Нужен, чтобы «Telegram»
-превратить в `org.telegram.messenger`.
+имени пакета: `packageName`, `label`.
 
-**`getAppRoute`** — статический ответ по сохранённым правилам: первое
-включённое правило, в чьих `package_name` / `package_name_regex` есть пакет.
-Ответ: `target` (тег Направления, `direct`, `block`), `targetName`,
-`ruleName` (пусто, если правило не найдено — действует `defaultRoute`),
-`conditional: Boolean` (у правила есть ещё условия — домен, сеть, Wi-Fi; тогда
-маршрут зависит от них).
+**`selectExit`** — выбирает в работающем ядре выход `exit` (точное имя из
+`listExits`) в Направлении `direction`. Ответ: `direction`, `exit`,
+`changed`. Выбор живёт до перезапуска туннеля, как выбор пальцем. Группа с
+автовыбором (urltest) ручного выбора не принимает — ошибка.
 
-**`selectExit`** — в работающем ядре выбирает в Направлении `direction`
-выход `exit` (точное имя из `listExits`; `selectOutbound`). Ответ:
-`direction`, `exit`, `changed`. Ошибки: туннель остановлен; такого выхода в
-Направлении нет. Выбор, как и выбор пальцем на главном экране, живёт до
-перезапуска туннеля.
+**`getApiHelp`** — карта разрешённых маршрутов (содержимое `/help`,
+отфильтрованное белым списком): метод, путь, назначение, параметры.
 
-**`setAppRoute`** — «пусти приложение через…». `target`: тег Направления,
-`direct` или `block`. `exitFilter` (необязателен, только с тегом Направления)
-— подстрока имён выходов, которую ассистент выбрал по `listExits`: флаг,
-название страны или полное имя одного сервера.
+**`callApi`** — вызов разрешённого маршрута. `method`: `GET` / `POST` /
+`PUT` / `PATCH` / `DELETE`; `path` — путь со строкой запроса; `body` — JSON.
+Ответ: `status` (как HTTP-код обработчика), `body` (JSON строкой, до 64 КБ;
+больше — `413` с просьбой сузить запрос).
 
-- Без `exitFilter` правило ведёт в Направление `target` как есть.
-- С `exitFilter` правило ведёт в Направление, ограниченное этими выходами:
-  ищется Направление, чей фильтр узлов равен этой подстроке (экранированной
-  для регулярки); если такого нет, оно создаётся — подпись = `exitFilter`,
-  фильтр узлов = подстрока, авто-выбор лучшего узла (urltest) включён.
-  Под подстроку в `target` не попал ни один выход — ошибка, ничего не
-  создаётся.
-- Правило: если уже есть включённое inline-правило ровно с одним условием
-  `package_name = [пакет]` — у него меняется выход; иначе создаётся новое
-  правило «<название приложения>» в пользовательской зоне (`nextUserRuleNum`).
-  Если выше по списку стоит другое правило, ловящее этот пакет, новое правило
-  ставится перед ним (`placeRuleAfter` / перенумерация в пределах зоны);
-  пресеты не двигаются.
-- Применение: пересборка конфига и перезагрузка ядра на месте, если туннель
-  поднят (без оглядки на галку «Auto-restart VPN on settings change»: человек
-  просил результат сейчас).
+Пример «Telegram через vpn-1 только на Wi-Fi Home»: `findApps("Telegram")`,
+затем `callApi("POST", "/rules?rebuild=true", {"name":"Telegram on Home",
+"packages":["org.telegram.messenger"],"wifi_ssids":["Home"],
+"outbound":"vpn-1"})` и `callApi("POST", "/action/reload-vpn")`.
 
-**`setConnectionEnabled`** — включить/выключить подключение `connectionId`
-из `getNetworkOverview`. Включение: флаг `enabled` у узла, пересборка,
-reload; если туннель остановлен и согласие на VPN выдано — старт туннеля.
-Выключение: флаг, пересборка, reload; туннель не останавливается.
+### Шлюз
 
-`ChangeRequest`: `status` (`applied` / `confirmation_required` / `rejected`),
-`summary` — что именно будет или было сделано, собранное приложением из
-собственных шаблонов («Route Telegram through 🇩🇪»).
+Dart, `lib/services/assistant/assistant_gateway.dart`: запрос проходит
+проверку политики и передаётся тем же обработчикам, что обслуживают Debug
+API (`buildDebugRouter`, тот же `DebugContext`, то же отображение ошибок),
+минуя HTTP-сервер и токен. Включён ли сам Debug API (сервер на порту) — не
+важно: шлюз работает и при выключенном.
 
-### Как применяются изменения конфигурации (рекомендуемый вариант, см. «Открытые вопросы», В1)
+**Политика** — чистая функция `(method, path, query) → allow / changes /
+deny`:
 
-`setAppRoute` и `setConnectionEnabled` применяет Dart, после подтверждения
-пользователя в приложении:
+| Группа | Маршруты | Решение |
+|--------|----------|---------|
+| Чтения | `GET /state`, `/state/rules`, `/state/vpn`, `/state/subs` (без `reveal`), `/rules*`, `/directions*`, `/subs*` (без `reveal`), `/folders*`, `/chains*`, `/pool`, `/assistant/*`, `/settings/{node_sort,enabled_groups,vpn_mode,tun_apps,ping_options}` | allow |
+| Диагностика | `POST /assistant/check-url`, `/assistant/check-exit`, `/action/check-config`, `/action/urltest*`, `GET /chains/{tag}/probe`, `POST /folders/{id}/probe` | allow |
+| VPN и выбор | `POST /action/{start-vpn-headless,stop-vpn,reconnect,reload-vpn,reset-network,switch-node,set-group}`, `POST /assistant/exit` | allow |
+| Изменения | `POST/PATCH/DELETE /rules*`, `/directions*`; `PATCH /subs/{id}`, `POST /subs/{id}/refresh`, `POST /action/{refresh-subs,rebuild-config}`, `POST /settings/rebuild-config`, `PUT /settings/{route_final,node_sort,enabled_groups,vpn_mode,tun_apps}`, `POST /assistant/connection` | changes |
+| Закрыто | всё остальное, в том числе `/config`, `/backup`, `/files`, `/logs`, `/diag`, `/nodes`, `/mixins`, `/warp`, `/taildrop`, `/support`, `/profiler`, `/core_reject`, `/wifi_history`, `/device`, `/settings/vars`, `/settings/dns_options`, `/settings/config_locked`, `/settings/vpn/*`, `/settings/core_logs*`, создание и удаление источников (`POST /subs`, `DELETE /subs/{id}`, запись в `/folders`, `/chains`), любой запрос с `reveal` | deny → `403` |
 
-1. Функция проверяет параметры по индексу (ниже), записывает заявку в
-   `SharedPreferences` `lxbox_assistant` (одна ячейка: новая заявка замещает
-   старую; срок жизни 10 минут) и показывает уведомление «Assistant request:
-   <summary>» с действием «Review».
-2. Агенту сразу возвращается `status = confirmation_required` и `summary`.
-3. Нажатие открывает L×Box; приложение показывает окно подтверждения с тем же
-   описанием и кнопками «Apply» / «Reject». Если окно L×Box уже на экране —
-   окно подтверждения появляется сразу, без нажатия на уведомление.
-4. «Apply» — Dart вносит изменение, пересобирает конфиг, перезагружает ядро,
-   обновляет индекс. Заявка стирается в любом исходе.
+`changes` исполняется, только если включён тумблер «Let assistants change
+settings»; иначе `403` с текстом «Changing settings is turned off in L×Box:
+App Settings → Automation → Let assistants change settings.»
 
-Так изменение сохранённой конфигурации никогда не происходит без человека,
-и схема не требует Flutter в фоновом процессе (совместима с §747).
+Почему закрыто: сырой конфиг, бэкап, логи и ссылки подписок содержат ключи
+и адреса; миксины и DNS-настройки позволяют перенаправить трафик в обход
+видимых правил; добавление источника — способ подменить выход целиком.
 
-Действия без подтверждения (исполняются сразу, нативно): все чтения,
-`checkUrl`, `checkExit`, `selectExit`, `startVpn`, `stopVpn`.
+### Когда Dart-часть не в памяти
+
+`callApi` / `getApiHelp` идут из натива в Dart через мост
+`AssistantBridge` (приём `AutomationBridge`: канал ставит `VpnPlugin` при
+подключении движка). Движка нет:
+
+1. натив пробует открыть окно L×Box (`startActivity` с `MainActivity`);
+2. ждёт до 10 с, пока мост появится и обработчики перестанут отвечать
+   «controller not ready», затем исполняет вызов;
+3. не дождался (Android не дал открыть окно из фона) — показывает
+   уведомление «Open L×Box to let the assistant continue» с переходом в
+   приложение и возвращает агенту ошибку «L×Box is not open. Open the app
+   and repeat.»
+
+Сработает ли шаг 1 при вызове от ассистента, зависит от ограничений Android
+на запуск окон из фона и проверяется только на устройстве.
+
+После §747 мост становится межпроцессным (`:bg` → `:ui`), шаги те же.
 
 ### Индекс для натива
 
-Нативу нужны подписи Направлений, имена их выходов, подключения (включая
-выключенные) и правила по приложениям. Dart после каждой записи конфига и на старте
-передаёт нативу сводку методом канала `setAssistantIndex(json)`; натив хранит
-её в `lxbox_assistant` (приём `AutomationCache`). Это производное зеркало,
-настройкой не является; Kotlin `lxbox_settings.json` по-прежнему не открывает.
+Нативному обзору нужны подписи Направлений и подключения (включая
+выключенные). Dart после каждой записи конфига и на старте передаёт нативу
+сводку методом канала `setAssistantIndex(json)`; натив хранит её в
+`SharedPreferences` `lxbox_assistant` (открывает `AutomationCache`, как
+требует правило границы). Это производное зеркало, не настройка; Kotlin
+`lxbox_settings.json` не открывает.
 
 ```json
-{"v":1,
- "route_final":"vpn-1",
- "directions":[{"tag":"vpn-1","name":"Proxy","enabled":true,
-                "exits":["🇩🇪 Frankfurt 1","🇳🇱 Amsterdam"]}],
- "connections":[{"id":"…","name":"Office","type":"wireguard","enabled":false,"tag":"…"}],
+{"v":1,"route_final":"vpn-1",
+ "directions":[{"tag":"vpn-1","name":"Proxy","enabled":true}],
+ "connections":[{"id":"Office","name":"Office","type":"wireguard","enabled":false}],
  "app_rules":[{"name":"Telegram","packages":["org.telegram.messenger"],
                "package_regexes":[],"outbound":"vpn-2","conditional":false}]}
 ```
 
-При поднятом туннеле список выходов и выбранный выход берутся из живых групп
-ядра (`getGroups`), индекс — запасной источник для остановленного туннеля.
+Выходы Направлений берутся из живых групп ядра, при остановленном туннеле —
+из сохранённого `singbox_config.json`. Индекса нет (приложение после
+обновления не открывали) — обзор отвечает «Open L×Box once to finish setup.»
 
-Индекса нет (приложение после обновления ещё не открывали) — чтения отвечают
-ошибкой «Open L×Box once to finish setup.»
+### Что видит ассистент
 
-### Страна выхода
+- Имена выходов, подписи Направлений, имена подключений, названия приложений
+  и правил в ответах нативных функций — после очистки: без управляющих
+  символов и переводов строк, до 64 знаков.
+- Через шлюз — ответы разрешённых обработчиков Debug API как есть.
+- Никогда: содержимое конфига, ключи, ссылки подписок, бэкап, логи.
+- `checkExit` отдаёт внешний адрес выхода.
 
-Решение владельца 17.11.2026: «разве ИИ по имени не сможет легко
-предположить страны? в имени же обычно подписки кодируют или флагом или
-названием. кроме того есть диагностика».
+### Тумблеры
 
-- Своего признака страны у узла и разбора имён в приложении **нет**.
-  Ассистент получает имена выходов как есть (`listExits`) и сам понимает,
-  какие из них «Германия».
-- Параметр функций — выход или подстрока имён (`exit`, `exitFilter`), не
-  страна.
-- Фактическую страну выхода подтверждает `checkExit` (ответ
-  `cdn-cgi/trace`: `loc=` и `ip=`).
+App Settings → Automation, раздел «AI assistants» (Android 16+):
 
-### Что видит ассистент (чужой текст в ответах)
+- **AI assistant control** (`appfunctions_enabled`, как в §721) — все функции.
+  Подпись: «Let Android assistants control the VPN, run network checks and
+  read your routing setup (Android 16+)».
+- **Let assistants change settings** (`appfunctions_allow_changes`, по
+  умолчанию выключен; активен, только когда включён первый) — группа
+  «Изменения» шлюза. Подпись: «Assistants can add and edit routing rules and
+  Directions and turn sources on or off without asking».
 
-- Решение владельца 17.11.2026 (см. «Страна выхода») отменяет для этой
-  задачи запрет §721: имена выходов агенту **отдаются**.
-- Отдаются: имена выходов, подписи Направлений, имена подключений, названия
-  приложений и правил — после очистки: без управляющих символов и переводов
-  строк, не длиннее 64 знаков. Это поля данных; в описаниях функций сказано,
-  что это имена, заданные поставщиком или пользователем.
-- Адреса серверов, ключи, ссылки подписок, содержимое конфига, логи, список
-  соединений — не отдаются никогда.
-- `error` в `UrlCheckReport` — текст ядра, обрезанный до 200 знаков, одной
-  строкой.
-- `advice` и `summary` — только из таблиц приложения.
+Оба — в `vars`, в бэкапе рядом с `appfunctions_enabled`. Второй тумблер
+читает сам шлюз (Dart), зеркало в натив ему не нужно.
 
-### Чего ассистент не может
+### Debug API — новые маршруты `/assistant`
 
-Добавлять и удалять серверы, подписки и подключения; менять DNS, настройки
-TUN, список приложений туннеля, тумблеры безопасности; удалять правила и
-Направления; читать и менять конфиг целиком; включать сам тумблер «AI
-assistant control»; выдавать согласие на VPN.
+| Маршрут | Делает |
+|---------|--------|
+| `GET /assistant/overview` | обзор сети |
+| `GET /assistant/exits?direction=&q=` | выходы Направления |
+| `POST /assistant/check-url` `{url, app?}` | проверка адреса |
+| `POST /assistant/check-exit` `{direction}` | фактический выход |
+| `GET /assistant/apps?q=` | поиск приложения |
+| `GET /assistant/app-route?app=` | какое правило ловит приложение и куда ведёт |
+| `POST /assistant/exit` `{direction, exit}` | смена выхода |
+| `POST /assistant/connection` `{id, enabled}` | включить/выключить подключение (флаг, пересборка, reload; при включении и остановленном туннеле — старт) |
 
-### Debug API
+Чтения и проверки Dart берёт у натива методами канала (`assistantOverview`,
+`assistantCheckUrl`, …) — логика одна. Правила создаются существующим
+`POST /rules`.
 
-Тот же набор для агента на компьютере — префикс `/assistant` (сервер
-`app/lib/services/debug/`, нужен включённый Debug API и токен; подтверждение
-не спрашивается — доступ уже выдан владельцем устройства):
+### Файлы
 
-| Маршрут | Соответствует |
-|---------|---------------|
-| `GET /assistant/overview` | `getNetworkOverview` |
-| `GET /assistant/exits?direction=&q=` | `listExits` |
-| `POST /assistant/check-url` `{url, app?}` | `checkUrl` |
-| `POST /assistant/check-exit` `{direction}` | `checkExit` |
-| `GET /assistant/apps?q=` | `findApps` |
-| `GET /assistant/app-route?app=` | `getAppRoute` |
-| `POST /assistant/exit` `{direction, exit}` | `selectExit` |
-| `POST /assistant/app-route` `{app, target, exit_filter?}` | `setAppRoute` (сразу `applied`) |
-| `POST /assistant/connection` `{id, enabled}` | `setConnectionEnabled` (сразу `applied`) |
-
-Ответы — те же поля в snake_case. Логика одна: чтения и проверку Dart берёт у
-натива методами канала (`assistantOverview`, `assistantCheckUrl`, …),
-изменения выполняет тот же Dart-код, что и после «Apply».
-
-### Тумблер
-
-Строка «AI assistant control» остаётся одна. Подпись меняется: «Let Android
-assistants control the VPN, check why a site does not open, and request
-routing or connection changes (Android 16+)». Отдельных тумблеров по классам
-функций нет.
-
-### Файлы (план)
-
-- Kotlin, `appfunctions/`: `LxBoxAppFunctions.kt` (+7 функций),
-  типы ответов (`@AppFunctionSerializable`), `AssistantIndex.kt` (чтение
-  индекса), `AssistantLogic.kt` (чистая логика: поиск выходов по
-  подстроке, маршрут приложения по индексу, класс стадии, совет, разбор
-  `cdn-cgi/trace`, очистка текста), `AssistantRequests.kt` (заявка + уведомление),
-  `AssistantCore.kt` (проверка адреса, проверка выхода, группы — через
-  сервисный клиент ядра).
-- Kotlin, `vpn/`: метод проверки адреса на сервисной стороне
-  (`ServiceCommandClient`), методы канала в `VpnPlugin`, приём extras заявки
-  в `MainActivity`.
-- Dart, `lib/services/assistant/`: `assistant_index.dart` (сборка индекса), `assistant_actions.dart`
-  (`setAppRoute`, `setConnectionEnabled`), `assistant_request.dart` (заявка,
-  окно подтверждения в `lib/screens/…`); `lib/services/debug/handlers/assistant.dart`.
-- Тесты: JVM-тест `AssistantLogicTest.kt`; Dart —
-  `test/services/assistant/*_test.dart`,
+- Kotlin, `appfunctions/`: `LxBoxAppFunctions.kt`, `AssistantTypes.kt`,
+  `AssistantLogic.kt` (чистая логика), `AssistantIndex.kt`,
+  `AssistantCore.kt` (операции над ядром), `AssistantBridge.kt` (мост в Dart,
+  открытие окна, уведомление); `vpn/ServiceCommandClient.kt` (сервисные
+  вызовы групп, состояний, выбора, GET через узел), `vpn/VpnPlugin.kt`
+  (методы канала, установка моста), `vpn/AutomationCache.kt`.
+- Dart, `lib/services/assistant/`: `assistant_index.dart`,
+  `assistant_actions.dart` (`setConnectionEnabled`),
+  `assistant_gateway.dart` (политика, исполнение, справка);
+  `lib/services/debug/handlers/assistant.dart`; тумблер —
+  `automation_tab.dart`, `settings_storage.dart`.
+- Тесты: `AssistantLogicTest.kt`; `test/services/assistant/*_test.dart`,
   `test/services/debug/assistant_handler_test.dart`.
 
 ## Docs to update
 
-- `docs/AI_ASSISTANT.md` + `docs/AI_ASSISTANT.ru.md` — новый пользовательский
-  гайд «Работа с ИИ-ассистентом и сетью»; ссылки из `docs/README.md`,
-  `docs/USER_GUIDE.md`, `docs/USER_GUIDE.ru.md`.
+- `docs/AI_ASSISTANT.md` + `docs/AI_ASSISTANT.ru.md` — пользовательский гайд;
+  ссылки из `docs/README.md`, `docs/USER_GUIDE.md`, `docs/USER_GUIDE.ru.md`.
 - `docs/AUTOMATION.md` / `.ru.md` — раздел «AI assistants (AppFunctions)»:
   новый перечень функций, ссылка на гайд.
-- `docs/api/debug-api-reference.md` — раздел `/assistant` с bash-примерами;
-  `handlers/help.dart`.
-- `docs/ARCHITECTURE.md` — индекс ассистента (§ 5, зеркала), заявка и её путь.
-- `docs/spec/features/014-AUTOMATION/` — функция `assistant-control`
-  (чёрный ящик) + строка в `FEATURE.md` (en/ru).
+- `docs/api/debug-api-reference.md` — раздел `/assistant`; `handlers/help.dart`.
+- `docs/ARCHITECTURE.md` — индекс ассистента (§ 5), шлюз и мост.
+- `docs/spec/features/014-AUTOMATION/` — функция `assistant-control` + строка
+  в `FEATURE.md` (en/ru).
 - `docs/PRIVACY_POLICY.md` / `.ru.md` — что получает ассистент.
 - `CHANGELOG.md` → Unreleased.
 - `RELEASE_NOTES.md`, `pubspec.yaml` — `[deferred till release]`.
 
 ## Risks and edge cases
 
-- AppFunctions API экспериментальный; вызывать функции из Gemini могут
-  только участники программы раннего доступа. До её открытия пользователь
-  изменения увидит только через Debug API и `adb shell cmd app_function`.
+- AppFunctions API экспериментальный; вызывать функции из Gemini могут только
+  участники программы раннего доступа. До её открытия пользователь увидит
+  изменения только через Debug API и `adb shell cmd app_function`.
+- Шлюз даёт ассистенту много: при включённом втором тумблере ошибка или
+  обманутый ассистент может изменить маршрутизацию. Защита — белый список,
+  отдельный тумблер, закрытые секреты. Подтверждения каждого изменения нет.
+- Требования Google Play к AppFunctions (с 14.04.2027): обобщённая функция
+  `callApi` и чужой текст в ответах (имена узлов) могут потребовать правки —
+  вернуться при подготовке к этой дате.
+- Открытие окна из фона Android может запретить — тогда ошибка и уведомление.
 - Kotlin-тесты и компиляция Kotlin на CI `checks` не гоняются — проверяются
-  локально (`:app:testDebugUnitTest`, `:app:compileDebugKotlin`) и сборкой APK.
-- Имя узла пишет поставщик подписки; флаг в нём может не совпадать со страной
-  выхода. Для этого есть `checkExit`.
-- В ответах агенту появляется текст из чужих подписок (имена узлов). Он
-  очищается и обрезается, но остаётся чужим текстом — осознанное решение
-  владельца; при проверке требований Google Play к AppFunctions (с 14.04.2027)
-  к нему вернуться.
-- `checkExit` обращается к `1.1.1.1` через туннель; внешний адрес уходит
-  ассистенту в ответе.
-- Направление с фильтром выходов остаётся в списке Направлений после просьбы — это
-  обычное Направление, пользователь удаляет его сам.
-- Заявка одна: вторая просьба до подтверждения первой замещает её.
-- Уведомление о заявке требует разрешения на уведомления; без него заявка
-  видна только при открытии приложения (окно подтверждения показывается при
-  старте, если заявка не истекла).
-- `config_locked_for_debug` включён — изменение отклоняется с понятным
-  текстом.
-- После §747 функции уезжают в `:bg`; индекс и заявка лежат в
-  `SharedPreferences`, читаемых обоими процессами через существующий канал
-  `:ui` → `:bg` (уточняется при слиянии §747).
+  локально и сборкой APK.
+- Имя узла пишет поставщик подписки; флаг в нём может не совпадать со
+  страной выхода. Для этого есть `checkExit`.
+- `checkExit` обращается к `1.1.1.1` через туннель.
+- `config_locked_for_debug` включён — пересборка отклоняется обработчиком.
 
 ## Verification
 
-1. JVM-тест `AssistantLogicTest`: поиск выходов по подстроке; разбор
-   `cdn-cgi/trace`; маршрут приложения (точное имя, регулярка, условное правило, нет правила);
-   класс стадии и совет; очистка текста; разбор индекса.
-2. Dart-тесты: сборка индекса; `setAppRoute` (новое правило, замена выхода,
-   создание и повторное использование Направления с фильтром выходов, под
-   фильтр ничего не попало, правило выше по списку); `setConnectionEnabled`;
-   хендлеры `/assistant/*`.
-3. Локально: `flutter analyze`, `:app:compileDebugKotlin` (KSP порождает
-   схему с новыми функциями, все `enabledByDefault=false`),
-   `:app:testDebugUnitTest`.
-4. Эмулятор (Android 16), если доступен: `adb shell cmd app_function
-   execute-app-function` для каждой функции при выключенном и включённом
-   тумблере; заявка → уведомление → окно → «Apply» → правило в списке и
-   маршрут в `getAppRoute`; `/assistant/*` через `adb forward`.
+1. JVM-тест `AssistantLogicTest`: очистка текста; разбор индекса; поиск
+   выходов; маршрут приложения по индексу; разбор `cdn-cgi/trace`; класс
+   стадии и совет; состояния подключений.
+2. Dart-тесты: сборка индекса; `setConnectionEnabled`; политика шлюза (по
+   строке на группу таблицы, `reveal`, выключенный тумблер изменений);
+   исполнение через шлюз (чтение, изменение, закрытый маршрут, ответ больше
+   предела); справка содержит только разрешённое; хендлеры `/assistant/*`.
+3. Локально: `flutter analyze`, `:app:compileDebugKotlin` (схема KSP: все
+   функции `enabledByDefault=false`), `:app:testDebugUnitTest`,
+   `boundary_check --strict`.
+4. Эмулятор Android 16, если доступен: `adb shell cmd app_function
+   execute-app-function` для каждой функции при выключенных и включённых
+   тумблерах; `callApi` при открытом и закрытом окне; `/assistant/*` через
+   `adb forward`.
 5. CI `checks` зелёный на голове `develop`.
-
-## Открытые вопросы (к владельцу, до реализации)
-
-**В1. Как применяются изменения конфигурации по просьбе ассистента**
-(`setAppRoute`, `setConnectionEnabled`).
-
-- (а) **Подтверждение в приложении** — рекомендую, описано выше. Ничего не
-  меняется без человека; не нужен Flutter в фоне; укладывается в §747.
-  Цена: «подключи к рабочей сети» голосом требует одного касания.
-- (б) **Сразу, без рук** — нужен фоновый Dart-исполнитель (второй
-  Flutter-движок без окна в процессе сервиса либо, после §747, сервис в
-  `:ui`), защита от двух писателей `lxbox_settings.json`. Отдельная крупная
-  работа, пересекается с §747; изменение конфигурации чужой командой без
-  подтверждения.
-- (в) **(а) сейчас, (б) следующей задачей после §747** — с настройкой
-  «применять без подтверждения», выключенной по умолчанию.
-
-**В2. Что из имён отдаётся ассистенту** — **решено** владельцем 17.11.2026:
-имена выходов отдаются, страну определяет ассистент (раздел «Страна выхода»).
 
 ## Unresolved / follow-up
 
-- Фоновое применение изменений без окна приложения (В1-б).
+- Исполнение шлюза без окна (фоновый Dart-исполнитель) — после §747.
 - «Через какой выход сейчас идёт приложение» по живым соединениям.
+- Состояние OpenVPN-подключения.
 - Проверка в Gemini — после открытия программы раннего доступа.
