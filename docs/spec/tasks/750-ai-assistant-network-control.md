@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress — код и документы в `develop` (`a88392b1`); CI 17.11.2026: `checks` 44162361438 зелёный, сборка APK build-fast 44162010641 зелёная (Kotlin + KSP компилируются); JVM-тесты Kotlin после правок этапа 2 не запускались (на CI их нет); на устройстве и эмуляторе не проверено |
+| Status | In progress — код и документы в `develop`; CI 17.11.2026 зелёный (`checks` 44162361438, build-fast 44162010641); эмулятор Android 14 17.11: маршруты `/assistant/*` проверены (см. «Проверка на эмуляторе»); AppFunctions, шлюз `callApi`, мост и оба тумблера не проверены — нужен Android 16 |
 | Start date | 2026-11-17 |
 | Source | Решение владельца 17.11.2026: развить управление сетью через ИИ-ассистента (три класса задач: «почему не открывается», «пусти приложение через выход/страну», «подключи к рабочей сети») |
 | Related specs | §721 (AppFunctions: старт/стоп/статус, тумблер «AI assistant control»), §687 (URL Check), §047 (Automation API), §747 (два процесса `:ui`/`:bg`), §712 (`package_name_regex`), §715 (значок пула = флаг в имени узла), фича `014-AUTOMATION` |
@@ -374,6 +374,31 @@ App Settings → Automation, раздел «AI assistants» (Android 16+):
    тумблерах; `callApi` при открытом и закрытом окне; `/assistant/*` через
    `adb forward`.
 5. CI `checks` зелёный на голове `develop`.
+
+## Проверка на эмуляторе (17.11.2026)
+
+`emulator-5554`, AVD LxBox_test, Android 14 (API 34), APK из CI build-fast
+44162010641 (2.25.22-dev.53, коммит `e51125fb`), Debug API через `adb forward`.
+
+| Что | Результат |
+|-----|-----------|
+| `GET /assistant/overview`, туннель остановлен | Направления с подписями и числом выходов, 8 подключений: выключенные `disabled`, остальные `down` |
+| `GET /assistant/overview`, туннель поднят | `current_exit` заполнен; AmneziaWG и Tailscale — `up`, OpenConnect — `down` |
+| `GET /assistant/exits?direction=vpn-1` | 20 имён, `truncated: false` |
+| `GET /assistant/apps?q=chrom` | `com.android.chrome` / Chrome |
+| `GET /assistant/app-route?app=com.android.chrome` | `vpn-1`, правила нет |
+| `POST /assistant/check-url`, туннель остановлен | `outcome: vpn_off`, совет |
+| `POST /assistant/check-url` `https://example.com` (и с `app`) | `ok`, HTTP 200, `route.direction: vpn-1`, `route.exit` — выбранный узел |
+| `POST /assistant/check-url` несуществующее имя | `failed`, `failed_stage: dns`, `error: rcode NXDOMAIN`, совет про DNS |
+| `POST /assistant/check-exit` | `country: FI`, `ip` заполнен; через нерабочий узел — `failed` с текстом ошибки |
+| `POST /assistant/exit` | выход сменился (`changed: true`), обзор показывает новый; неизвестное имя — `not_found` |
+| `POST /assistant/connection` выкл/вкл | `applied`; после перезагрузки ядра состояние `disabled`, затем `up`; неизвестный id — `not_found` |
+
+Не проверено: всё, что требует Android 16, — вызов функций через
+`adb shell cmd app_function` (на эмуляторе сервиса `app_function` нет), шлюз
+`getApiHelp` / `callApi`, мост с открытием окна и уведомлением, оба тумблера
+(раздел AI assistants на Android 14 скрыт). JVM-тесты Kotlin после правок
+этапа 2 не запускались.
 
 ## Unresolved / follow-up
 
