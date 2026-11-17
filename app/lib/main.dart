@@ -33,6 +33,7 @@ import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
 import 'services/wifi_history_listener.dart';
 import 'widgets/mouse_drag_scroll_behavior.dart';
+import 'widgets/dpad_text_field_exit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -428,6 +429,10 @@ class LxBoxApp extends StatelessWidget {
           themeMode: themeNotifier.mode,
           // §736 — списки тянутся и указателем-«мышью» (пульт TV, issue #220).
           scrollBehavior: const MouseDragScrollBehavior(),
+          // §746 — пульт TV уходит из любого текстового поля стрелками, когда
+          // каретка на краю; слой глубже DefaultTextEditingShortcuts.
+          builder: (context, child) =>
+              DpadTextFieldExit(child: child ?? const SizedBox.shrink()),
           // §279 — ВСЕГДА подаём явную локаль (effective уже резолвит
           // 'system' по языку устройства через PlatformDispatcher). Ранее
           // 'system' давал locale: null, и Flutter полагался на собственный

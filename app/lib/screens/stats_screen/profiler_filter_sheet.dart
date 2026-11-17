@@ -6,7 +6,6 @@ import '../per_app_trace_tab/app_multi_picker.dart';
 import 'profiler_filter.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
-import '../../widgets/dpad_field_exit.dart';
 
 /// §044/new-profiler — фильтр-окно профайлера. Bottom-sheet, паттерн
 /// `home/widgets/filter_panel.dart`: TabBar с amber-точкой на табе с активным
@@ -408,27 +407,25 @@ class _ProfilerFilterSheetState extends State<_ProfilerFilterSheet>
             // детали соединения кладёт значение сюда; юзер видит/правит/чистит.
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: DpadFieldExit(
-                child: TextField(
-                  controller: _searchCtrl,
-                  onChanged: (v) => f.search = v.trim(),
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: getLocalText.s("Search domain / IP / app"),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _searchCtrl.text.isEmpty
-                        ? null
-                        : IconButton(
-                            icon: const Icon(Icons.close, size: 18),
-                            tooltip: getLocalText.s("Clear"),
-                            onPressed: () {
-                              _searchCtrl.clear();
-                              f.search = '';
-                            },
-                          ),
-                    border: const OutlineInputBorder(),
-                  ),
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => f.search = v.trim(),
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: getLocalText.s("Search domain / IP / app"),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _searchCtrl.text.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: getLocalText.s("Clear"),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            f.search = '';
+                          },
+                        ),
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ),

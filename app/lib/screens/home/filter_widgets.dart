@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/l10n/locale_controller.dart';
-import '../../widgets/dpad_field_exit.dart';
 
 /// §048 — UI components для filter panel в node list header.
 /// Все слим, compact, default collapsed (см. spec).
@@ -93,72 +92,70 @@ class RegexFilterField extends StatelessWidget {
         ),
         const SizedBox(width: 4),
         Expanded(
-          child: DpadFieldExit(
-            child: TextField(
-              controller: controller,
-              onChanged: onChanged,
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
-                hintText: getLocalText.s("regex pattern"),
-                // §096 — invert переехал в ведущий [!] (NegateToggle слева от
-                // поля); внутри prefix остаётся только лупа.
-                prefixIcon: const SizedBox(
-                  width: 30,
-                  height: 28,
-                  child: Center(child: Icon(Icons.search, size: 18)),
-                ),
-                prefixIconConstraints:
-                    const BoxConstraints(minWidth: 34, minHeight: 28),
-                errorText: valid ? null : 'Invalid regex',
-                errorStyle: const TextStyle(fontSize: 10),
-                // §195 — суффикс: [💾 save] + [× clear], оба только при непустом
-                // тексте. 💾 — лишь если onSaveRegex задан (есть активное Направление) И
-                // regex валиден (битый паттерн сохранять нельзя). Каждый — голый
-                // SizedBox 28×28, без material 48dp tap-target → suffix не прыгает.
-                suffixIcon: controller.text.isEmpty
-                    ? null
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (onSaveRegex != null && valid)
-                            InkWell(
-                              onTap: () => onSaveRegex!(controller.text, invert),
-                              borderRadius: BorderRadius.circular(4),
-                              child: SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: Icon(Icons.save_outlined,
-                                    size: 17,
-                                    color: cs.onSurfaceVariant.withAlpha(200)),
-                              ),
-                            ),
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.fromLTRB(8, 8, 12, 8),
+              hintText: getLocalText.s("regex pattern"),
+              // §096 — invert переехал в ведущий [!] (NegateToggle слева от
+              // поля); внутри prefix остаётся только лупа.
+              prefixIcon: const SizedBox(
+                width: 30,
+                height: 28,
+                child: Center(child: Icon(Icons.search, size: 18)),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 34, minHeight: 28),
+              errorText: valid ? null : 'Invalid regex',
+              errorStyle: const TextStyle(fontSize: 10),
+              // §195 — суффикс: [💾 save] + [× clear], оба только при непустом
+              // тексте. 💾 — лишь если onSaveRegex задан (есть активное Направление) И
+              // regex валиден (битый паттерн сохранять нельзя). Каждый — голый
+              // SizedBox 28×28, без material 48dp tap-target → suffix не прыгает.
+              suffixIcon: controller.text.isEmpty
+                  ? null
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (onSaveRegex != null && valid)
                           InkWell(
-                            onTap: onClear,
+                            onTap: () => onSaveRegex!(controller.text, invert),
                             borderRadius: BorderRadius.circular(4),
                             child: SizedBox(
                               width: 28,
                               height: 28,
-                              child: Center(
-                                child: Text(
-                                  '×',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: cs.onSurfaceVariant.withAlpha(180),
-                                  ),
+                              child: Icon(Icons.save_outlined,
+                                  size: 17,
+                                  color: cs.onSurfaceVariant.withAlpha(200)),
+                            ),
+                          ),
+                        InkWell(
+                          onTap: onClear,
+                          borderRadius: BorderRadius.circular(4),
+                          child: SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: Center(
+                              child: Text(
+                                '×',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: cs.onSurfaceVariant.withAlpha(180),
                                 ),
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                suffixIconConstraints:
-                    const BoxConstraints(minWidth: 32, minHeight: 28),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+              suffixIconConstraints:
+                  const BoxConstraints(minWidth: 32, minHeight: 28),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
+            style: const TextStyle(fontSize: 13),
           ),
         ),
       ],

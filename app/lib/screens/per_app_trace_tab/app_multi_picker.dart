@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../models/app_info.dart';
 import '../../services/app_info_cache.dart';
 import '../../services/l10n/locale_controller.dart';
-import '../../widgets/dpad_field_exit.dart';
 
 /// §044/new-profiler — **встраиваемый** мульти-select пикер приложений для
 /// фильтр-окна профайлера (Profiler-таб). Это виджет внутри фильтр-листа:
@@ -81,19 +80,17 @@ class _AppMultiPickerState extends State<AppMultiPicker> {
         Row(
           children: [
             Expanded(
-              child: DpadFieldExit(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: getLocalText.s("Search by name or package"),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                  style: const TextStyle(fontSize: 13),
-                  onChanged: (v) => setState(() => _search = v),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: getLocalText.s("Search by name or package"),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+                style: const TextStyle(fontSize: 13),
+                onChanged: (v) => setState(() => _search = v),
               ),
             ),
             IconButton(

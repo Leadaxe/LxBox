@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lxbox/widgets/dpad_text_field_exit.dart';
 import 'package:lxbox/widgets/mouse_drag_scroll_behavior.dart';
 import 'package:lxbox/screens/app_picker_screen.dart';
 import 'package:lxbox/services/app_info_cache.dart';
@@ -52,6 +53,8 @@ void main() {
     ],
     supportedLocales: LocaleController.supportedLocales,
     scrollBehavior: const MouseDragScrollBehavior(),
+    // §746 — как в main.dart: слой выхода из полей по стрелкам.
+    builder: (context, child) => DpadTextFieldExit(child: child!),
     home: const AppPickerScreen(selected: {}),
   );
 
