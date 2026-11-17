@@ -256,13 +256,10 @@ Future<DebugResponse> _putVpnMode(DebugRequest req, DebugContext ctx) async {
 
 /// Ключи, которые API не вправе перезаписать. Иначе пользователь
 /// может заблокировать себе доступ (`debug_token`/`debug_enabled`/`debug_port`).
-/// §750 — тумблеры ассистента: агент и ассистент не включают их себе сами.
 const Set<String> _varBlocklist = {
   'debug_token',
   'debug_enabled',
   'debug_port',
-  'appfunctions_enabled',
-  'appfunctions_allow_changes',
 };
 
 // §279 — per-key side-effect registry: ключи, чья запись обязана пройти через
