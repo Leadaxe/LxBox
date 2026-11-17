@@ -14,9 +14,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/// §745 — держатель клиента UI: логика `UiCoreSession` (`ClientHolder`) на
+/// §745 — держатель клиента экрана: логика `ScreenCoreSession` (`ClientHolder`) на
 /// подменной фабрике, без libbox; условие создания — настоящий `TunnelState`.
-class UiCoreSessionTest {
+class ScreenCoreSessionTest {
 
     private class FakeClient {
         val shutdowns = AtomicInteger(0)

@@ -19,10 +19,9 @@ import kotlinx.coroutines.launch
  *
  * §747 — процессов два (`:ui` — окно, `:bg` — сервисная сторона), и
  * `onCreate` исполняется в каждом. Шаги выполняются только на своей стороне
- * ([ProcessRole]): чужой шаг здесь вреден, а не лишний — `CrashRecovery` в
- * окне удалил бы `cache.db` работающего ядра, `Libbox.setup` с
- * `crashReportSource` затёр бы его crash-файл, `TaildropClip` выключил бы
- * «Поделиться» при живом туннеле.
+ * ([ProcessRole]): чужой шаг здесь вреден, а не лишний — `TaildropClip` в
+ * окне выключил бы «Поделиться» при живом туннеле, а ядро (`libbox.so`) в
+ * окне не нужно вовсе и стоит десятков мегабайт.
  *
  * `Seq.setContext(this)` намеренно не вызываем (см. reference
  * `Application.kt:41` — закомментирован). Native libbox init сам
@@ -105,8 +104,7 @@ class BoxApplication : Application() {
 
     /**
      * Сторона окна (`:ui`): наблюдатель Wi-Fi для истории сетей (включает и
-     * выключает его Dart, `setAutoRecordWifi`), приёмники журнала клиента
-     * ядра роли UI и рантайм ядра для него.
+     * выключает его Dart, `setAutoRecordWifi`). Ядро здесь не грузится.
      */
     private fun initUiSide() {
         // §051 Phase 3 — singleton observer. start()/stop() driven by
@@ -114,34 +112,13 @@ class BoxApplication : Application() {
         // app init если flag true; toggle в Diagnostics дёргает на лету.
         wifiObserver = WifiNetworkObserver(this)
 
-        // §745/§747 — WARN-строки клиента ядра роли UI и полосы `lxbox-cc`
-        // процесса окна пишет в журнал сама сторона окна.
-        UiCoreSession.warningSink = { text -> UiSinks.appLogWarning(text) }
-        CommandLane.warningSink = { text -> UiSinks.appLogWarning(text) }
-
-        // Окну рантайм ядра нужен сразу (клиент `command.sock`, проверка и
-        // форматирование конфига, проба без туннеля) — загрузка в фоне.
+        // §747 — ядро в этот процесс не загружается никогда: клиент экрана,
+        // проба, проверка конфига живут в `:bg`. Первый вызов заранее
+        // поднимает процесс `:bg` — к подключению движка он уже отвечает.
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
-            runCatching { ensureLibbox() }
-                .onFailure { android.util.Log.e(TAG, "initializeLibbox failed", it) }
+            runCatching { BgClient.call(this@BoxApplication, "tunnelSnapshot") }
         }
-        // Параллельно — первый вызов `:bg`: он поднимает процесс `:bg` заранее
-        // (к подключению движка тот уже отвечает) и приносит настройку языка
-        // для локали рантайма окна (тексты ошибок проверки конфига и пробы).
-        @Suppress("OPT_IN_USAGE")
-        GlobalScope.launch(Dispatchers.IO) {
-            runCatching {
-                val lang = BgClient.callOr(this@BoxApplication, "getAppLanguage", null, L10n.SETTING_SYSTEM)
-                ensureLibbox()
-                L10n.setLibboxLocale(lang)
-            }.onFailure { android.util.Log.w(TAG, "ui core locale failed: ${it.message}") }
-        }
-    }
-
-    /** `Libbox.setup` процесса окна: только рантайм для клиента ядра. */
-    private fun initializeLibboxForUi() {
-        Libbox.setup(baseSetupOptions())
     }
 
     private fun baseSetupOptions(): SetupOptions {
@@ -265,21 +242,23 @@ class BoxApplication : Application() {
             private set
 
         /**
-         * §747 — загрузить ядро в этот процесс, если ещё не загружено
-         * (`Libbox.setup` — один раз на процесс). Блокирует на время загрузки
-         * библиотеки; звать вне главного потока. Отказ — исключение, следующий
-         * вызов попробует снова.
+         * §747 — загрузить ядро в процесс `:bg`, если ещё не загружено
+         * (`Libbox.setup` — один раз на процесс): локаль, лог, порог памяти,
+         * crash-файл, `CrashRecovery`, ручки quic-go. Блокирует на время
+         * загрузки библиотеки; звать вне главного потока. Отказ — исключение,
+         * следующий вызов попробует снова.
          *
-         * В процессе с сервисом (`:bg`) — полная настройка: локаль, лог, порог
-         * памяти, crash-файл, `CrashRecovery`. В процессе окна — только
-         * рантайм для клиента ядра.
+         * Только сервисная сторона: в процессе окна ядра нет вовсе (итерация 2
+         * спеки 747) — вызов оттуда бросает исключение, сторож границ такие
+         * вызовы не пропускает.
          */
         fun ensureLibbox() {
             if (libboxLoaded) return
             synchronized(libboxLock) {
                 if (libboxLoaded) return
                 val app = instance
-                if (ProcessRole.isBg) app.initializeLibboxForCore(app) else app.initializeLibboxForUi()
+                check(ProcessRole.role != ProcessRole.Role.Ui) { "the core is never loaded in :ui" }
+                app.initializeLibboxForCore(app)
                 libboxLoaded = true
             }
         }

@@ -5,7 +5,6 @@ import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import io.nekohasekai.libbox.WIFIState
 
 /**
  * §051 — single source of truth для чтения текущей Wi-Fi сети.
@@ -150,15 +149,6 @@ object WifiInfoReader {
     fun normalizeBssid(raw: String?): String {
         val b = raw?.lowercase() ?: return ""
         return if (b == PLACEHOLDER_BSSID) "" else b
-    }
-
-    /// Convenience для callers которым нужен WIFIState? (sing-box callback
-    /// + auto-record). null на любую ошибку — sing-box обрабатывает gracefully
-    /// (existing F12.3 fix flow).
-    fun readAsState(ctx: Context): WIFIState? = when (val r = read(ctx)) {
-        is Result.Success -> WIFIState(r.ssid, r.bssid)
-        is Result.UnknownSsid -> WIFIState("", "")
-        else -> null
     }
 
     /// §567/§569 — preflight разрешений и геолокации. `null` — чтение

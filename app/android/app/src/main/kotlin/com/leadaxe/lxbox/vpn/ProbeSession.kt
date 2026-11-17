@@ -85,19 +85,6 @@ object ProbeSession : CommandServerHandler {
     /// `{error, runId}`: error '' при успехе, иначе текст ошибки (runId 0).
     /// Повторный вызов поверх живой сессии — рестарт: старая закрывается, её
     /// владелец дальше получает [STALE_RUN].
-    /// §747 D — согласование с `:bg` (`ProbeGate`): [gateBegin] — «проба
-    /// начинается» (false — туннель не остановлен), [gateEnd] — «проба
-    /// закончена». Ставит сторона окна (`VpnPlugin`) вызовами `BgClient`; по
-    /// умолчанию — без согласования (один процесс, JVM-тест).
-    @Volatile
-    internal var gateBegin: () -> Boolean = { true }
-
-    @Volatile
-    internal var gateEnd: () -> Unit = {}
-
-    /// `:bg` считает, что проба идёт: после остановки нужно сообщить ему.
-    private var gateHeld = false
-
     @Synchronized
     fun start(config: String): Map<String, Any> {
         // §732 — гейт по статусу службы, а не только по commandClient: тот
@@ -109,17 +96,10 @@ object ProbeSession : CommandServerHandler {
             return startResult("VPN is running — test uses the live tunnel instead")
         }
         stopInternal("restart")
-        // §747 — рантайм ядра в процессе окна грузится в фоне при старте
-        // процесса: дождаться (обычно уже готов).
+        // §747 — ядро в `:bg` грузится лениво: проба без туннеля — одна из
+        // потребностей в нём.
         runCatching { BoxApplication.ensureLibbox() }
             .onFailure { return startResult(it.message ?: "core runtime is not available") }
-        // §747 D — сокет ядра один на оба процесса, а туннель поднимает `:bg`:
-        // спросить его («проба начинается»). Отказ — туннель уже не Stopped
-        // (копия статуса в окне могла отстать).
-        if (!runCatching { gateBegin() }.getOrDefault(false)) {
-            return startResult("VPN is running — test uses the live tunnel instead")
-        }
-        gateHeld = true
         var cs: CommandServer? = null
         var cl: CommandClient? = null
         return runCatching {
@@ -258,19 +238,12 @@ object ProbeSession : CommandServerHandler {
             // службы: туннель стартовал бы, но смены сети (Wi-Fi ↔
             // мобильная) до перезапуска VPN не видел. Страховка ко второму
             // гейту в [start]: с ним проба в Starting не рождается.
-            // §747 — в процессе окна монитор сети поднят только пробой:
-            // останавливать его можно всегда. В процессе с сервисом — прежнее
-            // условие (монитор общий с туннелем).
-            if (!ProcessRole.isBg || probeMayStopMonitor(CoreSession.isUp, TunnelState.status)) {
+            if (probeMayStopMonitor(CoreSession.isUp, TunnelState.status)) {
                 runCatching { runBlocking { DefaultNetworkMonitor.stop() } }
             }
         }
         probeScope?.cancel()
         probeScope = null
-        if (gateHeld) {
-            gateHeld = false
-            runCatching { gateEnd() }
-        }
     }
 
     /// §669 — закрытие сервера под потолком [CLOSE_TIMEOUT_MS] (образец —

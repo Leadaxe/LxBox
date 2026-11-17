@@ -43,6 +43,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_CONNECTION_TEST_CHANNEL = "lxbox/cc/connection_test" // §687
         private const val CC_OPENCONNECT_CHANNEL = "lxbox/cc/openconnect" // §654
         private const val CC_TAILDROP_INBOX_CHANNEL = "lxbox/cc/taildrop_inbox" // §707
+
+        /// §747 — потоки данных из `:bg`: лог ядра и потоки клиентов ядра.
+        /// Имя потока в канале событий — имя `EventChannel`.
+        private val STREAM_CHANNELS = listOf(
+            CORE_LOG_CHANNEL, CC_STATUS_CHANNEL, CC_OUTBOUNDS_CHANNEL, CC_GROUPS_CHANNEL,
+            CC_CONNECTIONS_CHANNEL, CC_DNS_CHANNEL, CC_TAILSCALE_CHANNEL,
+            CC_TAILSCALE_PING_CHANNEL, CC_CONNECTION_TEST_CHANNEL, CC_OPENCONNECT_CHANNEL,
+            CC_TAILDROP_INBOX_CHANNEL,
+        )
         private const val TAILDROP_PICK_CODE = 25 // §707
         private const val TAILDROP_SAVE_CODE = 26 // §707
         private const val VPN_REQUEST_CODE = 24
@@ -54,18 +63,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var statusEventChannel: EventChannel
-    private lateinit var coreLogEventChannel: EventChannel
-    /// §122 Фаза 0 — EventChannel'ы нового CommandClient-канала.
-    private lateinit var ccStatusEventChannel: EventChannel
-    private lateinit var ccOutboundsEventChannel: EventChannel
-    private lateinit var ccGroupsEventChannel: EventChannel
-    private lateinit var ccConnectionsEventChannel: EventChannel
-    private lateinit var ccDnsEventChannel: EventChannel // §180
-    private lateinit var ccTailscaleEventChannel: EventChannel // §579
-    private lateinit var ccTailscalePingEventChannel: EventChannel // §581
-    private lateinit var ccConnectionTestEventChannel: EventChannel // §687
-    private lateinit var ccOpenConnectEventChannel: EventChannel // §654
-    private lateinit var ccTaildropInboxEventChannel: EventChannel // §707
     /// §707 — ждущий выбор файлов «Send file…» (тег, пир, имя пира, ответ).
     private var pendingTaildropPick: Pair<Triple<String, String, String>, MethodChannel.Result>? = null
     /// §707 — ждущий «Сохранить как» (API 24–28): тег, имя файла, ответ.
@@ -99,17 +96,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Фича 478 / Д-1 — сырой текст ядра без обёрток приложения.
             val coreError = intent.getStringExtra(BoxVpnService.EXTRA_CORE_ERROR)
             Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""}${if (revoked) " revoked=true" else ""} sink=${statusSink != null}")
-            // §745 — клиент ядра роли UI создаёт и закрывает сторона UI. На
-            // Started — до передачи события в Dart (onReceive на главном
-            // потоке, событие уходит следующим post): к первому `cc*` клиент
-            // уже есть. На Stopped — закрыть, если ещё жив (обычно его уже
-            // закрыл слушатель «перед закрытием»). Запоздалый Stopped прошлого
-            // туннеля после нового Started (§122, быстрый перезапуск) клиента
-            // нового туннеля не трогает: решает текущий статус, не событие.
-            // §747 — сначала копия состояния туннеля (в процессе окна её пишет
-            // только этот приёмник и запрос снимка), по ней — клиент ядра.
-            val wire = BgEvents.wireOf(intent)
-            if (wire != null) applyTunnelWire(wire) else syncUiClient()
+            // §747 — копия состояния туннеля в окне: её пишут только этот
+            // приёмник и запрос снимка. Клиент ядра экрана живёт в `:bg`.
+            BgEvents.wireOf(intent)?.let { applyTunnelWire(it) }
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
@@ -128,41 +117,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         }
     }
 
-    /// §747 — события `:bg` → `:ui` (`BgEvents`); зарегистрирован, пока
-    /// подключён движок. Данных, кроме имени и аргументов команды
-    /// автоматизации, события не несут.
-    private val bgEventsReceiver = object : BroadcastReceiver() {
-        override fun onReceive(ctx: Context?, intent: Intent?) {
-            when (intent?.action) {
-                // Состояние openconnect изменилось: забрать снимок вызовом и
-                // отдать в sink (раньше сервис писал в него сам).
-                BgEvents.ACTION_OPENCONNECT_CHANGED -> {
-                    if (UiSinks.ccOpenConnectSink == null) return
-                    val c = context
-                    BgClient.onLane {
-                        val snap = BgClient.callOr<Any?>(c, "ccGetOpenConnectStatus", null, null)
-                        if (snap != null) BgClient.onMain {
-                            runCatching { UiSinks.ccOpenConnectSink?.success(snap) }
-                        }
-                    }
-                }
-                // Команда автоматизации / «нативный Stop» для Dart.
-                BgEvents.ACTION_AUTOMATION -> {
-                    val name = intent.getStringExtra(BgEvents.EXTRA_NAME) ?: return
-                    val args = runCatching {
-                        BgCodec.decode(intent.getByteArrayExtra(BgEvents.EXTRA_ARGS)) as? Map<*, *>
-                    }.getOrNull().orEmpty().entries.associate { (k, v) -> k.toString() to v }
-                    AutomationBridge.handleAutomationAction(name, args)
-                }
-                // `:bg` поднимает туннель, а здесь идёт проба на том же сокете
-                // ядра: остановить (остановка сама ответит `probeEnd`).
-                BgEvents.ACTION_STOP_PROBE ->
-                    Thread({ runCatching { ProbeSession.stop() } }, "lxbox-probe-stop")
-                        .apply { isDaemon = true }.start()
-            }
-        }
-    }
-
     /// Движок подключён (между onAttachedToEngine и onDetachedFromEngine).
     private var attached = false
 
@@ -170,8 +124,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// `:bg` перезапущен.
     private var bgEpoch: Long? = null
 
-    /// Читатель потока лога из `:bg`; есть, пока Dart слушает `lxbox/coreLog`.
-    private var logReader: UiLogPipeReader? = null
+    /// §747 — потоки данных, которые Dart сейчас слушает (имя `EventChannel`).
+    /// Главный поток.
+    private val listening = HashSet<String>()
+
+    /// Каналы потоков данных: нужны только ради onListen / onCancel — сами
+    /// события уходят в [messenger] готовыми конвертами из `:bg`.
+    private val streamChannels = ArrayList<EventChannel>()
+
+    private var messenger: io.flutter.plugin.common.BinaryMessenger? = null
 
     // -------------------------------------------------------------------------
     // FlutterPlugin
@@ -201,89 +162,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         })
 
-        // §043: core log pump из sing-box. Sing-box логи приходят через
-        // PlatformInterface.writeDebugMessage в BoxService (`:bg`) → pipe
-        // (`BgLogPipe` → `UiLogPipeReader`, §747) → UiSinks.coreLogSink → этот
-        // EventChannel → ClashLogPump в Dart. Поток открыт, пока Dart слушает.
-        coreLogEventChannel = EventChannel(binding.binaryMessenger, CORE_LOG_CHANNEL)
-        coreLogEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
-                Log.d(TAG, "[vpn] coreLogEventChannel.onListen — sink installed")
-                UiSinks.coreLogSink = sink
-                openLogPipe()
-            }
-            override fun onCancel(args: Any?) {
-                Log.d(TAG, "[vpn] coreLogEventChannel.onCancel — sink cleared")
-                UiSinks.coreLogSink = null
-                closeLogPipe()
-            }
-        })
-
-        // §122 Фаза 0 — 4 канала CommandClient (status/outbounds/groups/connections).
-        // BoxCommandClient.handler пушит снапшоты в BoxVpnService.cc*Sink → сюда → Dart.
-        ccStatusEventChannel = EventChannel(binding.binaryMessenger, CC_STATUS_CHANNEL)
-        ccStatusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccStatusSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccStatusSink = null }
-        })
-        ccOutboundsEventChannel = EventChannel(binding.binaryMessenger, CC_OUTBOUNDS_CHANNEL)
-        ccOutboundsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccOutboundsSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccOutboundsSink = null }
-        })
-        ccGroupsEventChannel = EventChannel(binding.binaryMessenger, CC_GROUPS_CHANNEL)
-        ccGroupsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccGroupsSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccGroupsSink = null }
-        })
-        ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
-        ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
-                UiSinks.ccConnectionsSink = sink
-                // §193 — connections single-shot: ядро шлёт reset-снапшот РОВНО
-                // один раз при подписке screenClient (pull в libbox нет). Новый
-                // Dart-подписчик (открытие Stats при уже живом screenClient) не
-                // получает нового reset → пусто. Переэмитим накопленный
-                // аккумулятор сразу, чтобы Stats увидел текущие соединения.
-                UiCoreSession.client?.reEmitScreenConnections()
-            }
-            override fun onCancel(args: Any?) { UiSinks.ccConnectionsSink = null }
-        })
-        // §180 — DNS-журнал из ядра (SPEC 018).
-        ccDnsEventChannel = EventChannel(binding.binaryMessenger, CC_DNS_CHANNEL)
-        ccDnsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccDnsQueriesSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccDnsQueriesSink = null }
-        })
-        // §579 — состояние узлов Tailscale (псевдо-направление NETWORKS).
-        ccTailscaleEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_CHANNEL)
-        ccTailscaleEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTailscaleSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccTailscaleSink = null }
-        })
-        // §581 — ответы проверки устройства Tailscale.
-        ccTailscalePingEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_PING_CHANNEL)
-        ccTailscalePingEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTailscalePingSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccTailscalePingSink = null }
-        })
-        ccConnectionTestEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTION_TEST_CHANNEL)
-        ccConnectionTestEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccConnectionTestSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccConnectionTestSink = null }
-        })
-        // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
-        // §707 — входящие Taildrop узла.
-        ccTaildropInboxEventChannel = EventChannel(binding.binaryMessenger, CC_TAILDROP_INBOX_CHANNEL)
-        ccTaildropInboxEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccTaildropInboxSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccTaildropInboxSink = null }
-        })
-        ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
-        ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { UiSinks.ccOpenConnectSink = sink }
-            override fun onCancel(args: Any?) { UiSinks.ccOpenConnectSink = null }
-        })
+        // §747 — потоки данных окна (лог ядра §043, потоки клиентов ядра §122)
+        // рождаются в `:bg` и приходят каналом событий (pipe) готовыми
+        // конвертами `EventChannel`: окно отдаёт их в свой канал того же имени,
+        // не декодируя. Каналы здесь — ради onListen / onCancel: подписка и
+        // отписка Dart уходят в `:bg`, и ядро не шлёт то, что никто не читает.
+        messenger = binding.binaryMessenger
+        for (name in STREAM_CHANNELS) {
+            val channel = EventChannel(binding.binaryMessenger, name)
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, sink: EventChannel.EventSink?) = streamListen(name)
+                override fun onCancel(args: Any?) = streamCancel(name)
+            })
+            streamChannels.add(channel)
+        }
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -297,45 +189,59 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 Context.RECEIVER_NOT_EXPORTED
             )
         }.onFailure { Log.e(TAG, "[vpn] registerReceiver(statusReceiver) failed: $it") }
-        runCatching {
-            context.registerReceiver(
-                bgEventsReceiver,
-                IntentFilter().apply {
-                    addAction(BgEvents.ACTION_OPENCONNECT_CHANGED)
-                    addAction(BgEvents.ACTION_AUTOMATION)
-                    addAction(BgEvents.ACTION_STOP_PROBE)
-                },
-                Context.RECEIVER_NOT_EXPORTED
-            )
-        }.onFailure { Log.e(TAG, "[vpn] registerReceiver(bgEventsReceiver) failed: $it") }
-        // §747 D — проба без туннеля согласуется с `:bg` (сокет ядра общий).
-        val appCtx = context
-        ProbeSession.gateBegin = { BgClient.call(appCtx, "probeBegin") == true }
-        ProbeSession.gateEnd = { BgClient.callOr(appCtx, "probeEnd", null, true) }
-        // §745 — туннель уже поднят (движок подключился позже старта: плитка,
-        // автозапуск, возврат после закрытия активити) — клиент UI создаётся
-        // сейчас; без Started `ensure()` ничего не делает. §747 — в процессе
-        // окна копия состояния ещё пуста: её заполнит ответ `attachToBg`
-        // (broadcast не липкий), он же создаст клиента.
-        UiCoreSession.ensure()
         attachToBg()
     }
 
-    /// §747 — сообщить `:bg`, что окно живо (Binder-метка: `:bg` узнает и о
-    /// гибели процесса), и забрать снимок состояния туннеля. Зовётся при
-    /// подключении движка и когда `:bg` оказался перезапущен (новая метка
-    /// запуска в снимке) — тогда же заново открывается поток лога.
+    private fun streamListen(name: String) {
+        listening.add(name)
+        val ctx = context
+        BgClient.onLane { BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false) }
+    }
+
+    private fun streamCancel(name: String) {
+        listening.remove(name)
+        val ctx = context
+        BgClient.onLane { BgClient.callOr(ctx, "streamCancel", mapOf("stream" to name), false) }
+    }
+
+    /// §747 — открыть канал событий и назвать себя `:bg` (Binder-метка: `:bg`
+    /// узнает и о гибели процесса окна), затем забрать снимок состояния
+    /// туннеля (broadcast не липкий — окно, открытое при работающем туннеле,
+    /// иначе видело бы `Stopped`). Зовётся при подключении движка и когда
+    /// `:bg` оказался перезапущен (новая метка запуска в снимке) — тогда
+    /// новому процессу заново называются слушаемые потоки.
     private fun attachToBg() {
         val ctx = context
+        val streams = listening.toList()
         BgClient.onLane {
-            runCatching {
-                BgClient.raw(
-                    ctx, BgControlProvider.METHOD_UI_ATTACHED,
-                    android.os.Bundle().apply { putBinder(BgControlProvider.KEY_TOKEN, uiToken) },
-                )
-            }.onFailure { Log.w(TAG, "[bg] uiAttached failed: ${it.message}") }
+            BgClient.connect(ctx, uiToken) { stream, payload -> onFrame(stream, payload) }
+            for (name in streams) {
+                BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false)
+            }
             val wire = fetchTunnelWire()
             BgClient.onMain { if (wire != null && attached) applyTunnelWire(wire) }
+        }
+    }
+
+    /// Главный поток. Кадр канала событий: поток Dart — готовый конверт события
+    /// его `EventChannel` — уходит в движок как есть; служебный кадр
+    /// автоматизации (команда нативного входа или «нативный Stop» из `:bg`) —
+    /// в `AutomationBridge`.
+    private fun onFrame(stream: String, payload: ByteArray) {
+        if (stream == EventFrames.AUTOMATION) {
+            val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
+            val name = m["name"] as? String ?: return
+            val args = (m["args"] as? Map<*, *>).orEmpty().entries
+                .associate { (k, v) -> k.toString() to v }
+            AutomationBridge.handleAutomationAction(name, args)
+            return
+        }
+        if (stream !in listening) return
+        val out = messenger ?: return
+        // Движок ждёт direct-буфер с позицией в конце данных (как у EventChannel).
+        // §155 — движок может быть уже мёртв: глотаем.
+        runCatching {
+            out.send(stream, java.nio.ByteBuffer.allocateDirect(payload.size).apply { put(payload) })
         }
     }
 
@@ -344,72 +250,17 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         (BgClient.call(context, "tunnelSnapshot") as? Map<*, *>)?.let { BgEvents.wireOf(it) }
     }.getOrNull()
 
-    /// Главный поток. Принять снимок в копию состояния окна (в процессе, где
-    /// живёт и сервис, состояние настоящее — копию не пишем) и привести к нему
-    /// клиента ядра. Сменилась метка запуска `:bg` — процесс новый: он не
-    /// знает ни об окне, ни о подписке на лог.
+    /// Главный поток. Принять снимок в копию состояния окна. Сменилась метка
+    /// запуска `:bg` — процесс новый: он не знает ни об окне, ни о его
+    /// подписках.
     private fun applyTunnelWire(w: TunnelState.Wire) {
-        if (!ProcessRole.isBg) TunnelState.acceptMirror(w)
+        TunnelState.acceptMirror(w)
         val prev = bgEpoch
         bgEpoch = w.epoch
         if (prev != null && prev != w.epoch) {
             Log.w(TAG, "[bg] service process restarted — re-attaching")
             attachToBg()
-            if (UiSinks.coreLogSink != null) openLogPipe()
         }
-        syncUiClient()
-    }
-
-    /// §745 — клиент ядра роли UI создаёт и закрывает сторона UI по текущему
-    /// статусу туннеля (не по событию: запоздалый Stopped прошлого туннеля
-    /// после нового Started клиента нового туннеля не трогает).
-    private fun syncUiClient() {
-        when (TunnelState.status) {
-            VpnStatus.Started -> UiCoreSession.ensure()
-            // §747 — на Stopping сервис закрывает командный сервер: клиент
-            // закрывается сразу, не дожидаясь Stopped.
-            VpnStatus.Stopping, VpnStatus.Stopped -> UiCoreSession.closeOffMain()
-            VpnStatus.Starting -> {}
-        }
-    }
-
-    // ───────────── §747 — поток лога из `:bg` ─────────────
-
-    /// Главный поток. Создать pipe, читающий конец оставить себе, пишущий
-    /// отдать `:bg` (`openLogPipe`). Прежний поток закрывается.
-    private fun openLogPipe() {
-        logReader?.stop()
-        logReader = null
-        val pipe = runCatching { android.os.ParcelFileDescriptor.createPipe() }.getOrNull() ?: return
-        lateinit var reader: UiLogPipeReader
-        reader = UiLogPipeReader(
-            pipe[0],
-            post = { mainHandler.post(it) },
-            // §155 — sink может указывать на мёртвый движок: глотаем.
-            deliver = { batch -> runCatching { UiSinks.coreLogSink?.success(batch) } },
-            onEnd = { mainHandler.post { if (logReader === reader) logReader = null } },
-        )
-        logReader = reader
-        reader.start()
-        val writeEnd = pipe[1]
-        val ctx = context
-        BgClient.onLane {
-            runCatching {
-                BgClient.raw(
-                    ctx, BgControlProvider.METHOD_OPEN_LOG_PIPE,
-                    android.os.Bundle().apply { putParcelable(BgControlProvider.KEY_PFD, writeEnd) },
-                )
-            }.onFailure { Log.w(TAG, "[bg] openLogPipe failed: ${it.message}") }
-            // Свой экземпляр пишущего конца закрываем: у `:bg` — дубликат.
-            runCatching { writeEnd.close() }
-        }
-    }
-
-    private fun closeLogPipe() {
-        logReader?.stop()
-        logReader = null
-        val ctx = context
-        BgClient.onLane { BgClient.callOr(ctx, "closeLogPipe", null, true) }
     }
 
     /// §747 — переслать вызов Dart в `:bg` под тем же именем (`BgMethods`).
@@ -427,41 +278,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         attached = false
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
-        coreLogEventChannel.setStreamHandler(null)
-        ccStatusEventChannel.setStreamHandler(null)
-        ccOutboundsEventChannel.setStreamHandler(null)
-        ccGroupsEventChannel.setStreamHandler(null)
-        ccConnectionsEventChannel.setStreamHandler(null)
-        ccDnsEventChannel.setStreamHandler(null) // §180
-        ccTailscaleEventChannel.setStreamHandler(null) // §579
-        ccTailscalePingEventChannel.setStreamHandler(null) // §581
-        ccConnectionTestEventChannel.setStreamHandler(null) // §687
-        ccOpenConnectEventChannel.setStreamHandler(null) // §654
-        ccTaildropInboxEventChannel.setStreamHandler(null) // §707
+        for (channel in streamChannels) channel.setStreamHandler(null)
+        streamChannels.clear()
+        listening.clear()
+        messenger = null
         statusSink = null
-        UiSinks.coreLogSink = null
-        UiSinks.ccStatusSink = null
-        UiSinks.ccOutboundsSink = null
-        UiSinks.ccGroupsSink = null
-        UiSinks.ccConnectionsSink = null
-        UiSinks.ccDnsQueriesSink = null // §180
-        UiSinks.ccTailscaleSink = null // §579
-        UiSinks.ccTailscalePingSink = null // §581
-        UiSinks.ccConnectionTestSink = null // §687
-        UiSinks.ccOpenConnectSink = null // §654
-        UiSinks.ccTaildropInboxSink = null // §707
-        // §745 — движка нет, эмитить некуда: клиент UI закрыт, а не стоит на
-        // паузе. При возврате `onAttachedToEngine` создаст новый.
-        UiCoreSession.closeOffMain()
         // §047 — обнуляем bridge-ссылки (engine detached).
         AutomationBridge.bridgeChannel = null
         AutomationBridge.appContext = null
         runCatching { context.unregisterReceiver(statusReceiver) }
-        runCatching { context.unregisterReceiver(bgEventsReceiver) }
-        // §747 — поток лога закрыт; `:bg` узнаёт, что окна больше нет
-        // («окно закрыто»): слать ему события и держать процесс ради окна незачем.
-        logReader?.stop()
-        logReader = null
+        // §747 — канал событий закрыт; `:bg` узнаёт, что окна больше нет
+        // («окно закрыто»): он снимает потоки данных, закрывает клиента экрана
+        // и больше не держит процесс ради окна.
+        BgClient.disconnect()
         val ctx = context
         BgClient.onLane { BgClient.callOr(ctx, "uiDetached", null, true) }
         pluginScope.cancel()
@@ -474,34 +303,43 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         Log.d(TAG, "onMethodCall: ${call.method}")
         when (call.method) {
-            // §747 — обработчики, которым нужна память или права сервисной
-            // стороны (файлы настроек, состояние туннеля, ядро процесса `:bg`,
-            // сервисный клиент ядра, Taildrop): тело — в `BgMethods`, здесь
-            // пересылка под тем же именем. Форма ответа прежняя. Быстрые идут
-            // одной упорядоченной полосой, долгие — каждый на своём потоке.
-            "forceStopVPN", "getTunnelUptimeMs", "isForeignVpnActive", "reloadVPN",
-            "resetNetwork", "setQuicKnob", "clearDnsCache", "setNotificationTitle",
-            "setNotificationText", "setAutoStart", "getAutoStart", "setKeepOnExit",
-            "getKeepOnExit", "setNotificationStop", "getNotificationStop", "setNotificationRestart",
-            "getNotificationRestart", "setNotificationSend", "getNotificationSend", "setCoreLogsEnabled",
-            "getCoreLogsEnabled", "setCoreLogsVerbose", "getCoreLogsVerbose", "setAllowBypass",
-            "getAllowBypass", "setAutoRedirect", "getAutoRedirect", "setHasTun",
-            "getCurrentSessionAllowBypass", "startVpnHeadless", "getBackgroundMode", "setBackgroundMode",
-            "getMemoryLimit", "setMemoryLimit", "getAppLanguageState",
-            "setAutomationEnabled", "setAppFunctionsEnabled", "setAutomationActiveState", "taildropServiceStats",
-            "taildropBuildServiceFile", "taildropClipState", "setTaildropTags", "deleteLegacyPrefs",
-            "ccGetOpenConnectStatus", "ccStopOpenConnectCallback" -> toBg(call, result)
-            // §279 Phase 6 — язык приложения: настройку, LocaleManager-пуш и
-            // relabel нативных поверхностей делает `:bg`; здесь — локаль
-            // рантайма ядра процесса окна.
-            "setAppLanguage" -> {
-                if (!ProcessRole.isBg && BoxApplication.libboxLoaded) {
-                    L10n.setLibboxLocale(call.argument<String>("tag") ?: L10n.SETTING_SYSTEM)
-                }
-                toBg(call, result)
-            }
-            "stopVPN", "getMemoryInfo", "ccSubmitOpenConnectForm",
-            "ccCancelOpenConnectChallenge", "ccStartOpenConnectCallback" -> toBg(call, result, long = true)
+            // §747 — обработчики, которым нужна сервисная сторона (файлы
+            // настроек, состояние туннеля, ядро и его клиенты, проба, Taildrop):
+            // тело — в `BgMethods` / `BgCcMethods`, здесь пересылка под тем же
+            // именем. Форма ответа прежняя. Окно ядро не грузит вовсе.
+            // Быстрые — синхронным вызовом на упорядоченной полосе.
+            "forceStopVPN", "getTunnelUptimeMs", "isForeignVpnActive", "reloadVPN", "resetNetwork",
+            "setQuicKnob", "clearDnsCache", "setNotificationTitle", "setNotificationText",
+            "setAutoStart", "getAutoStart", "setKeepOnExit", "getKeepOnExit",
+            "setNotificationStop", "getNotificationStop", "setNotificationRestart",
+            "getNotificationRestart", "setNotificationSend", "getNotificationSend",
+            "setCoreLogsEnabled", "getCoreLogsEnabled", "setCoreLogsVerbose", "getCoreLogsVerbose",
+            "setAllowBypass", "getAllowBypass", "setAutoRedirect", "getAutoRedirect", "setHasTun",
+            "getCurrentSessionAllowBypass", "startVpnHeadless", "getBackgroundMode",
+            "setBackgroundMode", "getMemoryLimit", "setMemoryLimit", "getAppLanguageState",
+            "setAutomationEnabled", "setAppFunctionsEnabled", "setAutomationActiveState",
+            "taildropServiceStats", "taildropBuildServiceFile", "taildropClipState",
+            "setTaildropTags", "deleteLegacyPrefs", "ccGetOpenConnectStatus",
+            "ccStopOpenConnectCallback", "setAppLanguage", "ccCancelPing", "ccConnectProfiler",
+            "ccConnectScreen", "ccDisconnectProfiler", "ccDisconnectScreen", "ccPauseClients",
+            "ccResumeClients", "ccResyncForReopen", "ccSetStatusFast", "ccStartConnectionTest",
+            "ccStartTaildropInbox", "ccStartTailscalePing", "ccStartTailscaleStatus",
+            "ccStopConnectionTest", "ccStopTaildropInbox", "ccStopTailscalePing",
+            "ccStopTailscaleStatus" -> toBg(call, result)
+            // Долгие (остановка туннеля, блокирующий gRPC к ядру, замеры, проба,
+            // проверка конфига, профиль, отправка) — запуск той же полосой,
+            // исполнение на своём потоке `:bg`, ответ кадром канала событий:
+            // сотня параллельных замеров не занимает пул Binder.
+            "stopVPN", "getMemoryInfo", "ccSubmitOpenConnectForm", "ccCancelOpenConnectChallenge",
+            "ccStartOpenConnectCallback", "ccCloseConnection", "ccCloseConnections",
+            "ccGetDnsGroups", "ccGetGroups", "ccGetOutbounds", "ccGetPool", "ccGetRules",
+            "ccGetRunningConfig", "ccGetTailscaleStatus", "ccGetUrlViaOutbound",
+            "ccGetWireGuardStatus", "ccSelectOutbound", "ccSetEndpointEnabled",
+            "ccSetTailscaleExitNode", "ccTaildropCancelReceiving", "ccTaildropDelete",
+            "ccTaildropInboxSnapshot", "ccTaildropMarkRead", "ccTaildropSendBytes",
+            "ccTailscaleLogin", "ccTailscaleLogout", "ccUrlTestGroup", "ccUrlTestOutbound",
+            "checkConfig", "formatConfig", "getCoreVersion", "pprofProfile", "probeCancel",
+            "probeGetUrl", "probeStart", "probeStop", "probeUrlTest" -> toBg(call, result, long = true)
             // §747 — конфиг бывает больше предела Binder: файл пишет и читает само
             // окно (запись атомарная), а сервису уходит «конфиг сохранён» — он
             // сбрасывает кэш. Запись и вызов — на полосе: следующий за ними
@@ -546,17 +384,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                             )
                         )
                     }
-                }
-            }
-            "getCoreVersion" -> {
-                // Libbox.version() — статический Go-side метод; возвращает
-                // строку вида "1.13.11". Используется в About screen.
-                // Не требует libbox.setup; safe to call в любой момент.
-                try {
-                    result.success(io.nekohasekai.libbox.Libbox.version())
-                } catch (t: Throwable) {
-                    Log.e(TAG, "getCoreVersion failed", t)
-                    result.success("")
                 }
             }
             "quitApp" -> {
@@ -751,182 +578,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(true)
             }
-            // ───── §122 Фаза 0 — CommandClient lifecycle + императивы ─────
-            // §185 — cold-start после swipe-keep: ВСЕ CC-клиенты осиротели
-            // (PERSISTENT поля на companion, пережили swipe; Dart-движок умер,
-            // disconnect/pause не вызвались). resyncForReopen переподнимает
-            // screenClient (groups/connections, сброс протухшего refcount) +
-            // statusClient (трафик/память, минуя ранний return setStatusFast)
-            // на свежий движок — иначе стримы привязаны к мёртвым sink'ам →
-            // пустой UI. Идемпотентно при первом старте. Профайлер: чистая
-            // остановка осиротевшего клиента (буфер в Dart потерян by design).
-            "ccResyncForReopen" -> {
-                UiCoreSession.ensure()?.apply {
-                    resyncForReopen()
-                    disconnectProfiler()
-                }
-                result.success(true)
-            }
-            "ccConnectScreen" -> {
-                UiCoreSession.ensure()?.connectScreen(); result.success(true)
-            }
-            "ccDisconnectScreen" -> {
-                UiCoreSession.client?.disconnectScreen(); result.success(true)
-            }
-            "ccConnectProfiler" -> {
-                UiCoreSession.ensure()?.connectProfiler(); result.success(true)
-            }
-            "ccDisconnectProfiler" -> {
-                UiCoreSession.client?.disconnectProfiler(); result.success(true)
-            }
-            // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
-            // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
-            // §579 — подписка SubscribeTailscaleStatus. Старт стрима — gRPC,
-            // поэтому на Dispatchers.IO; ответ сразу (данные придут стримом).
-            "ccStartTailscaleStatus" -> {
-                val cc = UiCoreSession.ensure()
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscaleStatus() }
-                result.success(cc != null)
-            }
-            "ccStopTailscaleStatus" -> {
-                val cc = UiCoreSession.client
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
-                result.success(true)
-            }
-            // §581 — exit node на ходу и выход из аккаунта: блокирующий gRPC
-            // на Dispatchers.IO; ответ — null (успех) или текст ошибки ядра.
-            "ccSetTailscaleExitNode" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                val id = call.argument<String>("stable_id") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        if (cc == null) "no command client" else cc.setTailscaleExitNode(tag, id)
-                    }
-                    result.success(err)
-                }
-            }
-            // §645 — одиночный GetTailscaleStatus для опроса вкладки Network:
-            // map записи, null — пропуск тика, ядро без метода — error
-            // `unimplemented` (Dart останавливает опрос).
-            "ccGetTailscaleStatus" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        runCatching { cc?.getTailscaleStatus(tag) }
-                    }
-                    r.fold(
-                        onSuccess = { result.success(it) },
-                        onFailure = {
-                            if (it is UnsupportedOperationException) {
-                                result.error("unimplemented", null, null)
-                            } else {
-                                result.success(null)
-                            }
-                        },
-                    )
-                }
-            }
-            "ccTailscaleLogout" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        if (cc == null) "no command client" else cc.tailscaleLogout(tag)
-                    }
-                    result.success(err)
-                }
-            }
-            // §706 (ядро SPEC 149) — вход узла с новым ключом на лету. Успех →
-            // null; отказ ядра → PlatformException с кодом как у
-            // ccSetEndpointEnabled.
-            "ccTailscaleLogin" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                val key = call.argument<String>("auth_key") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        if (cc == null) {
-                            mapOf("error" to "error", "message" to "no command client")
-                        } else {
-                            cc.tailscaleLogin(tag, key)
-                        }
-                    }
-                    if (r == null) {
-                        result.success(null)
-                    } else {
-                        result.error(r["error"] ?: "error", r["message"], null)
-                    }
-                }
-            }
-            "ccStartTailscalePing" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                val ip = call.argument<String>("peer_ip") ?: ""
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscalePing(tag, ip) }
-                result.success(cc != null)
-            }
-            "ccStopTailscalePing" -> {
-                val cc = UiCoreSession.client
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
-                result.success(true)
-            }
-            // §687 — тест соединения: события идут в EventChannel connection_test.
-            "ccStartConnectionTest" -> {
-                val cc = UiCoreSession.ensure()
-                val link = call.argument<String>("link") ?: ""
-                val pkg = call.argument<String>("package_name") ?: ""
-                val depth = call.argument<Int>("depth") ?: 0
-                val fresh = call.argument<Boolean>("fresh") ?: false
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startConnectionTest(link, pkg, depth, fresh) }
-                result.success(cc != null)
-            }
-            "ccStopConnectionTest" -> {
-                val cc = UiCoreSession.client
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
-                result.success(true)
-            }
-            // §707 — Taildrop: входящие узла, сохранение, удаление, отправка
-            // из строки пира. Блокирующий gRPC — на Dispatchers.IO.
-            "ccStartTaildropInbox" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTaildropInbox(tag) }
-                result.success(cc != null)
-            }
-            "ccStopTaildropInbox" -> {
-                val cc = UiCoreSession.client
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
-                result.success(true)
-            }
-            "ccTaildropDelete", "ccTaildropCancelReceiving", "ccTaildropMarkRead" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                val name = call.argument<String>("name") ?: ""
-                val sender = call.argument<String>("sender_id") ?: ""
-                val method = call.method
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        if (cc == null) {
-                            "no command client"
-                        } else {
-                            when (method) {
-                                "ccTaildropDelete" -> cc.taildropDelete(tag, name)
-                                    .also {
-                                        if (it == null) BgClient.callOr(
-                                            context, "taildropDismissReceived",
-                                            mapOf("tag" to tag, "name" to name), true,
-                                        )
-                                    }
-                                "ccTaildropCancelReceiving" -> cc.taildropCancelReceiving(tag, sender, name)
-                                else -> cc.taildropMarkRead(tag)
-                            }
-                        }
-                    }
-                    result.success(err)
-                }
-            }
             "ccTaildropSave" -> {
                 val tag = call.argument<String>("tag") ?: ""
                 val name = call.argument<String>("name") ?: ""
@@ -986,41 +637,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     }
                 }
             }
-            // §707 итер. 5 — Debug API: отправка из байтов / заметки тем же
-            // путём, что «Send file…» (уведомление, Cancel), с ожиданием итога.
-            // §747 — отправляет `:bg`; байты больше предела Binder идут файлом.
-            "ccTaildropSendBytes" -> {
-                @Suppress("UNCHECKED_CAST")
-                val args = HashMap((call.arguments as? Map<String, Any?>) ?: emptyMap())
-                val ctx = context
-                BgClient.onLong {
-                    val reply = runCatching {
-                        val bytes = args["bytes"] as? ByteArray
-                        if (bytes != null && bytes.size > BgCodec.XFER_INLINE_MAX) {
-                            val f = BgClient.xferFile(ctx, "taildrop-")
-                            f.writeBytes(bytes)
-                            args.remove("bytes")
-                            args["bytes_file"] = f.path
-                        }
-                        BgClient.call(ctx, "ccTaildropSendBytes", args)
-                    }
-                    BgClient.onMain { BgClient.answer(result, reply) }
-                }
-            }
-            // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
-            // на диске (каталог узла — из последнего собранного конфига).
-            "ccTaildropInboxSnapshot" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                if (cc == null || tag.isEmpty()) {
-                    result.success(null)
-                } else {
-                    pluginScope.launch {
-                        val snap = withContext(Dispatchers.IO) { taildropInboxWithHashes(cc, tag) }
-                        result.success(snap)
-                    }
-                }
-            }
             "ccTakeTaildropOpenRequest" -> {
                 val tag = UiLaunchRequests.taildropOpenRequest
                 UiLaunchRequests.taildropOpenRequest = null
@@ -1031,335 +647,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 UiLaunchRequests.openConnectOpenRequest = null
                 result.success(tag)
             }
-            "ccCancelPing" -> {
-                UiCoreSession.client?.cancelPing(); result.success(true)
-            }
-            // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
-            // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
-            // (profilerClient НЕ трогаем, recording живёт в фоне). ccResumeClients:
-            // возврат из фона — поднимаем status(NORMAL)+screen(если refs>0).
-            "ccSetStatusFast" -> {
-                val fast = call.argument<Boolean>("fast") ?: false
-                UiCoreSession.ensure()?.setStatusFast(fast); result.success(true)
-            }
-            "ccPauseClients" -> {
-                UiCoreSession.client?.apply { pauseStatus(); pauseScreen() }
-                result.success(true)
-            }
-            "ccResumeClients" -> {
-                UiCoreSession.ensure()?.apply { resumeStatus(); resumeScreen() }
-                result.success(true)
-            }
-            // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
-            // timeout). Вызов прямо в handleMethodCall = на platform main thread →
-            // mass-ping (worker-pool=10 блокирующих urlTestOutbound) подвешивал
-            // приложение в ANR. Выносим на Dispatchers.IO; result.success обратно
-            // на main (pluginScope = Dispatchers.Main).
-            "ccUrlTestOutbound" -> {
-                val cc = UiCoreSession.ensure()
-                if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc.urlTestOutbound(tag, link, timeoutMs) }
-                    result.success(r)
-                }
-            }
-            // §392 — диагностический GET через узел боевого ядра (kernel SPEC
-            // 058). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound:
-            // на main thread обмен с телом ответа = гарантированный ANR.
-            "ccGetUrlViaOutbound" -> {
-                val cc = UiCoreSession.ensure()
-                if (cc == null) { result.success(mapOf("error" to "not connected")); return }
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                val maxBytes = call.argument<Int>("maxBytes") ?: 0
-                val userAgent = call.argument<String>("userAgent") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes, userAgent)
-                    }
-                    result.success(r)
-                }
-            }
-            // §308 — групповой URLTest (force-тест всех членов + переселект в
-            // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
-            "ccUrlTestGroup" -> {
-                val cc = UiCoreSession.ensure()
-                if (cc == null) { result.success(false); return }
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val ok = withContext(Dispatchers.IO) { cc.urlTestGroup(tag) }
-                    result.success(ok)
-                }
-            }
-            // §236 — headless probe-сессия (Test servers в папке при
-            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/cancel/stop; гейт «VPN не запущен» —
-            // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
-            // §669 — probeStart отдаёт {error, runId}; остальные вызовы несут
-            // runId владельца прогона, чужой/устаревший — no-op («stale run»).
-            "probeStart" -> {
-                val config = call.argument<String>("config") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) { ProbeSession.start(config) }
-                    result.success(err)
-                }
-            }
-            "probeUrlTest" -> {
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        ProbeSession.urlTest(probeRunId(call), tag, link, timeoutMs)
-                    }
-                    result.success(r)
-                }
-            }
-            // §392 — тот же диагностический GET, но в probe-сессии (VPN
-            // выключен). Форма результата идентична ccGetUrlViaOutbound.
-            "probeGetUrl" -> {
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                val maxBytes = call.argument<Int>("maxBytes") ?: 0
-                val userAgent = call.argument<String>("userAgent") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        ProbeSession.getUrl(probeRunId(call), tag, link, timeoutMs, maxBytes, userAgent)
-                    }
-                    result.success(r)
-                }
-            }
-            // §669 — обрыв начатых замеров (disconnect клиента сессии, §175).
-            "probeCancel" -> {
-                val runId = probeRunId(call)
-                pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.cancel(runId) } }
-                    result.success(null)
-                }
-            }
-            "probeStop" -> {
-                val runId = probeRunId(call)
-                pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop(runId) } }
-                    result.success(null)
-                }
-            }
-            // §209 — null = клиент недоступен (различаем от [] = правил нет).
-            // Dart getRules превращает null в пустой список (диагностика —
-            // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
-            "ccGetRules" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRules() }
-                    result.success(r)
-                }
-            }
-            // §122/SPEC015 — unary pull-снапшот групп. null = не смогли прочитать
-            // (не-STARTED/нет клиента) → Dart различает от пустого списка и не
-            // трогает state. Закрывает потерянный стартовый push (pull-vs-push).
-            "ccGetGroups" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getGroups() }
-                    result.success(r)
-                }
-            }
-            // §535 (ядро SPEC 097) — unary pull плоского списка: единственный
-            // источник endpointState/idleSinceSeconds (дерево групп и поток
-            // SubscribeOutbounds их не несут). null = не смогли прочитать.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccGetOutbounds" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getOutbounds() }
-                    result.success(r)
-                }
-            }
-            // §311/SPEC036 — unary снапшот конфига работающего ядра. null =
-            // недоступен (down / не-STARTED / attached / ядро < lx.16-rc.3) —
-            // обёртка BoxCommandClient no-throw (runCatching внутри), Dart
-            // различает null от строки и деградирует к saved-файлу.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            // §312/SPEC035 — unary снапшот состояния DNS-групп. null =
-            // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccGetDnsGroups" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
-                    result.success(r)
-                }
-            }
-            "ccGetRunningConfig" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
-                    result.success(r)
-                }
-            }
-            // §324 — каноническая форма конфига: `Libbox.formatConfig()` прогоняет
-            // текст через ТОТ ЖЕ парсер и энкодер, которым ядро делает снапшот
-            // работающего конфига (kernel SPEC 037 §3). Даёт сравнимые формы без
-            // клиентского списка «различий, которые игнорируем».
-            //
-            // Статический Go-метод: НЕ требует живого сервиса и libbox.setup —
-            // safe в любой момент (как getCoreVersion выше). На Dispatchers.IO:
-            // парс большого конфига на main = ANR (§122).
-            //
-            // КОНТРАКТ: null = ядро не смогло (невалидный конфиг, метод
-            // отсутствует в старом .aar, любой throw). Caller деградирует
-            // консервативно — «изменилось» (§324).
-            "formatConfig" -> {
-                val text = call.argument<String>("config") ?: ""
-                if (text.isBlank()) {
-                    result.success(null)
-                } else {
-                    pluginScope.launch {
-                        val r = withContext(Dispatchers.IO) {
-                            try {
-                                io.nekohasekai.libbox.Libbox.formatConfig(text)?.value
-                            } catch (t: Throwable) {
-                                // Невалидный конфиг — ожидаемый случай, не шумим error'ом.
-                                Log.d(TAG, "formatConfig failed: ${t.message}")
-                                null
-                            }
-                        }
-                        result.success(r)
-                    }
-                }
-            }
-            // §455 — проверка тела узла ядром: `Libbox.checkConfig()` = parse +
-            // box.New со стабом платформы (experimental/libbox/config.go). Ворота
-            // Save для узла с JSON-источником, который уходит в конфиг дословно
-            // и гейты модели не проходит. Статический Go-метод, живой сервис не
-            // нужен; на Dispatchers.IO — box.New на main = ANR (§122).
-            //
-            // КОНТРАКТ: {"ok": true} — ядро приняло; {"ok": false, "error": текст
-            // ядра} — отвергло. Throw без сообщения — тоже отказ (текст класса).
-            "checkConfig" -> {
-                val text = call.argument<String>("config") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        try {
-                            io.nekohasekai.libbox.Libbox.checkConfig(text)
-                            mapOf("ok" to true)
-                        } catch (t: Throwable) {
-                            Log.d(TAG, "checkConfig rejected: ${t.message}")
-                            mapOf("ok" to false, "error" to (t.message ?: t.toString()))
-                        }
-                    }
-                    result.success(r)
-                }
-            }
-            // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
-            // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
-            // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /
-            // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
-            // затираем null на emptyList — различение критично (§209).
-            "ccGetPool" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
-                    result.success(r)
-                }
-            }
-            "ccSelectOutbound" -> {
-                val cc = UiCoreSession.ensure()
-                val group = call.argument<String>("group") ?: ""
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.selectOutbound(group, tag) ?: false }
-                    result.success(r)
-                }
-            }
-            // §557 (ядро SPEC 106) — вкл/выкл WG/AWG-узла на лету. Успех →
-            // строка состояния узла; отказ ядра → PlatformException с кодом
-            // (not_found / invalid_argument / failed_precondition / unavailable
-            // / error). Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccSetEndpointEnabled" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                val enabled = call.argument<Boolean>("enabled") ?: true
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc?.setEndpointEnabled(tag, enabled)
-                            ?: mapOf("error" to "error", "message" to "no command client")
-                    }
-                    val err = r["error"]
-                    if (err != null) {
-                        result.error(err, r["message"], null)
-                    } else {
-                        result.success(r["state"] ?: "")
-                    }
-                }
-            }
-            // §613 (ядро SPEC 114) — статус WG/AWG-узла и его пиров. Успех →
-            // map состояния; отказ ядра → PlatformException с кодом
-            // (not_found / invalid_argument / failed_precondition /
-            // unavailable / unimplemented / error).
-            "ccGetWireGuardStatus" -> {
-                val cc = UiCoreSession.ensure()
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc?.getWireGuardStatus(tag)
-                            ?: mapOf("error" to "error", "message" to "no command client")
-                    }
-                    val err = r["error"]
-                    if (err != null) {
-                        result.error(err.toString(), r["message"]?.toString(), null)
-                    } else {
-                        result.success(r)
-                    }
-                }
-            }
-            "ccCloseConnection" -> {
-                val cc = UiCoreSession.ensure()
-                val id = call.argument<String>("id") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.closeConnection(id) ?: false }
-                    result.success(r)
-                }
-            }
-            "ccCloseConnections" -> {
-                val cc = UiCoreSession.ensure()
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.closeConnections() ?: false }
-                    result.success(r)
-                }
-            }
-            // §207 — снимок pprof ядра. Имя профиля проверяет по allowlist и сам
-            // снимок делает `:bg` (в нём ядро); результат приходит файлом —
-            // профиль бывает больше предела Binder. CPU `profile?seconds=N`
-            // держит вызов N секунд → свой поток. Ошибка — `PPROF_FAILED`.
-            "pprofProfile" -> {
-                val args = call.arguments
-                val ctx = context
-                BgClient.onLong {
-                    val reply = runCatching {
-                        @Suppress("UNCHECKED_CAST")
-                        val path = BgClient.call(ctx, "pprofProfile", args as? Map<String, Any?>) as String
-                        val f = java.io.File(path)
-                        try { f.readBytes() } finally { f.delete() }
-                    }
-                    BgClient.onMain { BgClient.answer(result, reply) }
-                }
-            }
 
             else -> result.notImplemented()
         }
     }
-
-    /// §669 — runId владельца probe-прогона. Dart-int приезжает Integer или
-    /// Long по величине, поэтому через Number; нет аргумента → 0 (ни одна
-    /// сессия такого id не получает — вызов уйдёт в «stale run»).
-    private fun probeRunId(call: MethodCall): Long =
-        call.argument<Number>("runId")?.toLong() ?: 0L
 
     /// §038 — `getHistoricalProcessExitReasons` lazy reader. На API <30 →
     /// пустой список (метод недоступен); на любую ошибку — тоже пустой
@@ -1654,24 +945,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             mapOf("tag" to tag, "name" to name, "target" to target?.toString()),
             result, long = true,
         )
-    }
-
-    /// §707 итер. 5 — снимок входящих [tag] (форма потока вкладки Network) +
-    /// `sha256` у каждого принятого файла (пусто — файла на диске нет или
-    /// каталог узла неизвестен). Хэши считает `:bg` (каталог узла — из его
-    /// конфига). Блокирующий — звать с IO.
-    private fun taildropInboxWithHashes(cc: BoxCommandClient, tag: String): Map<String, Any>? {
-        val snap = cc.taildropInboxOnce(tag, 3000L) ?: return null
-        @Suppress("UNCHECKED_CAST")
-        val list = (snap["files"] as? List<Map<String, Any>>).orEmpty()
-        val names = list.map { it["name"] as? String ?: "" }
-        val hashes = BgClient.callOr<Map<*, *>?>(
-            context, "taildropFileHashes", mapOf("tag" to tag, "names" to names), null,
-        ).orEmpty()
-        val files = list.map { f ->
-            f + ("sha256" to (hashes[f["name"] as? String ?: ""] as? String ?: ""))
-        }
-        return snap + ("files" to files)
     }
 
     /// §707 — ответы выбора файлов и «Сохранить как».

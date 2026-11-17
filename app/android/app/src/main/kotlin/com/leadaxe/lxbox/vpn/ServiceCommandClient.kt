@@ -1,5 +1,7 @@
 package com.leadaxe.lxbox.vpn
 
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import io.nekohasekai.libbox.CommandClient
 import io.nekohasekai.libbox.CommandClientOptions
@@ -41,21 +43,18 @@ interface OpenConnectControl {
 ///
 /// Создаёт и закрывает `BoxService` (после `startCommandServer()` и Started /
 /// в `closeCommandServerAtomic`), держит `CoreSession.client`. Статус-стрима,
-/// экрана и профайлера здесь нет — это роль UI ([BoxCommandClient], держатель
-/// `UiCoreSession`).
+/// экрана и профайлера здесь нет — это клиент экрана ([BoxCommandClient],
+/// держатель `ScreenCoreSession`).
 ///
 /// **JNI-no-throw**: каждый колбэк ядра обёрнут в try/catch — исключение через
 /// JNI роняет процесс.
 ///
-/// §747 — в приёмники Flutter сервисный клиент не пишет (окно в другом
-/// процессе): о перемене состояния openconnect он сообщает через [Host], а
-/// снимок окно забирает вызовом (см. [OpenConnectControl]).
+/// §747 — снимок состояния openconnect уходит окну кадром канала событий
+/// (`StreamSinks.ccOpenConnectSink`); вызовы окна — см. [OpenConnectControl].
 class ServiceCommandClient(private val host: Host) : OpenConnectControl {
 
     /// §742 — то, что клиенту нужно от стороны, которая его создала.
     interface Host {
-        /// Состояние openconnect изменилось — сообщить окну.
-        fun openConnectChanged()
         /// Уведомление «Sign-in required» для openconnect-endpoint'а [tag].
         fun showSignIn(tag: String)
         /// Снять уведомление «Sign-in required» для [tag].
@@ -167,6 +166,10 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
     private val openConnectClient = AtomicReference<CommandClient?>(null)
     private val openConnectSub = AtomicReference<OpenConnectStatusSubscription?>(null)
     private val openConnectGen = AtomicInteger(0)
+    /// §747 — снимок уходит кадром канала событий: приёмник в `:bg` —
+    /// `BgEventPipe.Sink`, пока Dart слушает `lxbox/cc/openconnect`.
+    private val openConnectEmitter =
+        SnapshotEmitter(Handler(Looper.getMainLooper())) { StreamSinks.ccOpenConnectSink }
     /// Последний снапшот endpoint'ов: Dart забирает его при подключении
     /// (висящий челлендж при открытии приложения).
     @Volatile private var openConnectEndpoints: List<Map<String, Any>> = emptyList()
@@ -227,11 +230,7 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
         return m
     }
 
-    /// §747 — окно живёт в другом процессе: сюда оно не подписано, а узнаёт о
-    /// перемене событием без данных ([BgEvents.ACTION_OPENCONNECT_CHANGED]) и
-    /// забирает снимок вызовом `ccGetOpenConnectStatus`. Снимок (в нём форма
-    /// входа) broadcast'ом не идёт.
-    private fun emitOpenConnect() = host.openConnectChanged()
+    private fun emitOpenConnect() = openConnectEmitter.offer(openConnectSnapshot())
 
     /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
     private inner class OpenConnectHandler(private val gen: Int) : OpenConnectStatusHandler {

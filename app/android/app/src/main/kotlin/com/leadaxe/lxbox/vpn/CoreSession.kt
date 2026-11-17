@@ -5,10 +5,10 @@ package com.leadaxe.lxbox.vpn
 ///
 /// §745 — здесь [ServiceCommandClient]: openconnect, подпись узла в шторке,
 /// Taildrop из уведомлений и активити; по [isUp] Taildrop и `ProbeSession`
-/// узнают, поднято ли ядро. Клиент роли UI (`BoxCommandClient`) держит сторона
-/// UI в `UiCoreSession`. `VpnPlugin` ходит сюда только за openconnect
-/// ([OpenConnectControl]). `@Volatile`: пишется из потока сервиса, читается из
-/// потока MethodChannel и других.
+/// узнают, поднято ли ядро. Клиент экрана (`BoxCommandClient`) держит
+/// `ScreenCoreSession` — с §747 тоже в `:bg`. Окно ходит сюда вызовом
+/// (`BgMethods`) только за openconnect ([OpenConnectControl]). `@Volatile`:
+/// пишется из потока сервиса, читается из потоков вызовов.
 ///
 /// Открывает и закрывает сессию `BoxService` в прежних точках (после
 /// `startCommandServer()` и Started / в `closeCommandServerAtomic`);

@@ -72,9 +72,6 @@ class BoxService(
         /// selector'ов после Started, прежде чем читать getGroups().
         private const val NOTIFICATION_SNAPSHOT_DELAY_MS = 3000L
 
-        /// §747 D — сколько старт туннеля ждёт остановки пробы в окне.
-        private const val PROBE_STOP_WAIT_MS = 2000L
-
         /// §707 итер. 4 — работающий сервис: строка в журнал приложения
         /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
         @Volatile
@@ -97,8 +94,6 @@ class BoxService(
                 ServiceNotification.showSignIn(BoxApplication.application, tag)
             override fun cancelSignIn(tag: String) =
                 ServiceNotification.cancelSignIn(BoxApplication.application, tag)
-            override fun openConnectChanged() =
-                BgEvents.send(BoxApplication.application, BgEvents.ACTION_OPENCONNECT_CHANGED)
         }
 
         /// §732 — полоса для pause/wake/rebind ядра. Эти вызовы синхронно
@@ -346,10 +341,38 @@ class BoxService(
             // уже стартовал по-настоящему — ничего не трогаем. stopSelf(startId):
             // не гасить старт, пришедший следом.
             if (status != VpnStatus.Stopped) {
-                // Настоящий старт уже прошёл: ничего не трогаем. Система
+                // Настоящий старт уже прошёл: туннель не трогаем. Система
                 // запоминает результат ПОСЛЕДНЕГО onStartCommand — вернуть
                 // NOT_STICKY здесь значило бы отключить sticky-рестарт §428 у
                 // живого сервиса.
+                // §747 — но обещание foreground выполняем: bounce приходит через
+                // startForegroundService, а система ждёт startForeground на
+                // КАЖДЫЙ такой старт, иначе убивает процесс
+                // (ForegroundServiceDidNotStartInTimeException). Гонка «bounce
+                // отправлен при Stopped, доставлен после настоящего старта»
+                // возможна: проверку делает `:bg` по вызову окна.
+                runCatching {
+                    when (status) {
+                        VpnStatus.Started -> notification.show(
+                            ConfigManager.notificationTitle,
+                            ConfigManager.notificationText.ifEmpty {
+                                L10n.str(service, R.string.status_connected)
+                            },
+                        )
+                        VpnStatus.Stopping -> {
+                            // Уведомление снято в doStop — показать и снять снова.
+                            notification.show(
+                                ConfigManager.notificationTitle,
+                                L10n.str(service, R.string.notification_status_starting),
+                            )
+                            notification.stop()
+                        }
+                        else -> notification.show(
+                            ConfigManager.notificationTitle,
+                            L10n.str(service, R.string.notification_status_starting),
+                        )
+                    }
+                }
                 return Service.START_STICKY
             }
             runCatching {
@@ -407,6 +430,19 @@ class BoxService(
             Log.e(TAG, "[vpn §428] startForeground failed — stopSelf", t)
             service.stopSelf()
             return Service.START_NOT_STICKY
+        }
+
+        // §747 — команда старта дошла до сервиса. Если после неё и до этого
+        // места пришёл Stop (сервиса ещё не было, принять его было некому) —
+        // старт отменяется здесь: startForeground выше уже вызван (обещание
+        // системе выполнено), туннель не поднимаем.
+        if (intent != null && BoxVpnService.startArrived()) {
+            if (status == VpnStatus.Stopped) {
+                Log.w(TAG, "[vpn] onStartCommand — start was cancelled by a Stop sent before the service existed")
+                notification.stop()
+                service.stopSelf()
+                return Service.START_NOT_STICKY
+            }
         }
 
         if (status != VpnStatus.Stopped) {
@@ -544,10 +580,11 @@ class BoxService(
     private fun closeCommandServerAtomic(reason: String, trace: StopTrace? = null) {
         // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
         // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
-        // §747 — клиент UI живёт в процессе окна и закрывается сам по статусу
-        // Stopping; ждать его не нужно: ядро закрывает командный сервер и при
-        // живых клиентах другого процесса (опыт спеки 747). Здесь — сервисный
-        // клиент, потом сервер.
+        // §745/§747 — строгий порядок внутри одного процесса: клиент экрана
+        // (закрыт синхронно, и новый не создаётся до следующего старта туннеля —
+        // статус здесь может быть ещё Started), сервисный клиент, потом сервер.
+        // Ни один клиент не переподключается к закрывающемуся серверу.
+        ScreenCoreSession.closeForCoreStop()
         runCatching { CoreSession.client?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         CoreSession.close()
@@ -746,9 +783,8 @@ class BoxService(
         // и Started: command.sock существует только когда сервер запущен.
         // §745 — здесь только сервисный клиент (openconnect, подпись узла,
         // Taildrop из уведомлений). Статус-стрим, экран и профайлер — клиент
-        // UI: его создаёт сторона UI по broadcast `Started` (`UiCoreSession`),
-        // без движка Flutter он не поднимается. Нативных читателей у
-        // статус-стрима нет.
+        // экрана (`ScreenCoreSession`, ниже): без подключённого окна он не
+        // поднимается. Нативных читателей у статус-стрима нет.
         runCatching {
             val cc = ServiceCommandClient(commandClientHost)
             CoreSession.open(cc)
@@ -758,6 +794,9 @@ class BoxService(
             // в конфиге есть такой endpoint; Dart для этого не нужен.
             cc.syncOpenConnectStatus(ConfigManager.load())
         }.onFailure { Log.w(TAG, "ServiceCommandClient start failed: ${it.message}") }
+        // §747 — клиент экрана: создаётся, только если окно подключено; иначе —
+        // когда оно подключится (`UiPresence`).
+        runCatching { ScreenCoreSession.ensure() }
 
         // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
         // Flutter-движка → Dart не прислал лейбл), через ~3с сами читаем
@@ -797,14 +836,10 @@ class BoxService(
         // §236 — VPN приоритетнее probe-сессии: если юзер запускает туннель
         // при живом Test servers, глушим probe (он держит command.sock —
         // второй CommandServer на том же basePath не поднимется).
-        // §747 D — проба без туннеля идёт в процессе окна на том же сокете
-        // ядра: просим окно остановить её и ждём подтверждения не дольше 2 с.
-        if (ProbeGate.isActive) {
-            BgEvents.send(service.applicationContext, BgEvents.ACTION_STOP_PROBE)
-            if (!ProbeGate.awaitIdle(PROBE_STOP_WAIT_MS)) {
-                Log.w(TAG, "[vpn] probe session did not stop in ${PROBE_STOP_WAIT_MS}ms — starting anyway")
-            }
-        }
+        // §236 — проба без туннеля держит свой командный сервер на том же
+        // сокете: остановить её (§747, итерация 2 — проба снова в процессе
+        // сервиса, согласования между процессами нет).
+        runCatching { ProbeSession.stop() }
         val cs = CommandServer(this, platformInterface)
         cs.start()
         commandServer.set(cs)
@@ -1228,26 +1263,25 @@ class BoxService(
     /// §043: sing-box log lines проходят сюда независимо от `log.level`
     /// в конфиге. INFO+ уходят в окно (EventChannel "lxbox/coreLog").
     ///
-    /// §747 — окно в другом процессе: строки идут потоком через pipe
-    /// ([BgLogPipe]). Свойства прежнего конвейера (F22) сохранены там же:
-    /// - поток ядра не блокируется: `offer` в ограниченную очередь (4096),
-    ///   при переполнении строка отбрасывается;
-    /// - на стороне окна строки отдаются в Dart пачками `List<String>` до 200
-    ///   за проход главного потока (`UiLogPipeReader`).
+    /// §747 — окно в другом процессе: строки идут каналом событий
+    /// ([BgEventPipe]). Свойства прежнего конвейера (F22) сохранены там же:
+    /// - поток ядра не блокируется: строка кладётся в ограниченную очередь
+    ///   (4096), при переполнении отбрасывается;
+    /// - в Dart строки уходят пачками `List<String>` до 200 за кадр.
     override fun writeDebugMessage(message: String) {
         // §747 — никто не слушает (окно не подписано на лог или его процесса
         // нет) — не форматировать: гейт первой строкой, как раньше.
-        if (!BgLogPipe.active) return
+        if (!BgEventPipe.logActive) return
         val plain = ansiEscapeRe.replace(message, "")
         if (!coreLogsVerbose && traceDebugRe.containsMatchIn(plain)) return
-        BgLogPipe.offer(plain)
+        BgEventPipe.logLine(plain)
     }
 
     /// §668 — своя строка в журнал приложения тем же каналом, что core-лог,
     /// но без ANSI-strip и без фильтра TRACE/DEBUG: в стеках горутин эти
     /// слова не должны глушить запись.
     private fun appLogLine(text: String) {
-        BgLogPipe.offer(text)
+        BgEventPipe.logLine(text)
     }
 
     private val ansiEscapeRe = Regex("\\u001B\\[[0-9;]*[A-Za-z]|\\u001B")

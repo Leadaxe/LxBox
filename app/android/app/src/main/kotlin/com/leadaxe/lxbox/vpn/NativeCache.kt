@@ -71,6 +71,22 @@ object NativeCache {
 
     // ─────────────── §428 «туннель желателен» и sticky-рестарты ───────────────
 
+    // §747 — версия ядра, запомненная на установленную сборку приложения
+    // ([stamp] — время последнего обновления пакета): строку показывают и без
+    // туннеля, а ядро в `:bg` грузится лениво.
+    fun coreVersion(ctx: Context, stamp: Long): String? {
+        val p = prefs(ctx)
+        if (p.getLong("core_version_stamp", -1L) != stamp) return null
+        return p.getString("core_version", null)?.takeIf { it.isNotEmpty() }
+    }
+
+    fun setCoreVersion(ctx: Context, stamp: Long, version: String) {
+        prefs(ctx).edit()
+            .putLong("core_version_stamp", stamp)
+            .putString("core_version", version)
+            .apply()
+    }
+
     /// §747 — см. `BootReceiver.flushPrefs`.
     fun flush(ctx: Context) {
         prefs(ctx).edit().commit()

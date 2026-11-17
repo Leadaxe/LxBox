@@ -49,7 +49,7 @@ class LocaleSettingReceiver : BroadcastReceiver() {
                 "start-vpn" -> BoxVpnService.start(context)
                 "stop-vpn" -> BoxVpnService.stop(context)
                 "toggle-vpn" -> handleToggle(context)
-                else -> AutomationRelay.handleAutomationAction(context, cmd, args)
+                else -> AutomationRelay.handleAutomationAction(cmd, args)
             }
         } catch (t: Throwable) {
             Log.e(TAG, "onReceive failed", t)

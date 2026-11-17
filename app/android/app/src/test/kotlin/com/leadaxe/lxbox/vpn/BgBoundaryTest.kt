@@ -5,8 +5,6 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.EOFException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -18,7 +16,7 @@ import org.junit.Before
 import org.junit.Test
 
 /// §747 — чистая логика границы процессов `:ui` / `:bg`: кодек значений
-/// вызова, кадры потока лога, копия состояния туннеля, гейт пробы, условия
+/// вызова, кадры и очереди канала событий, копия состояния туннеля, условия
 /// завершения `:bg`, роль процесса. Без Android.
 class BgBoundaryTest {
 
@@ -28,14 +26,12 @@ class BgBoundaryTest {
     fun setUp() {
         savedClock = TunnelState.clock
         TunnelState.resetForTest()
-        ProbeGate.end()
     }
 
     @After
     fun tearDown() {
         TunnelState.resetForTest()
         TunnelState.clock = savedClock
-        ProbeGate.end()
     }
 
     // ───────────── кодек ─────────────
@@ -68,7 +64,8 @@ class BgBoundaryTest {
     fun `codec keeps bytes and null`() {
         val bytes = ByteArray(1000) { (it % 251).toByte() }
         assertArrayEquals(bytes, BgCodec.decode(BgCodec.encode(bytes)) as ByteArray)
-        assertEquals(0, BgCodec.encode(null).size)
+        // null — один байт, как внутри списка: кадр с пустым значением валиден.
+        assertEquals(1, BgCodec.encode(null).size)
         assertNull(BgCodec.decode(BgCodec.encode(null)))
         assertNull(BgCodec.decode(null))
     }
@@ -80,31 +77,106 @@ class BgBoundaryTest {
         assertEquals(0L, BgCodec.decode(BgCodec.encode(0L)))
     }
 
-    // ───────────── кадры лога ─────────────
+    @Test
+    fun `event envelope is what an EventChannel would send`() {
+        // double выравнивается от начала сообщения: конверт строится целиком,
+        // а не приписыванием байта к голому значению.
+        val value = mapOf("up" to 1.5, "names" to listOf("a", "b"), "n" to 7L)
+        assertEquals(value, BgCodec.decodeEventEnvelope(BgCodec.encodeEventEnvelope(value)))
+        assertNull(BgCodec.decodeEventEnvelope(BgCodec.encodeEventEnvelope(null)))
+    }
+
+    // ───────────── кадры канала событий ─────────────
 
     @Test
-    fun `log frames keep multiline lines and order`() {
-        val lines = listOf("INFO one", "panic:\n  goroutine 1\n  main.go:1", "", "WARN юникод")
+    fun `frames keep stream names, payloads and order`() {
+        val frames = listOf(
+            "lxbox/cc/groups" to byteArrayOf(0, 1, 2, 3),
+            EventFrames.REPLY to ByteArray(0),
+            "lxbox/coreLog" to ByteArray(70_000) { (it % 127).toByte() },
+        )
         val buf = ByteArrayOutputStream()
-        DataOutputStream(buf).use { out -> lines.forEach { LogFrames.write(out, it) } }
+        DataOutputStream(buf).use { out -> frames.forEach { EventFrames.write(out, it.first, it.second) } }
         val input = DataInputStream(ByteArrayInputStream(buf.toByteArray()))
-        assertEquals(lines, List(lines.size) { LogFrames.read(input) })
+        for ((name, payload) in frames) {
+            val (n, p) = EventFrames.read(input)
+            assertEquals(name, n)
+            assertArrayEquals(payload, p)
+        }
         try {
-            LogFrames.read(input)
+            EventFrames.read(input)
             fail("expected end of stream")
         } catch (_: EOFException) {
         }
     }
 
     @Test
-    fun `log frame with absurd length ends the stream`() {
+    fun `frame with absurd length ends the stream`() {
         val buf = ByteArrayOutputStream()
         DataOutputStream(buf).use { it.writeInt(-5) }
         try {
-            LogFrames.read(DataInputStream(ByteArrayInputStream(buf.toByteArray())))
+            EventFrames.read(DataInputStream(ByteArrayInputStream(buf.toByteArray())))
             fail("expected end of stream")
         } catch (_: EOFException) {
         }
+    }
+
+    // ───────────── очереди канала событий ─────────────
+
+    @Test
+    fun `a newer snapshot replaces the waiting one`() {
+        val q = PipeQueues()
+        q.latest("lxbox/cc/groups", "g1")
+        q.latest("lxbox/cc/status", "s1")
+        q.latest("lxbox/cc/groups", "g2")
+        // Отставший читатель получает по одному снимку на поток — свежему.
+        assertEquals("lxbox/cc/groups" to "g2", q.next())
+        assertEquals("lxbox/cc/status" to "s1", q.next())
+        assertNull(q.next())
+        assertTrue(q.isEmpty)
+    }
+
+    @Test
+    fun `replies go first and are never dropped`() {
+        val q = PipeQueues(eventsMax = 2, logMax = 2)
+        q.log("l1")
+        q.latest("lxbox/cc/status", "s")
+        q.event("lxbox/cc/dns", "e1")
+        repeat(1000) { q.reliable(EventFrames.REPLY, it) }
+        for (i in 0 until 1000) assertEquals(EventFrames.REPLY to i, q.next())
+        assertEquals("lxbox/cc/dns" to "e1", q.next())
+        assertEquals("lxbox/cc/status" to "s", q.next())
+        assertEquals(BgEventPipe.STREAM_LOG to listOf("l1"), q.next())
+        assertEquals(0L, q.dropped)
+    }
+
+    @Test
+    fun `events and log are bounded when nobody reads`() {
+        val q = PipeQueues(eventsMax = 3, logMax = 5, logBatchMax = 4)
+        repeat(10) { q.event("lxbox/cc/dns", it) }
+        repeat(10) { q.log("line $it") }
+        assertEquals(12L, q.dropped)
+        assertEquals("lxbox/cc/dns" to 0, q.next())
+        assertEquals("lxbox/cc/dns" to 1, q.next())
+        assertEquals("lxbox/cc/dns" to 2, q.next())
+        // Лог уходит пачками.
+        assertEquals(BgEventPipe.STREAM_LOG to listOf("line 0", "line 1", "line 2", "line 3"), q.next())
+        assertEquals(BgEventPipe.STREAM_LOG to listOf("line 4"), q.next())
+        assertNull(q.next())
+    }
+
+    @Test
+    fun `an unsubscribed stream is forgotten`() {
+        val q = PipeQueues()
+        q.latest("lxbox/cc/groups", "g")
+        q.event("lxbox/cc/dns", "d")
+        q.event("lxbox/cc/connection_test", "t")
+        q.log("l")
+        q.forget("lxbox/cc/groups")
+        q.forget("lxbox/cc/dns")
+        q.forget(BgEventPipe.STREAM_LOG)
+        assertEquals("lxbox/cc/connection_test" to "t", q.next())
+        assertNull(q.next())
     }
 
     // ───────────── копия состояния туннеля в окне ─────────────
@@ -151,50 +223,6 @@ class BgBoundaryTest {
         assertTrue(c.snapshot.sessionAllowBypass)
     }
 
-    // ───────────── гейт пробы ─────────────
-
-    @Test
-    fun `probe is refused while the tunnel is not stopped`() {
-        assertFalse(ProbeGate.begin(tunnelStopped = false))
-        assertFalse(ProbeGate.isActive)
-        assertTrue(ProbeGate.begin(tunnelStopped = true))
-        assertTrue(ProbeGate.isActive)
-        ProbeGate.end()
-        assertFalse(ProbeGate.isActive)
-    }
-
-    @Test
-    fun `tunnel start does not wait when no probe runs`() {
-        assertTrue(ProbeGate.awaitIdle(2000))
-    }
-
-    @Test
-    fun `tunnel start waits for the probe to end`() {
-        assertTrue(ProbeGate.begin(tunnelStopped = true))
-        val waiting = CountDownLatch(1)
-        val done = CountDownLatch(1)
-        var result = false
-        Thread {
-            waiting.countDown()
-            result = ProbeGate.awaitIdle(10_000)
-            done.countDown()
-        }.start()
-        assertTrue(waiting.await(5, TimeUnit.SECONDS))
-        ProbeGate.end()
-        assertTrue(done.await(5, TimeUnit.SECONDS))
-        assertTrue(result)
-    }
-
-    @Test
-    fun `tunnel start gives up on a probe that never ends`() {
-        assertTrue(ProbeGate.begin(tunnelStopped = true))
-        // Часы теста: срок уже вышел к первой проверке.
-        var t = 0L
-        assertFalse(ProbeGate.awaitIdle(2000) { t.also { t += 3_000_000_000L } })
-        // Отметка снята силой: следующий старт не ждёт.
-        assertFalse(ProbeGate.isActive)
-    }
-
     // ───────────── завершение `:bg` ─────────────
 
     private val idle = BgExitState(
@@ -207,6 +235,7 @@ class BgBoundaryTest {
         taildropBusy = false,
         watchdogPending = false,
         probeActive = false,
+        startPending = false,
     )
 
     @Test
@@ -225,6 +254,7 @@ class BgBoundaryTest {
         assertFalse(bgMayExit(idle.copy(taildropBusy = true)))
         assertFalse(bgMayExit(idle.copy(watchdogPending = true)))
         assertFalse(bgMayExit(idle.copy(probeActive = true)))
+        assertFalse(bgMayExit(idle.copy(startPending = true)))
     }
 
     // ───────────── роль процесса ─────────────

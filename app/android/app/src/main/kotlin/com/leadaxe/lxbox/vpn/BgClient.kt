@@ -3,23 +3,32 @@ package com.leadaxe.lxbox.vpn
 import android.content.Context
 import android.os.Bundle
 import android.os.Handler
+import android.os.IBinder
 import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
+import java.io.DataInputStream
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
-/// §747 — сторона окна (`:ui`) канала `:ui` → `:bg`: вызов
-/// `BgControlProvider.call()` с ответом.
+/// §747 — сторона окна (`:ui`) связи с сервисной стороной (`:bg`).
 ///
-/// Вызов синхронный и может поднимать процесс `:bg`, поэтому с главного
-/// потока не делается никогда — только с двух мест:
-/// - [onLane] — одна упорядоченная полоса для быстрых вызовов (настройки,
-///   команды сервису, снимок туннеля). Порядок вызовов Dart сохраняется:
-///   `setHasTun` → `startVPN`, `saveConfig` → `reloadVPN`;
-/// - [onLong] — свой поток на каждый долгий вызов (остановка туннеля, профиль,
-///   Taildrop, openconnect, Path MTU), чтобы он не держал полосу.
+/// **Вызовы** (`BgControlProvider.call()`) с главного потока не делаются
+/// никогда. Все уходят с одной упорядоченной полосы ([onLane]) — порядок
+/// вызовов Dart сохраняется (`setHasTun` → `startVPN`, `saveConfig` →
+/// `reloadVPN`):
+/// - быстрый ([forward]) — синхронный, ответ тем же вызовом;
+/// - долгий ([forward] с `long`, [callAsync]) — вызов только запускает метод
+///   в `:bg` и сразу возвращается; ответ приходит кадром канала событий.
+///   Полосу и пул Binder долгий метод не занимает.
+///
+/// **Канал событий** `:bg` → `:ui` ([connect]): pipe, по которому приходят
+/// потоки данных окна и ответы долгих вызовов. Кадр потока Dart — готовый
+/// конверт `EventChannel`: окно отдаёт его в канал как есть.
 object BgClient {
     private const val TAG = "BgClient"
 
@@ -36,29 +45,39 @@ object BgClient {
         lane.execute { runCatching(block).onFailure { Log.w(TAG, "lane task failed: $it") } }
     }
 
-    fun onLong(block: () -> Unit) {
-        longPool.execute { runCatching(block).onFailure { Log.w(TAG, "long task failed: $it") } }
-    }
-
     fun onMain(block: () -> Unit) {
         main.post(block)
     }
+
+    // ───────────────────────── вызовы ─────────────────────────
 
     /// Блокирующий вызов метода [BgMethods]. Отказ метода — [BgError] (то, что
     /// Dart видел как `PlatformException`); сбой самого вызова (процесс `:bg`
     /// не поднялся, исключение в обработчике) — тоже [BgError] с кодом
     /// `BG_CALL_FAILED`. Не звать с главного потока.
     fun call(ctx: Context, method: String, args: Map<String, Any?>? = null): Any? {
-        val extras = Bundle()
-        if (args != null) extras.putByteArray(BgControlProvider.KEY_ARGS, BgCodec.encode(args))
-        val reply = raw(ctx, method, extras)
-        return BgCodec.decode(reply.getByteArray(BgControlProvider.KEY_RESULT))
+        val reply = raw(ctx, method, null, argsBundle(ctx, args))
+        return BgCodec.decode(
+            BgControlProvider.takeBytes(
+                ctx, reply, BgControlProvider.KEY_RESULT, BgControlProvider.KEY_RESULT_FILE,
+            ),
+        )
     }
 
-    /// То же для служебных методов с `Bundle` (дескриптор, Binder).
-    fun raw(ctx: Context, method: String, extras: Bundle?): Bundle {
+    private fun argsBundle(ctx: Context, args: Map<String, Any?>?): Bundle {
+        val extras = Bundle()
+        if (args != null) {
+            BgControlProvider.putBytes(
+                ctx, extras, BgControlProvider.KEY_ARGS, BgControlProvider.KEY_ARGS_FILE,
+                BgCodec.encode(args),
+            )
+        }
+        return extras
+    }
+
+    private fun raw(ctx: Context, method: String, arg: String?, extras: Bundle?): Bundle {
         val reply = try {
-            ctx.contentResolver.call(BgControlProvider.uri(ctx), method, null, extras)
+            ctx.contentResolver.call(BgControlProvider.uri(ctx), method, arg, extras)
         } catch (t: Throwable) {
             throw BgError(BgControlProvider.ERROR_CALL_FAILED, t.message ?: t.javaClass.simpleName)
         } ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no reply")
@@ -78,9 +97,44 @@ object BgClient {
             fallback
         }
 
+    private val nextId = AtomicLong(0)
+
+    /// Ждущие ответа долгие вызовы: номер → приёмник (зовётся на главном потоке).
+    private val pending = ConcurrentHashMap<Long, (Result<Any?>) -> Unit>()
+
+    /// Долгий вызов: запустить метод в `:bg` и получить ответ кадром канала
+    /// событий. [done] зовётся на главном потоке ровно один раз. Запуск идёт
+    /// полосой (после всех ранее отправленных вызовов). Канала событий нет —
+    /// запасной путь: синхронный вызов на отдельном потоке.
+    fun callAsync(
+        ctx: Context,
+        method: String,
+        args: Map<String, Any?>?,
+        done: (Result<Any?>) -> Unit,
+    ) {
+        onLane {
+            val id = nextId.incrementAndGet()
+            pending[id] = done
+            try {
+                val extras = argsBundle(ctx, args).apply { putLong(BgControlProvider.KEY_ID, id) }
+                raw(ctx, BgControlProvider.METHOD_INVOKE_ASYNC, method, extras)
+            } catch (e: BgError) {
+                pending.remove(id)
+                if (e.code == BgControlProvider.ERROR_NO_PIPE) {
+                    longPool.execute {
+                        val reply = runCatching { call(ctx, method, args) }
+                        main.post { done(reply) }
+                    }
+                } else {
+                    main.post { done(Result.failure(e)) }
+                }
+            }
+        }
+    }
+
     /// Переслать вызов Dart в `:bg` под тем же именем и ответить Dart на
-    /// главном потоке тем же значением (или той же ошибкой). [long] — на своём
-    /// потоке, иначе — полосой.
+    /// главном потоке тем же значением (или той же ошибкой). [long] — долгим
+    /// вызовом ([callAsync]), иначе — синхронно на полосе.
     fun forward(
         ctx: Context,
         method: String,
@@ -90,12 +144,14 @@ object BgClient {
     ) {
         @Suppress("UNCHECKED_CAST")
         val args = arguments as? Map<String, Any?>
-        val task = {
-            val reply = runCatching { call(ctx, method, args) }
-            main.post { answer(result, reply) }
-            Unit
+        if (long) {
+            callAsync(ctx, method, args) { answer(result, it) }
+        } else {
+            onLane {
+                val reply = runCatching { call(ctx, method, args) }
+                main.post { answer(result, reply) }
+            }
         }
-        if (long) onLong(task) else onLane(task)
     }
 
     fun answer(result: MethodChannel.Result, reply: Result<Any?>) {
@@ -108,9 +164,112 @@ object BgClient {
         )
     }
 
-    /// Файл-посылка в `cacheDir/bg-xfer` для байтов больше предела Binder.
-    fun xferFile(ctx: Context, prefix: String): File {
-        val dir = File(ctx.cacheDir, BgCodec.XFER_DIR).also { it.mkdirs() }
-        return File.createTempFile(prefix, ".bin", dir)
+    // ───────────────────────── канал событий ─────────────────────────
+
+    private class Reader(
+        readEnd: ParcelFileDescriptor,
+        val onFrame: (String, ByteArray) -> Unit,
+    ) {
+        val input = DataInputStream(
+            ParcelFileDescriptor.AutoCloseInputStream(readEnd).buffered(64 * 1024),
+        )
+
+        @Volatile
+        var stopped = false
+
+        fun stop() {
+            stopped = true
+            runCatching { input.close() }
+        }
+    }
+
+    @Volatile
+    private var reader: Reader? = null
+
+    /// Открыть канал событий и назвать себя `:bg` (`uiAttached`): создаётся
+    /// pipe, читающий конец остаётся здесь, пишущий уходит в `:bg` вместе с
+    /// Binder-меткой [token] живого процесса окна. Прежний канал закрывается.
+    /// [onFrame] — кадр потока Dart (имя канала, готовый конверт события) или
+    /// служебный кадр — зовётся на главном потоке; следующий кадр читается
+    /// только после доставки предыдущего, так что медленный главный поток
+    /// тормозит чтение, а не копит кадры в памяти окна.
+    ///
+    /// Блокирует (вызов `:bg`); звать с полосы. `false` — `:bg` не ответил.
+    fun connect(ctx: Context, token: IBinder, onFrame: (String, ByteArray) -> Unit): Boolean {
+        disconnect()
+        val pipe = runCatching { ParcelFileDescriptor.createPipe() }.getOrNull() ?: return false
+        val r = Reader(pipe[0], onFrame)
+        reader = r
+        Thread({ read(r) }, "lxbox-event-read").apply { isDaemon = true }.start()
+        val ok = runCatching {
+            raw(
+                ctx, BgControlProvider.METHOD_UI_ATTACHED, null,
+                Bundle().apply {
+                    putBinder(BgControlProvider.KEY_TOKEN, token)
+                    putParcelable(BgControlProvider.KEY_PFD, pipe[1])
+                },
+            )
+        }.onFailure { Log.w(TAG, "uiAttached failed: ${it.message}") }.isSuccess
+        // Свой экземпляр пишущего конца закрываем: у `:bg` — дубликат. Если
+        // вызов не удался, читатель увидит конец потока и завершится.
+        runCatching { pipe[1].close() }
+        return ok
+    }
+
+    /// Закрыть канал событий (движок отключён): `:bg` на записи получит `EPIPE`.
+    fun disconnect() {
+        reader?.stop()
+        reader = null
+        failPending("window detached")
+    }
+
+    private fun read(r: Reader) {
+        try {
+            while (!r.stopped) {
+                val (stream, payload) = EventFrames.read(r.input)
+                if (stream == EventFrames.REPLY) {
+                    reply(payload)
+                    continue
+                }
+                val done = CountDownLatch(1)
+                main.post {
+                    try {
+                        if (!r.stopped) r.onFrame(stream, payload)
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "frame($stream) failed: ${t.message}")
+                    } finally {
+                        done.countDown()
+                    }
+                }
+                done.await()
+            }
+        } catch (_: Throwable) {
+            // Конец потока: `:bg` закрыл канал или умер; либо disconnect().
+        } finally {
+            runCatching { r.input.close() }
+            if (reader === r) {
+                reader = null
+                // Процесс `:bg` ушёл вместе с идущими вызовами.
+                failPending("service process is gone")
+            }
+        }
+    }
+
+    private fun reply(payload: ByteArray) {
+        val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
+        val id = (m["id"] as? Number)?.toLong() ?: return
+        val done = pending.remove(id) ?: return
+        val code = m["ec"] as? String
+        val result: Result<Any?> =
+            if (code != null) Result.failure(BgError(code, m["em"] as? String))
+            else Result.success(m["r"])
+        main.post { done(result) }
+    }
+
+    private fun failPending(why: String) {
+        for (id in pending.keys.toList()) {
+            val done = pending.remove(id) ?: continue
+            main.post { done(Result.failure(BgError(BgControlProvider.ERROR_CALL_FAILED, why))) }
+        }
     }
 }

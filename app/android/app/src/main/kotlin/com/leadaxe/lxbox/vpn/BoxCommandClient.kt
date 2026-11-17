@@ -38,11 +38,12 @@ import java.util.concurrent.atomic.AtomicReference
 /// §122 Фаза 0 — нативный канал управления UI↔ядро через libbox `CommandClient`
 /// (gRPC поверх `command.sock`), замена Clash API HTTP-петли.
 ///
-/// §745 — **роль UI**: всё, что нужно экрану Flutter. Создаёт и закрывает
-/// клиента сторона UI — держатель `UiCoreSession` (`ensure()` по статусу
-/// `Started`: broadcast, attach движка, обработчик `cc*`; `close()` — слушатель
-/// `CoreSession` «перед закрытием», `Stopped`, detach движка). Единственный
-/// вызывающий — `VpnPlugin`. Сервисная роль (openconnect, подпись узла,
+/// §745 — **клиент экрана**: всё, что нужно экрану Flutter. §747 (итерация 2)
+/// — живёт в `:bg`, рядом с ядром: окно `libbox` не грузит. Создаёт и
+/// закрывает клиента держатель `ScreenCoreSession` (`ensure()` — туннель
+/// `Started` и окно подключено; закрытие — первым шагом закрытия командного
+/// сервера и при отключении окна). Вызывает его `BgCcMethods` (вызовы `cc*`
+/// окна); снимки и события уходят окну через `StreamSinks` → `BgEventPipe`. Сервисная роль (openconnect, подпись узла,
 /// Taildrop из уведомлений) — отдельный клиент `ServiceCommandClient`; общее
 /// двух клиентов — `CommandClientShared.kt`.
 ///
@@ -71,12 +72,11 @@ import java.util.concurrent.atomic.AtomicReference
 /// **Эмиттеры** — по образцу `BoxService` core-log drainer: `LinkedBlockingQueue` + cap +
 /// drop-newest (не блокируем producer-thread ядра) + single Runnable + main-Handler + batch.
 ///
-/// Sink'и читаются из `UiSinks` (`cc*Sink`, @Volatile) — инвариант §2.1:
+/// Sink'и читаются из `StreamSinks` (`cc*Sink`, @Volatile) — инвариант §2.1:
 /// эмиттер живёт во Flutter-процессе.
 ///
 /// [logWarning] — приёмник WARN-строк журнала приложения (сбой подключения
-/// статус-клиента). §745: вместо интерфейса `Host` — клиент UI не знает о
-/// сервисе; приёмник даёт `UiCoreSession`.
+/// статус-клиента); приёмник даёт `ScreenCoreSession`.
 class BoxCommandClient(private val logWarning: (String) -> Unit) {
 
     companion object {
@@ -508,7 +508,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
     private val taildropInboxClient = AtomicReference<CommandClient?>(null)
     private val taildropInboxSub = AtomicReference<TaildropInboxSubscription?>(null)
     private val taildropInboxGen = AtomicInteger(0)
-    private val taildropInboxEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTaildropInboxSink }
+    private val taildropInboxEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccTaildropInboxSink }
 
     fun startTaildropInbox(tag: String) {
         stopTaildropInbox()
@@ -571,7 +571,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
     private val tailscalePingClient = AtomicReference<CommandClient?>(null)
     private val tailscalePingSession = AtomicReference<TailscalePingSession?>(null)
     private val tailscalePingGen = AtomicInteger(0)
-    private val tailscalePingEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTailscalePingSink }
+    private val tailscalePingEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccTailscalePingSink }
 
     fun startTailscalePing(tag: String, peerIP: String) {
         stopTailscalePing()
@@ -623,7 +623,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
     private val connTestClient = AtomicReference<CommandClient?>(null)
     private val connTestSession = AtomicReference<ConnectionTestSession?>(null)
     private val connTestGen = AtomicInteger(0)
-    private val connTestEmitter = EventEmitter(mainHandler) { UiSinks.ccConnectionTestSink }
+    private val connTestEmitter = EventEmitter(mainHandler) { StreamSinks.ccConnectionTestSink }
 
     fun startConnectionTest(
         link: String,
@@ -1156,7 +1156,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
             runCatching {
                 if (gen != statusGen.get()) return  // устаревшее поколение
                 val m = message ?: return
-                if (UiSinks.ccStatusSink == null) return
+                if (StreamSinks.ccStatusSink == null) return
                 val snap = HashMap<String, Any>(10)
                 snap["uplink"] = m.getUplink()
                 snap["downlink"] = m.getDownlink()
@@ -1180,7 +1180,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
             runCatching {
                 if (gen != screenGen.get()) return
                 val it = outbounds ?: return
-                if (UiSinks.ccOutboundsSink == null) return
+                if (StreamSinks.ccOutboundsSink == null) return
                 val list = ArrayList<Map<String, Any>>()
                 while (it.hasNext()) {
                     val item = it.next()
@@ -1199,7 +1199,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
             runCatching {
                 if (gen != screenGen.get()) return
                 val it = groups ?: return
-                if (UiSinks.ccGroupsSink == null) return
+                if (StreamSinks.ccGroupsSink == null) return
                 val list = ArrayList<Map<String, Any>>()
                 while (it.hasNext()) list.add(serializeGroup(it.next()))
                 groupsEmitter.offer(list)
@@ -1224,7 +1224,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
         override fun writeDNSQuery(query: DnsQuery?) {
             runCatching {
                 val q = query ?: return
-                if (UiSinks.ccDnsQueriesSink == null) return
+                if (StreamSinks.ccDnsQueriesSink == null) return
                 // §180 — processInfo: атрибуция к приложению ИЗ ЯДРА (не connId-сшивка).
                 var pkg = ""
                 var processPath = ""
@@ -1370,7 +1370,7 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
             // случилось; §193 — re-emit при подписке отдаёт накопленное новому
             // подписчику (см. reEmitScreenConnections), закрывая потерю стартового
             // reset-снапшота (connections — single-shot, pull в ядре нет).
-            if (UiSinks.ccConnectionsSink == null) return
+            if (StreamSinks.ccConnectionsSink == null) return
             connectionsEmitter.offer(serializeConnections(acc))
         }.onFailure { Log.w(TAG, "applyConnectionEvents failed: ${it.message}") }
     }
@@ -1457,14 +1457,14 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
 
     // ═══════════════════════ Emitters (по образцу core-log drainer) ═══════════════════════
 
-    private val statusEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccStatusSink }
-    private val outboundsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccOutboundsSink }
-    private val groupsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccGroupsSink }
-    private val connectionsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccConnectionsSink }
+    private val statusEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccStatusSink }
+    private val outboundsEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccOutboundsSink }
+    private val groupsEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccGroupsSink }
+    private val connectionsEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccConnectionsSink }
     // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
-    private val dnsQueriesEmitter = EventEmitter(mainHandler) { UiSinks.ccDnsQueriesSink }
+    private val dnsQueriesEmitter = EventEmitter(mainHandler) { StreamSinks.ccDnsQueriesSink }
     // §579 — состояние узлов Tailscale: снапшот, coalesce.
-    private val tailscaleEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTailscaleSink }
+    private val tailscaleEmitter = SnapshotEmitter(mainHandler) { StreamSinks.ccTailscaleSink }
 }
 
 /// §659 — заголовки диагностического GET (kernel SPEC 058): только User-Agent

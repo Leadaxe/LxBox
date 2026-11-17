@@ -151,6 +151,6 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
     /// Flutter-engine не запущен — silently skip (action не выполнится, Tasker
     /// узнает из отсутствия outgoing-события / по таймауту).
     private fun forward(context: Context, name: String, args: Map<String, Any?>) {
-        AutomationRelay.handleAutomationAction(context, name, args)
+        AutomationRelay.handleAutomationAction(name, args)
     }
 }

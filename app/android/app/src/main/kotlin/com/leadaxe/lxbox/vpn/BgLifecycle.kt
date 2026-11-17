@@ -10,61 +10,6 @@ import android.os.Looper
 import android.util.Log
 import java.util.concurrent.atomic.AtomicInteger
 
-/// §747 D — согласование пробы без туннеля (`ProbeSession`, живёт в `:ui`) со
-/// стартом туннеля в `:bg`: сокет ядра `command.sock` один на оба процесса.
-///
-/// - окно перед стартом пробы зовёт [begin]: отказ, если туннель не `Stopped`;
-/// - `BoxService` перед запуском своего командного сервера, если проба идёт,
-///   шлёт окну событие «остановить пробу» и ждёт [end] не дольше заданного
-///   времени ([awaitIdle]); не дождался — считает пробу снятой и идёт дальше.
-///
-/// Чистая логика без Android — проверяется JVM-тестом.
-object ProbeGate {
-    private val lock = java.util.concurrent.locks.ReentrantLock()
-    private val idle = lock.newCondition()
-    private var active = false
-
-    val isActive: Boolean get() = locked { active }
-
-    /// Проба начинается. `false` — туннель не остановлен, пробе нельзя.
-    fun begin(tunnelStopped: Boolean): Boolean = locked {
-        if (tunnelStopped) active = true
-        tunnelStopped
-    }
-
-    /// Проба закончена (или окно умерло).
-    fun end() = locked {
-        active = false
-        idle.signalAll()
-    }
-
-    /// Ждать конца пробы не дольше [timeoutMs]. `true` — проба не шла или
-    /// закончилась; `false` — время вышло, отметка «проба идёт» снята силой.
-    fun awaitIdle(timeoutMs: Long, now: () -> Long = System::nanoTime): Boolean = locked {
-        val deadline = now() + timeoutMs * 1_000_000L
-        var ok = true
-        while (active) {
-            val leftNs = deadline - now()
-            if (leftNs <= 0L) {
-                active = false
-                ok = false
-                break
-            }
-            idle.awaitNanos(leftNs)
-        }
-        ok
-    }
-
-    private inline fun <T> locked(block: () -> T): T {
-        lock.lock()
-        try {
-            return block()
-        } finally {
-            lock.unlock()
-        }
-    }
-}
-
 /// §747 — жив ли процесс окна с подключённым Flutter-движком, глазами `:bg`.
 ///
 /// Окно при подключении движка передаёт вызовом `uiAttached` Binder-метку;
@@ -84,6 +29,9 @@ object UiPresence {
     fun attached(ctx: Context, newToken: IBinder?) {
         unlink()
         isAttached = true
+        // Туннель уже поднят (окно открыли позже старта) — клиент экрана
+        // создаётся сейчас; без Started `ensure()` ничего не делает.
+        ScreenCoreSession.ensure()
         if (newToken == null) return
         val r = IBinder.DeathRecipient {
             Log.w(TAG, "ui process died")
@@ -94,7 +42,7 @@ object UiPresence {
         runCatching { newToken.linkToDeath(r, 0) }
             .onFailure {
                 // Процесс умер раньше, чем мы подписались.
-                isAttached = false
+                left(ctx)
                 return
             }
         token = newToken
@@ -126,9 +74,16 @@ object UiPresence {
 
     private fun left(ctx: Context) {
         isAttached = false
-        // Слушать лог и держать сокет ядра под пробу больше некому.
-        BgLogPipe.close()
-        ProbeGate.end()
+        // Показывать некому: потоки данных окна снимаются, канал событий и
+        // клиент экрана закрываются (ядро перестаёт слать то, что никто не
+        // читает), проба без туннеля останавливается.
+        StreamSinks.cancelAll()
+        BgEventPipe.close()
+        ScreenCoreSession.closeOffThread()
+        if (ProbeSession.active) {
+            Thread({ runCatching { ProbeSession.stop() } }, "lxbox-probe-stop")
+                .apply { isDaemon = true }.start()
+        }
         BgLifecycle.check(ctx, BgLifecycle.DELAY_UI_GONE_MS)
     }
 }
@@ -152,8 +107,11 @@ data class BgExitState(
     /// Признак «VPN желателен» при остановленном туннеле: сторож (§428)
     /// собирается поднять его снова.
     val watchdogPending: Boolean,
-    /// В окне идёт проба без туннеля.
+    /// Идёт проба без туннеля (`ProbeSession`).
     val probeActive: Boolean,
+    /// Сервису только что отправлена команда старта, а его экземпляр ещё не
+    /// создан: завершиться сейчас — значит потерять старт.
+    val startPending: Boolean,
 )
 
 /// §747 G — можно ли процессу `:bg` завершиться: туннель остановлен, сервис
@@ -161,7 +119,7 @@ data class BgExitState(
 fun bgMayExit(s: BgExitState): Boolean =
     s.tunnelStopped && !s.serviceAlive && !s.uiAttached && s.nativeWindows == 0 &&
         s.holds == 0 && s.activeCalls == 0 && !s.taildropBusy && !s.watchdogPending &&
-        !s.probeActive
+        !s.probeActive && !s.startPending
 
 /// §747 G — завершение ненужного процесса `:bg`.
 ///
@@ -182,6 +140,8 @@ object BgLifecycle {
     const val DELAY_UI_GONE_MS = 1_500L
     /// Процесс поднят (плиткой, приёмником, вызовом без окна), а дела не нашлось.
     const val DELAY_START_MS = 15_000L
+    /// Сколько процесс ждёт создания сервиса после команды старта.
+    private const val START_GRACE_MS = 20_000L
     /// Задержка самозавершения после `quitApp`: ответ вызова успевает уйти.
     private const val DELAY_QUIT_MS = 150L
 
@@ -192,6 +152,20 @@ object BgLifecycle {
 
     @Volatile
     private var quitting = false
+
+    /// До какого момента (`elapsedRealtime`) процесс ждёт создания сервиса по
+    /// только что отправленной команде старта.
+    @Volatile
+    private var startPendingUntil = 0L
+
+    /// Сервису отправлена команда старта (`BoxVpnService.start`): между
+    /// `startForegroundService` и `onCreate` сервиса проходит время, и в этом
+    /// окне туннель ещё `Stopped`, а экземпляра сервиса нет. Завершение
+    /// процесса здесь оставило бы систему с обещанным, но не начатым
+    /// foreground-сервисом — на [START_GRACE_MS] процесс удерживается.
+    fun startRequested() {
+        startPendingUntil = android.os.SystemClock.elapsedRealtime() + START_GRACE_MS
+    }
 
     private val enabled: Boolean get() = ProcessRole.role == ProcessRole.Role.Bg
 
@@ -271,7 +245,8 @@ object BgLifecycle {
         activeCalls = activeCalls.get(),
         taildropBusy = Taildrop.isBusy(),
         watchdogPending = runCatching { BootReceiver.isVpnDesired(app) }.getOrDefault(true),
-        probeActive = ProbeGate.isActive,
+        probeActive = ProbeSession.active,
+        startPending = android.os.SystemClock.elapsedRealtime() < startPendingUntil,
     )
 
     private fun exitIfIdle(app: Context) {
@@ -280,7 +255,9 @@ object BgLifecycle {
             Log.d(TAG, "stay: $s")
             // Причина, у которой нет своего события об окончании (передача
             // Taildrop, идущий вызов, проба): перепроверить позже.
-            if (s.taildropBusy || s.activeCalls > 0 || s.probeActive) check(app, DELAY_IDLE_MS)
+            if (s.taildropBusy || s.activeCalls > 0 || s.probeActive || s.startPending) {
+                check(app, DELAY_IDLE_MS)
+            }
             return
         }
         exit(app, "idle")

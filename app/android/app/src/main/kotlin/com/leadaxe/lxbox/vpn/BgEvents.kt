@@ -1,30 +1,12 @@
 package com.leadaxe.lxbox.vpn
 
-import android.content.Context
 import android.content.Intent
 
-/// §747 — события `:bg` → `:ui`: broadcast'ы внутри пакета (`setPackage`).
-/// Приёмники регистрирует `VpnPlugin`, пока подключён Flutter-движок; без
-/// движка событие никто не принимает — как раньше вызов в пустой sink.
-///
-/// Данных, кроме перечисленных здесь, события не несут: снимок openconnect
-/// (в нём форма входа) и секреты формы идут только вызовом `BgControlProvider`.
+/// §747 — то, что едет между процессами в Intent'ах: снимок состояния туннеля
+/// в `BROADCAST_STATUS` (и в ответе вызова `tunnelSnapshot`) и extras запуска
+/// окна из уведомлений `:bg`. Остальные события `:bg` → `:ui` (потоки данных,
+/// ответы вызовов, команды автоматизации) идут каналом событий ([BgEventPipe]).
 object BgEvents {
-    /// Состояние openconnect изменилось — `:ui` забирает снимок вызовом
-    /// `ccGetOpenConnectStatus`. Без extras.
-    const val ACTION_OPENCONNECT_CHANGED = "com.leadaxe.lxbox.BG_OPENCONNECT_CHANGED"
-
-    /// Команда автоматизации или «нативный Stop» для Dart
-    /// (`AutomationRelay` → `AutomationBridge`). Extras: [EXTRA_NAME],
-    /// [EXTRA_ARGS] (карта, [BgCodec]).
-    const val ACTION_AUTOMATION = "com.leadaxe.lxbox.BG_AUTOMATION_ACTION"
-    const val EXTRA_NAME = "name"
-    const val EXTRA_ARGS = "args"
-
-    /// `:bg` поднимает командный сервер, а в `:ui` идёт проба без туннеля на
-    /// том же сокете: остановить пробу и ответить вызовом `probeEnd`.
-    const val ACTION_STOP_PROBE = "com.leadaxe.lxbox.BG_STOP_PROBE"
-
     // Extras запуска `MainActivity` из уведомлений `:bg` (тап по «Sign-in
     // required» и по уведомлению Taildrop): тег узла.
     const val EXTRA_LAUNCH_OPENCONNECT_TAG = "openconnect_tag"
@@ -35,12 +17,6 @@ object BgEvents {
     const val EXTRA_SEQ = "ts_seq"
     const val EXTRA_STARTED_ELAPSED_MS = "started_elapsed_ms"
     const val EXTRA_SESSION_ALLOW_BYPASS = "session_allow_bypass"
-
-    fun send(ctx: Context, action: String, fill: Intent.() -> Unit = {}) {
-        runCatching {
-            ctx.sendBroadcast(Intent(action).setPackage(ctx.packageName).apply(fill))
-        }
-    }
 
     /// Положить в `BROADCAST_STATUS` метку и те поля снимка, которых нет среди
     /// прежних extras (`status`, `revoked` кладёт отправитель).

@@ -6,7 +6,6 @@ import android.net.VpnService
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
-import java.io.File
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -14,8 +13,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 /// нужна память или права процесса `:bg` (файлы настроек, состояние туннеля,
 /// ядро, сервисный клиент ядра, Taildrop, `protect` сервиса).
 ///
-/// Зовёт [BgControlProvider] на потоке пула Binder; имя метода — то же, что у
-/// `MethodChannel` (служебные — без пары в Dart). Ответ — значение
+/// Зовёт [BgControlProvider]: быстрый метод — на потоке пула Binder, долгий —
+/// на своём потоке (ответ кадром канала событий). Имя метода — то же, что у
+/// `MethodChannel` (служебные — без пары в Dart). Обработчики, которые ходят
+/// в ядро через клиент экрана, — в [BgCcMethods]. Ответ — значение
 /// `MethodChannel` той же формы, что раньше отдавал `VpnPlugin`; отказ,
 /// который Dart видел как `PlatformException`, — [BgError].
 ///
@@ -38,19 +39,12 @@ object BgMethods {
         "block", "mutex", "threadcreate",
     )
 
-    private class Args(private val m: Map<*, *>?) {
-        @Suppress("UNCHECKED_CAST")
-        fun <T> get(key: String): T? = m?.get(key) as? T
-        fun bool(key: String, def: Boolean): Boolean = m?.get(key) as? Boolean ?: def
-        fun str(key: String, def: String = ""): String = m?.get(key) as? String ?: def
-        fun int(key: String, def: Int): Int = (m?.get(key) as? Number)?.toInt() ?: def
-        fun long(key: String, def: Long): Long = (m?.get(key) as? Number)?.toLong() ?: def
-        fun strings(key: String): List<String> =
-            (m?.get(key) as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-    }
-
     fun handle(ctx: Context, method: String, raw: Map<*, *>?): Any? {
-        val a = Args(raw)
+        val a = BgArgs(raw)
+        // Обработчики, которые ходят в ядро (клиент экрана, проба, проверка
+        // конфига), — отдельным набором.
+        val cc = BgCcMethods.handle(ctx, method, a)
+        if (cc !== BgCcMethods.NOT_HANDLED) return cc
         return when (method) {
             // ───────────── состояние туннеля ─────────────
             // Снимок с меткой порядка — окно ведёт по нему свою копию
@@ -169,8 +163,6 @@ object BgMethods {
             // нативных поверхностей + локаль ядра.
             "setAppLanguage" -> { L10n.applySetting(ctx, a.str("tag", "system")); true }
             "getAppLanguageState" -> L10n.appLanguageState(ctx)
-            // Значение настройки языка — окну для локали его рантайма ядра.
-            "getAppLanguage" -> L10n.setting(ctx)
             // Строка ресурса на языке приложения — для тостов окна.
             "l10nString" -> L10n.str(ctx, a.int("id", 0))
             "retryShortcutRelabel" -> { QuickShortcuts.retryPendingRelabel(ctx); true }
@@ -204,7 +196,7 @@ object BgMethods {
 
             // ───────────── ядро процесса `:bg` ─────────────
             "setQuicKnob" -> setQuicKnob(ctx, a.get<String>("knob"), a.bool("disabled", false))
-            "pprofProfile" -> pprofProfile(ctx, a.str("pathAndQuery", "goroutine?debug=2"))
+            "pprofProfile" -> pprofProfile(a.str("pathAndQuery", "goroutine?debug=2"))
             // §242/§507 — память процесса с ядром.
             "getMemoryInfo" -> try {
                 collectProcessMemoryInfo(ctx)
@@ -235,14 +227,6 @@ object BgMethods {
                 }
             }
             "ccTaildropSendBytes" -> taildropSendBytes(ctx, a)
-            "taildropFileHashes" -> {
-                val tag = a.str("tag")
-                val dir = Taildrop.taildropDirectories(ConfigManager.load())
-                    .firstOrNull { it.first == tag }?.second
-                a.strings("names").associateWith { name ->
-                    if (dir == null || name.isEmpty()) "" else sha256Hex(File(dir, name))
-                }
-            }
             "taildropServiceStats" -> TaildropServiceFiles.stats()
             "taildropBuildServiceFile" -> {
                 val commands = a.get<List<Any?>>("commands") ?: emptyList()
@@ -297,20 +281,16 @@ object BgMethods {
             }
             "ccStopOpenConnectCallback" -> { openConnect()?.stopOpenConnectCallback(); true }
 
-            // ───────────── окно: лог, проба, присутствие ─────────────
-            "closeLogPipe" -> { BgLogPipe.close(); true }
+            // ───────────── окно ─────────────
+            // Движок отключён («окно закрыто»).
             "uiDetached" -> { UiPresence.detached(ctx); true }
-            // §747 D — проба без туннеля делит сокет ядра со стартом туннеля.
-            "probeBegin" -> ProbeGate.begin(
-                TunnelState.status == VpnStatus.Stopped && !CoreSession.isUp,
-            )
-            "probeEnd" -> { ProbeGate.end(); true }
 
             else -> throw BgError("BG_UNKNOWN_METHOD", method)
         }
     }
 
-    /// §745 — openconnect целиком живёт на сервисном клиенте ядра.
+    /// §745 — openconnect целиком живёт на сервисном клиенте ядра (слушатель SSO
+    /// работает и при закрытом окне).
     private fun openConnect(): OpenConnectControl? = CoreSession.client
 
     /// Ответ вызова «null — успех, иначе текст ошибки», когда клиента ядра нет.
@@ -404,11 +384,11 @@ object BgMethods {
         }
     }
 
-    /// §207 — снимок pprof ядра. Результат — файлом в `cacheDir/bg-xfer`
-    /// (профиль бывает больше предела Binder); ответ — путь, файл удаляет окно.
-    /// CPU `profile?seconds=N` держит соединение N секунд → read-timeout
-    /// масштабируем; прочие снимки мгновенны (5s).
-    private fun pprofProfile(ctx: Context, pathAndQuery: String): String {
+    /// §207 — снимок pprof ядра. CPU `profile?seconds=N` держит соединение N
+    /// секунд → read-timeout масштабируем; прочие снимки мгновенны (5s). Окно
+    /// зовёт долгим вызовом: ответ идёт кадром канала событий, размер профиля
+    /// пределом Binder не ограничен.
+    private fun pprofProfile(pathAndQuery: String): ByteArray {
         val name = pathAndQuery.substringBefore('?')
         try {
             if (name !in PPROF_PROFILES) {
@@ -421,11 +401,7 @@ object BgMethods {
             } else 0
             val readTimeout = if (name == "profile") secs * 1000 + 5000 else 5000
             BoxApplication.ensureLibbox()
-            val bytes = PProfClient.fetch(pathAndQuery, readTimeoutMs = readTimeout)
-            val dir = File(ctx.cacheDir, BgCodec.XFER_DIR).also { it.mkdirs() }
-            val f = File.createTempFile("pprof-", ".bin", dir)
-            f.writeBytes(bytes)
-            return f.path
+            return PProfClient.fetch(pathAndQuery, readTimeoutMs = readTimeout)
         } catch (t: Throwable) {
             Log.e(TAG, "pprofProfile($pathAndQuery) failed", t)
             throw BgError("PPROF_FAILED", t.message ?: t.javaClass.simpleName)
@@ -449,21 +425,15 @@ object BgMethods {
         else mapOf("status" to "error", "error" to err)
     }
 
-    /// §707 итер. 5 — Debug API: отправка из байтов / заметки с ожиданием
-    /// итога. Байты больше предела Binder приходят файлом (`bytes_file`).
-    private fun taildropSendBytes(ctx: Context, a: Args): Map<String, Any> {
+    /// §707 итер. 5 — Debug API: отправка из байтов / заметки с ожиданием итога.
+    private fun taildropSendBytes(ctx: Context, a: BgArgs): Map<String, Any> {
         val tag = a.str("tag")
         val peerId = a.str("peer_id")
         val peerName = a.str("peer_name")
         val text = a.get<String>("text")
         val name = a.str("name")
         val waitMs = a.long("wait_ms", 60_000L)
-        val bytes = a.get<ByteArray>("bytes") ?: a.get<String>("bytes_file")?.let { path ->
-            val f = File(path)
-            // Только наш каталог посылок: путь пришёл из другого процесса.
-            val ours = f.canonicalFile.parentFile == File(ctx.cacheDir, BgCodec.XFER_DIR).canonicalFile
-            if (!ours) null else runCatching { f.readBytes() }.getOrNull().also { f.delete() }
-        }
+        val bytes = a.get<ByteArray>("bytes")
         val item = when {
             text != null -> Taildrop.noteItem(text)
             bytes != null && name.isNotEmpty() ->
@@ -488,20 +458,6 @@ object BgMethods {
             mapOf("status" to status, "error" to (err ?: ""), "name" to item.name)
         }
     }
-
-    private fun sha256Hex(f: File): String = runCatching {
-        if (!f.isFile) return ""
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        f.inputStream().use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
-            }
-        }
-        md.digest().joinToString("") { "%02x".format(it) }
-    }.getOrDefault("")
 
     /// §242/§507 — PSS-разбивка процесса `:bg` (в нём ядро) для Stats → Memory.
     ///

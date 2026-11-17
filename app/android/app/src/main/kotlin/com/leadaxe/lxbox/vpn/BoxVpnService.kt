@@ -163,8 +163,38 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 "applied=${applied.size} [${applied.joinToString(",")}] " +
                 "not_installed=${missing.size} [${missing.joinToString(",")}]"
 
+        /// §747 — команда старта отправлена, но до сервиса ещё не дошла
+        /// (`startForegroundService` → `onStartCommand` — не мгновенно, а при
+        /// свежем процессе `:bg` и заметно). В этом окне статус ещё `Stopped`
+        /// и приёмника ACTION_STOP нет: Stop, пришедший сюда, раньше уходил в
+        /// пустоту, и туннель поднимался вопреки ему.
+        @Volatile
+        private var startPending = false
+
+        /// Stop пришёл, пока старт был в пути: сервис отменит его сам.
+        @Volatile
+        private var startCancelled = false
+
+        /// `BoxService.onStartCommand`: старт дошёл. `true` — его успели отменить.
+        internal fun startArrived(): Boolean {
+            startPending = false
+            return startCancelled.also { startCancelled = false }
+        }
+
+        /// Stop при статусе `Stopped`: если старт в пути — отменить его.
+        private fun cancelPendingStart(): Boolean {
+            if (!startPending) return false
+            Log.w(TAG, "[vpn] stop while a start is on its way — the start will be cancelled")
+            startCancelled = true
+            return true
+        }
+
         fun start(context: Context) {
             Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${TunnelState.status.name}")
+            startPending = true
+            startCancelled = false
+            // §747 G — процесс не завершается, пока система создаёт сервис.
+            BgLifecycle.startRequested()
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
             ContextCompat.startForegroundService(context, intent)
         }
@@ -176,7 +206,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             // Идущий прогон страховки о них иначе не узнаёт и финальным
             // стартом поднимает туннель обратно; особенно в фазе тихого
             // цикла, где сервиса нет и ACTION_STOP принять некому.
-            AutomationRelay.notifyStopRequested(context)
+            AutomationRelay.notifyStopRequested()
+            if (TunnelState.status == VpnStatus.Stopped) cancelPendingStart()
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
@@ -269,6 +300,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         fun stopAwait(context: Context): Deferred<Unit> {
             Log.d(TAG, "[vpn] companion.stopAwait() current status=${TunnelState.status.name}")
             if (TunnelState.status == VpnStatus.Stopped) {
+                cancelPendingStart()
                 return CompletableDeferred(Unit)
             }
             // §361 — статус не Stopped, но принимать ACTION_STOP некому: сервис

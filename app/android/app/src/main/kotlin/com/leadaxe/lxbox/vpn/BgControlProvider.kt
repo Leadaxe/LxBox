@@ -7,19 +7,30 @@ import android.database.Cursor
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /// §747 — канал `:ui` → `:bg`: вызов с ответом.
 ///
 /// `ContentProvider` процесса `:bg`, не экспортируется; работает только
-/// [call]. Вызов синхронный, с ответом, и сам поднимает `:bg`, если процесса
-/// нет. Имя метода — имя метода `MethodChannel` (или служебное), аргументы и
-/// результат — значения `MethodChannel`, закодированные [BgCodec] в
-/// `ByteArray` внутри `Bundle`. Тело каждого метода — в [BgMethods].
+/// [call]. Вызов сам поднимает `:bg`, если процесса нет. Имя метода — имя
+/// метода `MethodChannel` (или служебное), аргументы и результат — значения
+/// `MethodChannel`, закодированные [BgCodec]. Тело каждого метода — в
+/// [BgMethods].
 ///
-/// [call] исполняется на потоке пула Binder процесса `:bg` (15 потоков):
-/// долгие методы (остановка туннеля, профиль, отправка Taildrop) занимают
-/// поток на всё время, поэтому `:ui` зовёт их со своих отдельных потоков и
-/// никогда — с главного (`BgClient`).
+/// Два вида вызова:
+/// - **синхронный** — ответ в `Bundle` того же вызова. Для быстрых методов
+///   (настройки, команды, подписки): [call] исполняется на потоке пула Binder
+///   процесса `:bg` (15 потоков) и держит его до ответа;
+/// - **асинхронный** ([METHOD_INVOKE_ASYNC]) — вызов возвращается сразу, метод
+///   исполняется на своём потоке `:bg`, ответ приходит кадром
+///   [EventFrames.REPLY] в канале событий. Для долгих методов (остановка
+///   туннеля, замеры, проба, Taildrop, openconnect, профиль): сотня
+///   параллельных замеров не занимает ни одного потока Binder.
+///
+/// Аргументы и синхронный ответ больше [BgCodec.XFER_INLINE_MAX] идут файлом в
+/// `cacheDir/bg-xfer` (конфиг на проверку бывает больше предела Binder).
 class BgControlProvider : ContentProvider() {
 
     companion object {
@@ -29,19 +40,60 @@ class BgControlProvider : ContentProvider() {
         fun uri(ctx: Context): Uri = Uri.parse("content://${ctx.packageName}.bgcontrol")
 
         const val KEY_ARGS = "a"
+        const val KEY_ARGS_FILE = "af"
         const val KEY_RESULT = "r"
+        const val KEY_RESULT_FILE = "rf"
         const val KEY_ERROR_CODE = "ec"
         const val KEY_ERROR_MESSAGE = "em"
-        /// Пишущий конец pipe лога (`openLogPipe`): pipe создаёт окно.
+        /// Номер асинхронного вызова (`invokeAsync`).
+        const val KEY_ID = "id"
+        /// Пишущий конец pipe канала событий (`uiAttached`): pipe создаёт окно.
         const val KEY_PFD = "pfd"
         /// Binder-метка живого процесса окна (`uiAttached`).
         const val KEY_TOKEN = "token"
 
-        /// Служебные методы, которым нужен сам `Bundle` (дескриптор, Binder).
-        const val METHOD_OPEN_LOG_PIPE = "openLogPipe"
+        /// Окно подключилось: метка процесса и канал событий.
         const val METHOD_UI_ATTACHED = "uiAttached"
+        /// Асинхронный вызов: имя метода — в `arg`.
+        const val METHOD_INVOKE_ASYNC = "invokeAsync"
 
         const val ERROR_CALL_FAILED = "BG_CALL_FAILED"
+        /// Канала событий нет — ответ асинхронного вызова некуда слать.
+        const val ERROR_NO_PIPE = "BG_NO_PIPE"
+
+        private val asyncSeq = AtomicInteger(0)
+        private val asyncPool = Executors.newCachedThreadPool { r ->
+            Thread(r, "lxbox-bg-async-${asyncSeq.incrementAndGet()}").apply { isDaemon = true }
+        }
+
+        private fun xferDir(ctx: Context) = File(ctx.cacheDir, BgCodec.XFER_DIR)
+
+        /// Положить байты в `Bundle`: небольшие — как есть, крупные — файлом.
+        fun putBytes(ctx: Context, out: Bundle, key: String, fileKey: String, bytes: ByteArray) {
+            if (bytes.size <= BgCodec.XFER_INLINE_MAX) {
+                out.putByteArray(key, bytes)
+                return
+            }
+            val dir = xferDir(ctx).also { it.mkdirs() }
+            val f = File.createTempFile("x-", ".bin", dir)
+            f.writeBytes(bytes)
+            out.putString(fileKey, f.path)
+        }
+
+        /// Достать байты, положенные [putBytes]; файл-посылка удаляется. Путь
+        /// принимается только из нашего каталога посылок.
+        fun takeBytes(ctx: Context, from: Bundle?, key: String, fileKey: String): ByteArray? {
+            from ?: return null
+            from.getByteArray(key)?.let { return it }
+            val path = from.getString(fileKey) ?: return null
+            val f = File(path)
+            if (f.canonicalFile.parentFile != xferDir(ctx).canonicalFile) return null
+            return try {
+                f.readBytes()
+            } finally {
+                f.delete()
+            }
+        }
     }
 
     override fun onCreate(): Boolean = true
@@ -52,14 +104,15 @@ class BgControlProvider : ContentProvider() {
         BgLifecycle.callStarted()
         try {
             when (method) {
-                METHOD_OPEN_LOG_PIPE -> {
+                METHOD_UI_ATTACHED -> {
                     @Suppress("DEPRECATION")
-                    BgLogPipe.attach(extras?.getParcelable(KEY_PFD))
+                    BgEventPipe.attach(extras?.getParcelable(KEY_PFD))
+                    UiPresence.attached(ctx, extras?.getBinder(KEY_TOKEN))
                 }
-                METHOD_UI_ATTACHED -> UiPresence.attached(ctx, extras?.getBinder(KEY_TOKEN))
+                METHOD_INVOKE_ASYNC -> invokeAsync(ctx, arg ?: "", extras)
                 else -> {
-                    val args = BgCodec.decode(extras?.getByteArray(KEY_ARGS)) as? Map<*, *>
-                    out.putByteArray(KEY_RESULT, BgCodec.encode(BgMethods.handle(ctx, method, args)))
+                    val result = BgMethods.handle(ctx, method, args(ctx, extras))
+                    putBytes(ctx, out, KEY_RESULT, KEY_RESULT_FILE, BgCodec.encode(result))
                 }
             }
         } catch (e: BgError) {
@@ -72,6 +125,35 @@ class BgControlProvider : ContentProvider() {
             BgLifecycle.callFinished(ctx)
         }
         return out
+    }
+
+    private fun args(ctx: Context, extras: Bundle?): Map<*, *>? =
+        BgCodec.decode(takeBytes(ctx, extras, KEY_ARGS, KEY_ARGS_FILE)) as? Map<*, *>
+
+    /// Запустить метод на своём потоке и ответить кадром в канале событий.
+    private fun invokeAsync(ctx: Context, method: String, extras: Bundle?) {
+        if (!BgEventPipe.connected) throw BgError(ERROR_NO_PIPE, "no event pipe")
+        val id = extras?.getLong(KEY_ID) ?: 0L
+        val args = args(ctx, extras)
+        BgLifecycle.callStarted()
+        asyncPool.execute {
+            val reply = HashMap<String, Any?>()
+            reply["id"] = id
+            try {
+                reply["r"] = BgMethods.handle(ctx, method, args)
+            } catch (e: BgError) {
+                reply["ec"] = e.code
+                reply["em"] = e.message
+            } catch (t: Throwable) {
+                Log.e(TAG, "async $method failed", t)
+                reply["ec"] = ERROR_CALL_FAILED
+                reply["em"] = t.message ?: t.javaClass.simpleName
+            } finally {
+                BgLifecycle.callFinished(ctx)
+            }
+            // Окна уже нет — ответ некому; вызов свою работу сделал.
+            BgEventPipe.reliable(EventFrames.REPLY, reply)
+        }
     }
 
     private fun error(code: String, message: String?): Bundle = Bundle().apply {
