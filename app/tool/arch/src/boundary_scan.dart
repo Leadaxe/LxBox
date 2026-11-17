@@ -1,6 +1,33 @@
 // §742 C — чистые функции разбора для tool/arch/boundary_check.dart
 // (вынесены, чтобы test/tool/boundary_check_test.dart мог их импортировать).
 
+// §745 C — `CoreSession.client` как отдельное имя: `UiCoreSession.client` не
+// совпадает (слева буква).
+final _coreSessionClientRe = RegExp(r'(?<![A-Za-z0-9_])CoreSession\.client\b');
+final _openConnectRe = RegExp('openconnect', caseSensitive: false);
+final _serviceClientRe = RegExp(r'\bServiceCommandClient\b');
+final _uiSinksMemberRe = RegExp(r'\bUiSinks\.(\w+)');
+
+/// §745 C — нарушение в строке `VpnPlugin.kt` (уже без комментариев) или
+/// null. Плагин ходит в сервисный клиент только за openconnect: обращение к
+/// `CoreSession.client` допустимо лишь в строке, где есть слово `openConnect`
+/// (регистр не важен) — признак живёт в самой строке и не зависит от сдвига
+/// номеров. Тип `ServiceCommandClient` плагину не нужен вовсе: openconnect он
+/// видит через узкий интерфейс `OpenConnectControl`.
+String? vpnPluginServiceClientUse(String codeLine) {
+  if (_serviceClientRe.hasMatch(codeLine)) return 'тип ServiceCommandClient';
+  if (_coreSessionClientRe.hasMatch(codeLine) &&
+      !_openConnectRe.hasMatch(codeLine)) {
+    return 'CoreSession.client вне openconnect';
+  }
+  return null;
+}
+
+/// §745 C — поля `UiSinks.<имя>`, к которым обращается строка.
+List<String> uiSinksMembers(String codeLine) => [
+  for (final m in _uiSinksMemberRe.allMatches(codeLine)) m.group(1)!,
+];
+
 /// Убирает комментарии из строк исходника (Dart / Kotlin): целиковые `//`,
 /// `///`, блоки `/* … */` (в том числе `/** … */` на несколько строк) и
 /// хвостовые `// …`. Номера строк сохраняются: на выходе столько же строк,

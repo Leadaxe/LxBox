@@ -94,6 +94,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// для любых будущих awaitable операций. Отменяется в onDetachedFromEngine.
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    /// §745 — единственное обращение плагина к сервисному клиенту: openconnect
+    /// целиком живёт у сервиса, плагин читает снимок, отвечает на челлендж и
+    /// управляет слушателем SSO (пять обработчиков `cc*OpenConnect*`). Всё
+    /// прочее идёт через клиент UI — `UiCoreSession.ensure()`. Сторож границ
+    /// (`kt-vpnplugin-coresession`) других обращений не пропускает.
+    private fun openConnectControl(): OpenConnectControl? = CoreSession.client
+
     /// 693 итер. 3: кодирование иконок (отрисовка + PNG + base64) — не больше
     /// 4 одновременно. Вкладка Tunnel apps и пикер просят иконки пачкой;
     /// без предела десятки битмапов рисуются разом на общем IO-пуле.
@@ -112,6 +119,18 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Фича 478 / Д-1 — сырой текст ядра без обёрток приложения.
             val coreError = intent.getStringExtra(BoxVpnService.EXTRA_CORE_ERROR)
             Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""}${if (revoked) " revoked=true" else ""} sink=${statusSink != null}")
+            // §745 — клиент ядра роли UI создаёт и закрывает сторона UI. На
+            // Started — до передачи события в Dart (onReceive на главном
+            // потоке, событие уходит следующим post): к первому `cc*` клиент
+            // уже есть. На Stopped — закрыть, если ещё жив (обычно его уже
+            // закрыл слушатель «перед закрытием»). Запоздалый Stopped прошлого
+            // туннеля после нового Started (§122, быстрый перезапуск) клиента
+            // нового туннеля не трогает: решает текущий статус, не событие.
+            when (name) {
+                VpnStatus.Started.name -> UiCoreSession.ensure()
+                VpnStatus.Stopped.name ->
+                    if (TunnelState.status != VpnStatus.Started) UiCoreSession.closeOffMain()
+            }
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
@@ -198,7 +217,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // Dart-подписчик (открытие Stats при уже живом screenClient) не
                 // получает нового reset → пусто. Переэмитим накопленный
                 // аккумулятор сразу, чтобы Stats увидел текущие соединения.
-                CoreSession.client?.reEmitScreenConnections()
+                UiCoreSession.client?.reEmitScreenConnections()
             }
             override fun onCancel(args: Any?) { UiSinks.ccConnectionsSink = null }
         })
@@ -250,6 +269,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 Context.RECEIVER_NOT_EXPORTED
             )
         }.onFailure { Log.e(TAG, "[vpn] registerReceiver(statusReceiver) failed: $it") }
+        // §745 — туннель уже поднят (движок подключился позже старта: плитка,
+        // автозапуск, возврат после закрытия активити) — клиент UI создаётся
+        // сейчас; без Started `ensure()` ничего не делает.
+        UiCoreSession.ensure()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -275,8 +298,13 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         UiSinks.ccConnectionsSink = null
         UiSinks.ccDnsQueriesSink = null // §180
         UiSinks.ccTailscaleSink = null // §579
+        UiSinks.ccTailscalePingSink = null // §581
+        UiSinks.ccConnectionTestSink = null // §687
         UiSinks.ccOpenConnectSink = null // §654
         UiSinks.ccTaildropInboxSink = null // §707
+        // §745 — движка нет, эмитить некуда: клиент UI закрыт, а не стоит на
+        // паузе. При возврате `onAttachedToEngine` создаст новый.
+        UiCoreSession.closeOffMain()
         // §047 — обнуляем bridge-ссылки (engine detached).
         AutomationBridge.bridgeChannel = null
         AutomationBridge.appContext = null
@@ -834,42 +862,42 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // пустой UI. Идемпотентно при первом старте. Профайлер: чистая
             // остановка осиротевшего клиента (буфер в Dart потерян by design).
             "ccResyncForReopen" -> {
-                CoreSession.client?.apply {
+                UiCoreSession.ensure()?.apply {
                     resyncForReopen()
                     disconnectProfiler()
                 }
                 result.success(true)
             }
             "ccConnectScreen" -> {
-                CoreSession.client?.connectScreen(); result.success(true)
+                UiCoreSession.ensure()?.connectScreen(); result.success(true)
             }
             "ccDisconnectScreen" -> {
-                CoreSession.client?.disconnectScreen(); result.success(true)
+                UiCoreSession.ensure()?.disconnectScreen(); result.success(true)
             }
             "ccConnectProfiler" -> {
-                CoreSession.client?.connectProfiler(); result.success(true)
+                UiCoreSession.ensure()?.connectProfiler(); result.success(true)
             }
             "ccDisconnectProfiler" -> {
-                CoreSession.client?.disconnectProfiler(); result.success(true)
+                UiCoreSession.ensure()?.disconnectProfiler(); result.success(true)
             }
             // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
             // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
             // §579 — подписка SubscribeTailscaleStatus. Старт стрима — gRPC,
             // поэтому на Dispatchers.IO; ответ сразу (данные придут стримом).
             "ccStartTailscaleStatus" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscaleStatus() }
                 result.success(cc != null)
             }
             "ccStopTailscaleStatus" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
                 result.success(true)
             }
             // §581 — exit node на ходу и выход из аккаунта: блокирующий gRPC
             // на Dispatchers.IO; ответ — null (успех) или текст ошибки ядра.
             "ccSetTailscaleExitNode" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("stable_id") ?: ""
                 pluginScope.launch {
@@ -883,7 +911,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // map записи, null — пропуск тика, ядро без метода — error
             // `unimplemented` (Dart останавливает опрос).
             "ccGetTailscaleStatus" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
@@ -902,7 +930,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccTailscaleLogout" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val err = withContext(Dispatchers.IO) {
@@ -915,7 +943,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // null; отказ ядра → PlatformException с кодом как у
             // ccSetEndpointEnabled.
             "ccTailscaleLogin" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 val key = call.argument<String>("auth_key") ?: ""
                 pluginScope.launch {
@@ -934,20 +962,20 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStartTailscalePing" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 val ip = call.argument<String>("peer_ip") ?: ""
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscalePing(tag, ip) }
                 result.success(cc != null)
             }
             "ccStopTailscalePing" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
                 result.success(true)
             }
             // §687 — тест соединения: события идут в EventChannel connection_test.
             "ccStartConnectionTest" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val link = call.argument<String>("link") ?: ""
                 val pkg = call.argument<String>("package_name") ?: ""
                 val depth = call.argument<Int>("depth") ?: 0
@@ -956,7 +984,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(cc != null)
             }
             "ccStopConnectionTest" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
                 result.success(true)
             }
@@ -964,23 +992,23 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // отмена, слушатель SSO. Блокирующий gRPC — на Dispatchers.IO;
             // ответ — null (успех) или текст ошибки.
             "ccGetOpenConnectStatus" -> {
-                result.success(CoreSession.client?.openConnectSnapshot())
+                result.success(openConnectControl()?.openConnectSnapshot())
             }
             // §707 — Taildrop: входящие узла, сохранение, удаление, отправка
             // из строки пира. Блокирующий gRPC — на Dispatchers.IO.
             "ccStartTaildropInbox" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTaildropInbox(tag) }
                 result.success(cc != null)
             }
             "ccStopTaildropInbox" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
                 result.success(true)
             }
             "ccTaildropDelete", "ccTaildropCancelReceiving", "ccTaildropMarkRead" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 val name = call.argument<String>("name") ?: ""
                 val sender = call.argument<String>("sender_id") ?: ""
@@ -1104,7 +1132,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
             // на диске (каталог узла — из последнего собранного конфига).
             "ccTaildropInboxSnapshot" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 if (cc == null || tag.isEmpty()) {
                     result.success(null)
@@ -1174,7 +1202,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 result.success(tag)
             }
             "ccSubmitOpenConnectForm" -> {
-                val cc = CoreSession.client
+                val cc = openConnectControl()
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 val raw = call.argument<List<Any?>>("values") ?: emptyList()
@@ -1191,7 +1219,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCancelOpenConnectChallenge" -> {
-                val cc = CoreSession.client
+                val cc = openConnectControl()
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 pluginScope.launch {
@@ -1202,7 +1230,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStartOpenConnectCallback" -> {
-                val cc = CoreSession.client
+                val cc = openConnectControl()
                 val tag = call.argument<String>("tag") ?: ""
                 val id = call.argument<String>("challenge_id") ?: ""
                 val port = call.argument<Int>("port") ?: 8020
@@ -1215,11 +1243,11 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccStopOpenConnectCallback" -> {
-                CoreSession.client?.stopOpenConnectCallback()
+                openConnectControl()?.stopOpenConnectCallback()
                 result.success(true)
             }
             "ccCancelPing" -> {
-                CoreSession.client?.cancelPing(); result.success(true)
+                UiCoreSession.ensure()?.cancelPing(); result.success(true)
             }
             // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
             // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
@@ -1227,14 +1255,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // возврат из фона — поднимаем status(NORMAL)+screen(если refs>0).
             "ccSetStatusFast" -> {
                 val fast = call.argument<Boolean>("fast") ?: false
-                CoreSession.client?.setStatusFast(fast); result.success(true)
+                UiCoreSession.ensure()?.setStatusFast(fast); result.success(true)
             }
             "ccPauseClients" -> {
-                CoreSession.client?.apply { pauseStatus(); pauseScreen() }
+                UiCoreSession.ensure()?.apply { pauseStatus(); pauseScreen() }
                 result.success(true)
             }
             "ccResumeClients" -> {
-                CoreSession.client?.apply { resumeStatus(); resumeScreen() }
+                UiCoreSession.ensure()?.apply { resumeStatus(); resumeScreen() }
                 result.success(true)
             }
             // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
@@ -1243,7 +1271,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // приложение в ANR. Выносим на Dispatchers.IO; result.success обратно
             // на main (pluginScope = Dispatchers.Main).
             "ccUrlTestOutbound" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
                 val tag = call.argument<String>("tag") ?: ""
                 val link = call.argument<String>("link") ?: ""
@@ -1257,7 +1285,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // 058). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound:
             // на main thread обмен с телом ответа = гарантированный ANR.
             "ccGetUrlViaOutbound" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc == null) { result.success(mapOf("error" to "not connected")); return }
                 val tag = call.argument<String>("tag") ?: ""
                 val link = call.argument<String>("link") ?: ""
@@ -1274,7 +1302,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // §308 — групповой URLTest (force-тест всех членов + переселект в
             // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
             "ccUrlTestGroup" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 if (cc == null) { result.success(false); return }
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
@@ -1339,7 +1367,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Dart getRules превращает null в пустой список (диагностика —
             // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
             "ccGetRules" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getRules() }
                     result.success(r)
@@ -1349,7 +1377,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (не-STARTED/нет клиента) → Dart различает от пустого списка и не
             // трогает state. Закрывает потерянный стартовый push (pull-vs-push).
             "ccGetGroups" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getGroups() }
                     result.success(r)
@@ -1360,7 +1388,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // SubscribeOutbounds их не несут). null = не смогли прочитать.
             // Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccGetOutbounds" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getOutbounds() }
                     result.success(r)
@@ -1375,14 +1403,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
             // Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccGetDnsGroups" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
                     result.success(r)
                 }
             }
             "ccGetRunningConfig" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
                     result.success(r)
@@ -1448,7 +1476,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
             // затираем null на emptyList — различение критично (§209).
             "ccGetPool" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
@@ -1456,7 +1484,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccSelectOutbound" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val group = call.argument<String>("group") ?: ""
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
@@ -1469,7 +1497,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (not_found / invalid_argument / failed_precondition / unavailable
             // / error). Dispatchers.IO — unary RPC на main = ANR (§122).
             "ccSetEndpointEnabled" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 val enabled = call.argument<Boolean>("enabled") ?: true
                 pluginScope.launch {
@@ -1490,7 +1518,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // (not_found / invalid_argument / failed_precondition /
             // unavailable / unimplemented / error).
             "ccGetWireGuardStatus" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) {
@@ -1506,7 +1534,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCloseConnection" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 val id = call.argument<String>("id") ?: ""
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.closeConnection(id) ?: false }
@@ -1514,7 +1542,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "ccCloseConnections" -> {
-                val cc = CoreSession.client
+                val cc = UiCoreSession.ensure()
                 pluginScope.launch {
                     val r = withContext(Dispatchers.IO) { cc?.closeConnections() ?: false }
                     result.success(r)

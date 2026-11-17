@@ -3,8 +3,9 @@ package com.leadaxe.lxbox.vpn
 /**
  * §740 — sink'и EventChannel'ов Flutter-движка: объекты Flutter-движка, живут
  * на стороне UI. Ставит и снимает их `VpnPlugin` (onListen / onCancel /
- * onDetachedFromEngine), пишут в них `BoxService` (логи ядра) и
- * `BoxCommandClient` (эмиттеры CommandClient).
+ * onDetachedFromEngine), пишут в них `BoxService` (логи ядра),
+ * `BoxCommandClient` (эмиттеры клиента UI) и `ServiceCommandClient` (только
+ * `ccOpenConnectSink`, §745).
  *
  * После разделения на процессы сервис сюда писать не сможет — см.
  * docs/ARCHITECTURE.md, раздел о границе процессов.

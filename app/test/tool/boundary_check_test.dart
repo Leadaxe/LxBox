@@ -66,6 +66,67 @@ void main() {
     });
   });
 
+  group('service client in VpnPlugin (745)', () {
+    test('CoreSession.client is allowed only on an openconnect line', () {
+      expect(
+        vpnPluginServiceClientUse(
+          'private fun openConnectControl(): OpenConnectControl? = '
+          'CoreSession.client',
+        ),
+        isNull,
+      );
+      expect(
+        vpnPluginServiceClientUse('val cc = CoreSession.client'),
+        isNotNull,
+      );
+      expect(
+        vpnPluginServiceClientUse('CoreSession.client?.taildropDelete(t, n)'),
+        isNotNull,
+      );
+    });
+
+    test('UiCoreSession and CoreSession.isUp are not the service client', () {
+      expect(
+        vpnPluginServiceClientUse('val cc = UiCoreSession.client'),
+        isNull,
+      );
+      expect(vpnPluginServiceClientUse('UiCoreSession.ensure()'), isNull);
+      expect(vpnPluginServiceClientUse('if (CoreSession.isUp) {'), isNull);
+    });
+
+    test('the ServiceCommandClient type is not allowed at all', () {
+      expect(
+        vpnPluginServiceClientUse(
+          'fun openConnectHelper(cc: ServiceCommandClient) {}',
+        ),
+        isNotNull,
+      );
+    });
+
+    test('a comment does not hide or cause a violation', () {
+      final code = stripComments([
+        'val cc = CoreSession.client // openconnect',
+        '// CoreSession.client',
+      ]);
+      expect(vpnPluginServiceClientUse(code[0]), isNotNull);
+      expect(vpnPluginServiceClientUse(code[1]), isNull);
+    });
+  });
+
+  group('UiSinks members (745)', () {
+    test('every member on the line is listed', () {
+      expect(uiSinksMembers('if (UiSinks.coreLogSink == null) return'), [
+        'coreLogSink',
+      ]);
+      expect(uiSinksMembers('UiSinks.ccStatusSink = UiSinks.ccGroupsSink'), [
+        'ccStatusSink',
+        'ccGroupsSink',
+      ]);
+      expect(uiSinksMembers('object UiSinks {'), isEmpty);
+      expect(uiSinksMembers('MyUiSinks.x'), isEmpty);
+    });
+  });
+
   group('comments', () {
     test('comment lines and trailing comments are dropped, lines kept', () {
       final out = stripComments([

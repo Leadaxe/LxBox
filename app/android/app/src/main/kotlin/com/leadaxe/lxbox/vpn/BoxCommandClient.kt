@@ -3,9 +3,7 @@ package com.leadaxe.lxbox.vpn
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import io.flutter.plugin.common.EventChannel
 import io.nekohasekai.libbox.CommandClient
-import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.CommandClientOptions
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.ConnectionTestAttrIterator
@@ -18,20 +16,12 @@ import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.GetURLResult
 import io.nekohasekai.libbox.HTTPHeaders
 import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.LogIterator
-import io.nekohasekai.libbox.OpenConnectEndpointStatus
-import io.nekohasekai.libbox.OpenConnectStatusHandler
-import io.nekohasekai.libbox.OpenConnectStatusSubscription
-import io.nekohasekai.libbox.OpenConnectStatusUpdate
-import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
 import io.nekohasekai.libbox.PoolSlotIterator
 import io.nekohasekai.libbox.RuleIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
-import io.nekohasekai.libbox.TailscaleEndpointStatus
-import io.nekohasekai.libbox.TailscalePeer
 import io.nekohasekai.libbox.TailscalePingHandler
 import io.nekohasekai.libbox.TailscalePingResult
 import io.nekohasekai.libbox.TailscalePingSession
@@ -42,28 +32,35 @@ import io.nekohasekai.libbox.TaildropInbox
 import io.nekohasekai.libbox.TaildropInboxHandler
 import io.nekohasekai.libbox.TaildropInboxSubscription
 import io.nekohasekai.libbox.URLTestOutboundResult
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /// §122 Фаза 0 — нативный канал управления UI↔ядро через libbox `CommandClient`
 /// (gRPC поверх `command.sock`), замена Clash API HTTP-петли.
 ///
-/// **Три клиента (§2.8)** — разный lifecycle под реальные нужды (разведано: что
+/// §745 — **роль UI**: всё, что нужно экрану Flutter. Создаёт и закрывает
+/// клиента сторона UI — держатель `UiCoreSession` (`ensure()` по статусу
+/// `Started`: broadcast, attach движка, обработчик `cc*`; `close()` — слушатель
+/// `CoreSession` «перед закрытием», `Stopped`, detach движка). Единственный
+/// вызывающий — `VpnPlugin`. Сервисная роль (openconnect, подпись узла,
+/// Taildrop из уведомлений) — отдельный клиент `ServiceCommandClient`; общее
+/// двух клиентов — `CommandClientShared.kt`.
+///
+/// **Клиенты (§2.8)** — разный lifecycle под реальные нужды (разведано: что
 /// работает в фоне vs гасится с экраном):
 ///  - `statusClient`   — `CommandStatus` + `setStatusInterval`. Foreground пока
-///    туннель up; §164 спит в фоне (pauseStatus). NORMAL 0.5с (главный) / FAST
-///    0.1с (Stats). Питает скорость в шапке + Stats-счётчики.
+///    туннель up и есть движок; §164 спит в фоне (pauseStatus). NORMAL 0.5с
+///    (главный) / FAST 0.1с (Stats). Питает скорость в шапке + Stats-счётчики.
+///    Читатель один — Flutter-sink, нативных читателей нет.
 ///  - `screenClient`   — `CommandOutbounds`+`CommandGroup`+`CommandConnections`.
 ///    refcount по открытию экрана узлов/stats/conn; §164 спит в фоне (pauseScreen).
 ///  - `profilerClient` — `CommandConnections` + `CommandDNS` (§261, SPEC 018 v2:
 ///    DNS-стрим в мультиплексе). connect/disconnect по recording (§048). Живёт в
 ///    фоне ПОКА идёт запись; DNS авто-реконнектится с клиентом. См. feature 123.
-///  - `pingClient`     — голый `PingHandler`, БЕЗ подписок (§175). §209: носитель
-///    ВСЕХ unary RPC (urlTestOutbound + getPool/getGroups/getRules + select/
-///    close*). lifecycle-НЕзависим — pause не трогает → unary работают в фоне.
-///    Поднимается лениво, дисконнект лишь в cancelPing/resync/shutdown.
+///  - `pingClient`     — голый `CcPingHandler`, БЕЗ подписок (§175). §209: носитель
+///    ВСЕХ unary RPC роли UI (urlTestOutbound + getPool/getGroups/getRules +
+///    select/close*). lifecycle-НЕзависим — pause не трогает → unary работают в
+///    фоне. Поднимается лениво, дисконнект лишь в cancelPing/resync/shutdown.
 ///
 /// **Подписка в gomobile-фасаде** = `CommandClientOptions.addCommand(int)` + колбэки
 /// `CommandClientHandler.write*` (НЕ прямые `subscribe*`-методы — их в AAR нет).
@@ -77,23 +74,13 @@ import java.util.concurrent.atomic.AtomicReference
 /// Sink'и читаются из `UiSinks` (`cc*Sink`, @Volatile) — инвариант §2.1:
 /// эмиттер живёт во Flutter-процессе.
 ///
-/// §742 — клиент `command.sock` не знает о сервисе: уведомления и журнал
-/// приложения приходят через [Host] (реализацию даёт `BoxService`), а
-/// предупреждения общей полосы — через [laneWarningSink].
-class BoxCommandClient(private val host: Host) {
-
-    /// §742 — то, что клиенту нужно от стороны, которая его создала.
-    interface Host {
-        /// Уведомление «Sign-in required» для openconnect-endpoint'а [tag].
-        fun showSignIn(tag: String)
-        /// Снять уведомление «Sign-in required» для [tag].
-        fun cancelSignIn(tag: String)
-        /// WARN-строка в журнал приложения (AppLog).
-        fun logWarning(text: String)
-    }
+/// [logWarning] — приёмник WARN-строк журнала приложения (сбой подключения
+/// статус-клиента). §745: вместо интерфейса `Host` — клиент UI не знает о
+/// сервисе; приёмник даёт `UiCoreSession`.
+class BoxCommandClient(private val logWarning: (String) -> Unit) {
 
     companion object {
-        private const val TAG = "BoxCommandClient"
+        private const val TAG = CC_LOG_TAG
 
         /// §163 — интервал status-стрима (наносекунды: `time.Duration(Interval)`
         /// на сервере). ДВЕ частоты + пауза (энергосбережение):
@@ -105,34 +92,13 @@ class BoxCommandClient(private val host: Host) {
         private const val STATUS_INTERVAL_FAST = 100_000_000L   // 1e8 нс = 0.1с
         private const val STATUS_INTERVAL_NORMAL = 500_000_000L  // 5e8 нс = 0.5с
 
-        /// Cap очереди эмиттера — drop-newest при переполнении (producer не блокируется).
-        /// Эмиттер coalesce'ит до последнего снапшота, так что cap — страховка.
-        private const val QUEUE_MAX = 4096
-
         private const val RECONNECT_BACKOFF_START_MS = 500L
         private const val RECONNECT_BACKOFF_MAX_MS = 8_000L
-
-        /// §732 — полоса для connect()/disconnect() клиентов. `connect()` ядра
-        /// ждёт командный сервер до 3,25 с; раньше он шёл с главного потока
-        /// (обработчики `cc*` в VpnPlugin и реконнект через mainHandler), и
-        /// при молчащем сервере главный поток стоял почти непрерывно —
-        /// MethodChannel отвечал таймаутами (issue #210). Одна на процесс:
-        /// задачи прошлого экземпляра гасит его же `tunnelAlive`.
-        private val lane = SerialLane(
-            "lxbox-cc",
-            onSlow = { msg ->
-                Log.e(TAG, "[cc §732] $msg")
-                laneWarningSink?.invoke("[cc §732] $msg")
-            },
-            onError = { label, t -> Log.w(TAG, "[cc §732] $label failed: ${t.message}") },
-        )
-
-        /// §742 — приёмник WARN-строк полосы [lane] (она одна на процесс, без
-        /// экземпляра клиента). Назначает `BoxService` вместе со своим `current`
-        /// и снимает вместе с ним; null — сервиса нет, строка только в logcat.
-        @Volatile
-        internal var laneWarningSink: ((String) -> Unit)? = null
     }
+
+    /// §732 — полоса connect()/disconnect(): одна на процесс (`CommandLane`).
+    /// Задачи этого экземпляра гейтит его же [tunnelAlive].
+    private val lane = CommandLane.lane
 
     /// §732 — пауза реконнекта statusClient: 0,5 → 8 с, сброс на успехе.
     private val statusBackoff = ReconnectBackoff(RECONNECT_BACKOFF_START_MS, RECONNECT_BACKOFF_MAX_MS)
@@ -180,11 +146,6 @@ class BoxCommandClient(private val host: Host) {
         statusPaused = false
         statusBackoff.reset() // §732 — новый туннель: новая серия сбоев
         lane.post("startStatus") { connectStatus() }
-    }
-
-    fun stopStatus() {
-        tunnelAlive = false
-        lane.post("stopStatus") { disconnectClient(statusClient, "stopStatus") }
     }
 
     /// §163 — переключить частоту status-стрима (пересоздаёт statusClient с новым
@@ -343,7 +304,6 @@ class BoxCommandClient(private val host: Host) {
         stopTailscalePing() // §581
         stopTaildropInbox() // §707
         stopConnectionTest() // §687
-        stopOpenConnectStatus() // §654
         screenAccumulator.set(null)
         profilerAccumulator.set(null)
     }
@@ -373,7 +333,7 @@ class BoxCommandClient(private val host: Host) {
             // §732 — первый сбой серии — в журнал приложения: дамп покажет,
             // что клиент не достучался до командного сервера и почему.
             if (statusBackoff.firstFailure()) {
-                host.logWarning("[cc §732] status client cannot connect: ${it.message}")
+                logWarning("[cc §732] status client cannot connect: ${it.message}")
             }
             scheduleReconnect(delayMs) { if (tunnelAlive && !statusPaused) connectStatus() }
         }
@@ -424,11 +384,6 @@ class BoxCommandClient(private val host: Host) {
         }.onFailure { Log.w(TAG, "connectProfiler failed (gen=$gen): ${it.message}") }
     }
 
-    private fun disconnectClient(ref: AtomicReference<CommandClient?>, reason: String) {
-        ref.getAndSet(null)?.runCatching { disconnect() }
-            ?.onFailure { Log.w(TAG, "disconnect($reason) failed: ${it.message}") }
-    }
-
     private fun scheduleReconnect(delayMs: Long, action: () -> Unit) {
         val capped = delayMs.coerceAtMost(RECONNECT_BACKOFF_MAX_MS)
         // §732 — на полосе, не на главном потоке: action зовёт connect().
@@ -453,7 +408,7 @@ class BoxCommandClient(private val host: Host) {
         stopTailscaleStatus()
         val gen = tailscaleGen.incrementAndGet()
         runCatching {
-            val client = CommandClient(PingHandler(), CommandClientOptions())
+            val client = CommandClient(CcPingHandler(), CommandClientOptions())
             client.connect()
             tailscaleClient.getAndSet(client)?.runCatching { disconnect() }
             val sub = client.subscribeTailscaleStatus(TailscaleHandler(gen))
@@ -488,51 +443,6 @@ class BoxCommandClient(private val host: Host) {
         }
     }
 
-    /// §581 — запись `TailscaleEndpointStatus` в map канала: полное состояние
-    /// для вкладки Network. Имена, адреса и ссылка входа в лог не пишутся
-    /// (раздел 9). §645 — тот же разбор у потока и у `getTailscaleStatus`.
-    private fun tailscaleEndpointMap(e: TailscaleEndpointStatus): HashMap<String, Any> {
-        val groups = ArrayList<Map<String, Any>>()
-        val gi = e.userGroups()
-        while (gi != null && gi.hasNext()) {
-            val g = gi.next() ?: continue
-            val peers = ArrayList<Map<String, Any>>()
-            val pi = g.peers()
-            while (pi != null && pi.hasNext()) {
-                val p = pi.next() ?: continue
-                peers.add(tailscalePeerMap(p))
-            }
-            groups.add(mapOf(
-                "user_id" to g.userID,
-                "login_name" to (g.loginName ?: ""),
-                "display_name" to (g.displayName ?: ""),
-                "peers" to peers,
-            ))
-        }
-        val m = HashMap<String, Any>()
-        m["tag"] = e.endpointTag ?: ""
-        m["backend_state"] = e.backendState ?: ""
-        m["state_text"] = e.stateText ?: ""
-        m["auth_url"] = e.authURL ?: ""
-        m["network_name"] = e.networkName ?: ""
-        m["magic_dns_suffix"] = e.magicDNSSuffix ?: ""
-        m["key_auth"] = e.keyAuth
-        e.self?.let { m["self"] = tailscalePeerMap(it) }
-        e.exitNode?.let { m["exit_node"] = tailscalePeerMap(it) }
-        m["user_groups"] = groups
-        // §613 (ядро SPEC 115, lx.12) — предупреждения бэкенда.
-        val health = ArrayList<String>()
-        val hi = e.health()
-        while (hi != null && hi.hasNext()) hi.next()?.let { health.add(it) }
-        m["health"] = health
-        // §707 — Taildrop: право узла на обмен файлами и счётчики входящих.
-        m["can_share_files"] = e.canShareFiles
-        m["waiting_file_count"] = e.waitingFileCount
-        m["receiving_file_count"] = e.receivingFileCount
-        m["unread_file_count"] = e.unreadFileCount
-        return m
-    }
-
     /// §645 — одиночный `GetTailscaleStatus(tag)` (ядро SPEC 115): ядро
     /// перечитывает состояние на каждый вызов, путь до устройств — на момент
     /// запроса. Блокирующий gRPC — звать с `Dispatchers.IO`. Вкладка Network
@@ -554,37 +464,6 @@ class BoxCommandClient(private val host: Host) {
         return runCatching {
             tailscaleEndpointMap(e).also { if ((it["tag"] as String).isEmpty()) it["tag"] = tag }
         }.getOrNull()
-    }
-
-    /// §581 — `TailscalePeer` в map канала. `key_expiry`/`last_seen` — Unix-секунды
-    /// ядра (`Time.Unix()`), 0 = нет значения.
-    private fun tailscalePeerMap(p: TailscalePeer): Map<String, Any> {
-        val ips = ArrayList<String>()
-        val iter = p.tailscaleIPs()
-        while (iter != null && iter.hasNext()) iter.next()?.let { ips.add(it) }
-        return mapOf(
-            "stable_id" to (p.stableID ?: ""),
-            "host_name" to (p.hostName ?: ""),
-            "dns_name" to (p.dnsName ?: ""),
-            "os" to (p.os ?: ""),
-            "online" to p.online,
-            "exit_node" to p.exitNode,
-            "exit_node_option" to p.exitNodeOption,
-            "sharee_node" to p.shareeNode,
-            "expired" to p.expired,
-            "key_expiry" to p.keyExpiry,
-            "last_seen" to p.lastSeen,
-            "ips" to ips,
-            // §613 (ядро SPEC 115, lx.12) — путь до пира: DIRECT / PEER_RELAY /
-            // DERP / NONE; `last_handshake` — Unix-секунды, 0 = не было.
-            "path" to (p.path ?: ""),
-            "endpoint" to (p.endpoint ?: ""),
-            "peer_relay" to (p.peerRelay ?: ""),
-            "derp_region_code" to (p.derpRegionCode ?: ""),
-            "last_handshake" to p.lastHandshake,
-            // §707 — пир принимает файлы Taildrop (своё устройство, право есть).
-            "can_receive_files" to p.canReceiveFiles,
-        )
     }
 
     /// §581 — выбор (`stableID`) или снятие (`""`) exit node на ходу. Блокирующий
@@ -629,20 +508,13 @@ class BoxCommandClient(private val host: Host) {
     private val taildropInboxClient = AtomicReference<CommandClient?>(null)
     private val taildropInboxSub = AtomicReference<TaildropInboxSubscription?>(null)
     private val taildropInboxGen = AtomicInteger(0)
-    private val taildropInboxEmitter = SnapshotEmitter { UiSinks.ccTaildropInboxSink }
-
-    /// Новый подключённый клиент без подписок — под поток одной передачи
-    /// (отправка, выгрузка файла), чтобы его закрытие не задевало другие.
-    /// Блокирующий connect — звать не с main.
-    fun newCallClient(): CommandClient? = runCatching {
-        CommandClient(PingHandler(), CommandClientOptions()).also { it.connect() }
-    }.getOrElse { Log.w(TAG, "newCallClient failed: ${it.message}"); null }
+    private val taildropInboxEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTaildropInboxSink }
 
     fun startTaildropInbox(tag: String) {
         stopTaildropInbox()
         val gen = taildropInboxGen.incrementAndGet()
         runCatching {
-            val client = CommandClient(PingHandler(), CommandClientOptions())
+            val client = CommandClient(CcPingHandler(), CommandClientOptions())
             client.connect()
             taildropInboxClient.getAndSet(client)?.runCatching { disconnect() }
             val sub = client.subscribeTaildropInbox(tag, TaildropInboxCallback(gen, tag))
@@ -673,99 +545,20 @@ class BoxCommandClient(private val host: Host) {
         }
     }
 
-    private fun taildropInboxMap(inbox: TaildropInbox, tag: String): Map<String, Any> {
-        val files = ArrayList<Map<String, Any>>()
-        val fi = inbox.files()
-        while (fi != null && fi.hasNext()) {
-            val f = fi.next() ?: continue
-            files.add(mapOf(
-                "name" to (f.name ?: ""),
-                "size" to f.size,
-                "sender_id" to (f.senderID ?: ""),
-                "sender_name" to (f.senderName ?: ""),
-                "modified_at" to f.modifiedAt,
-            ))
-        }
-        val receiving = ArrayList<Map<String, Any>>()
-        val ri = inbox.receiving()
-        while (ri != null && ri.hasNext()) {
-            val f = ri.next() ?: continue
-            receiving.add(mapOf(
-                "name" to (f.name ?: ""),
-                "size" to f.size,
-                "received_bytes" to f.receivedBytes,
-                "sender_id" to (f.senderID ?: ""),
-                "sender_name" to (f.senderName ?: ""),
-            ))
-        }
-        return mapOf(
-            "tag" to (inbox.endpointTag?.takeIf { it.isNotEmpty() } ?: tag),
-            "files" to files,
-            "receiving" to receiving,
-        )
-    }
-
-    /// §707 итер. 4 — разовый снимок входящих узла [tag]: имя файла →
-    /// (senderID, senderName). Нужен разбору служебных файлов: уведомление
-    /// ядра отправителя не несёт. Блокирует до [timeoutMs]; `null` — клиента
-    /// нет или ядро не ответило. Имена в журнал не пишутся.
-    fun taildropInboxSnapshot(tag: String, timeoutMs: Long): Map<String, Pair<String, String>>? {
-        val inbox = taildropInboxOnce(tag, timeoutMs) ?: return null
-        val m = HashMap<String, Pair<String, String>>()
-        @Suppress("UNCHECKED_CAST")
-        for (f in inbox["files"] as List<Map<String, Any>>) {
-            val name = f["name"] as? String ?: continue
-            m[name] = (f["sender_id"] as? String ?: "") to (f["sender_name"] as? String ?: "")
-        }
-        return m
-    }
-
     /// §707 итер. 5 — разовый снимок входящих узла [tag] той же формы, что
     /// поток вкладки Network (`taildropInboxMap`): первое обновление
     /// `SubscribeTaildropInbox` на своём клиенте. Блокирует до [timeoutMs];
     /// `null` — клиента нет или ядро не ответило.
-    fun taildropInboxOnce(tag: String, timeoutMs: Long): Map<String, Any>? {
-        val client = newCallClient() ?: return null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        val out = AtomicReference<Map<String, Any>?>(null)
-        var sub: TaildropInboxSubscription? = null
-        try {
-            sub = client.subscribeTaildropInbox(tag, object : TaildropInboxHandler {
-                override fun onInboxUpdate(inbox: TaildropInbox?) {
-                    runCatching {
-                        if (inbox == null || latch.count == 0L) return@runCatching
-                        out.set(taildropInboxMap(inbox, tag))
-                        latch.countDown()
-                    }
-                }
-
-                override fun onError(message: String?) {
-                    runCatching { latch.countDown() }
-                }
-            })
-            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (t: Exception) {
-            Log.w(TAG, "taildropInboxOnce failed: ${t.javaClass.simpleName}")
-        } finally {
-            sub?.runCatching { close() }
-            client.runCatching { disconnect() }
-        }
-        return out.get()
-    }
+    fun taildropInboxOnce(tag: String, timeoutMs: Long): Map<String, Any>? =
+        taildropInboxOnceCall(tag, timeoutMs)
 
     /// Удалить принятый файл. `null` = успех, иначе текст ошибки ядра.
-    fun taildropDelete(tag: String, name: String): String? {
-        val client = ensurePingClient() ?: return "no command client"
-        return runCatching { client.deleteTaildropFile(tag, name); null }
-            .getOrElse { Log.w(TAG, "deleteTaildropFile failed"); it.message ?: "failed" }
-    }
+    fun taildropDelete(tag: String, name: String): String? =
+        taildropDeleteVia(ensurePingClient(), tag, name)
 
     /// Прервать приём файла. `null` = успех, иначе текст ошибки ядра.
-    fun taildropCancelReceiving(tag: String, senderID: String, name: String): String? {
-        val client = ensurePingClient() ?: return "no command client"
-        return runCatching { client.cancelTaildropReceiving(tag, senderID, name); null }
-            .getOrElse { Log.w(TAG, "cancelTaildropReceiving failed"); it.message ?: "failed" }
-    }
+    fun taildropCancelReceiving(tag: String, senderID: String, name: String): String? =
+        taildropCancelReceivingVia(ensurePingClient(), tag, senderID, name)
 
     fun taildropMarkRead(tag: String): String? {
         val client = ensurePingClient() ?: return "no command client"
@@ -773,318 +566,18 @@ class BoxCommandClient(private val host: Host) {
             .getOrElse { Log.w(TAG, "markTaildropInboxRead failed"); it.message ?: "failed" }
     }
 
-    /// Разовый снимок узлов Tailscale работающего конфига (первое обновление
-    /// подписки `SubscribeTailscaleStatus` на своём клиенте) — экрану
-    /// «Поделиться», у которого нет Flutter. Блокирует до [timeoutMs];
-    /// `null` — клиента нет или ядро не ответило.
-    fun tailscaleSnapshot(timeoutMs: Long): List<Map<String, Any>>? {
-        val client = newCallClient() ?: return null
-        val latch = java.util.concurrent.CountDownLatch(1)
-        val out = AtomicReference<List<Map<String, Any>>?>(null)
-        var sub: TailscaleStatusSubscription? = null
-        try {
-            sub = client.subscribeTailscaleStatus(object : TailscaleStatusHandler {
-                override fun onStatusUpdate(update: TailscaleStatusUpdate?) {
-                    runCatching {
-                        if (update == null || latch.count == 0L) return@runCatching
-                        val list = ArrayList<Map<String, Any>>()
-                        val iter = update.endpoints()
-                        while (iter != null && iter.hasNext()) {
-                            val e = iter.next() ?: continue
-                            list.add(tailscaleEndpointMap(e))
-                        }
-                        out.set(list)
-                        latch.countDown()
-                    }
-                }
-
-                override fun onError(message: String?) {
-                    runCatching { latch.countDown() }
-                }
-            })
-            latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-        } catch (t: Exception) {
-            Log.w(TAG, "tailscaleSnapshot failed: ${t.javaClass.simpleName}")
-        } finally {
-            sub?.runCatching { close() }
-            client.runCatching { disconnect() }
-        }
-        return out.get()
-    }
-
-    // ═══════════════════════ §654 OpenConnect status ═══════════════════════
-    // Подписка `SubscribeOpenConnectStatus` на ОТДЕЛЬНОМ клиенте (как Tailscale).
-    // Держит её натив, не Dart: челлендж второго фактора приходит сразу после
-    // старта, а старт бывает с QS-плитки или при загрузке, когда Flutter-движка
-    // нет. Живёт, пока VPN запущен и в конфиге есть endpoint `openconnect`
-    // ([syncOpenConnectStatus] после старта и после reload); снимается в
-    // [shutdownAll]. Уведомление «Sign-in required» ставит тоже натив.
-
-    private val openConnectClient = AtomicReference<CommandClient?>(null)
-    private val openConnectSub = AtomicReference<OpenConnectStatusSubscription?>(null)
-    private val openConnectGen = AtomicInteger(0)
-    private val openConnectEmitter = SnapshotEmitter { UiSinks.ccOpenConnectSink }
-    /// Последний снапшот endpoint'ов: Dart забирает его при подключении
-    /// (висящий челлендж при открытии приложения).
-    @Volatile private var openConnectEndpoints: List<Map<String, Any>> = emptyList()
-    /// Состояние слушателя SSO: `{tag, challenge_id, state, error}`; пусто — нет.
-    @Volatile private var openConnectCallbackState: Map<String, Any>? = null
-    private val openConnectCallback = AtomicReference<OpenConnectCallbackServer?>(null)
-    /// tag → id челленджа, о котором уже стоит уведомление.
-    private val openConnectNotified = java.util.concurrent.ConcurrentHashMap<String, String>()
-
-    /// Поднять подписку, если в конфиге есть endpoint `openconnect`, иначе
-    /// снять. Блокирующий gRPC — звать вне main.
-    fun syncOpenConnectStatus(configJson: String) {
-        if (hasOpenConnectEndpoint(configJson)) startOpenConnectStatus() else stopOpenConnectStatus()
-    }
-
-    private fun hasOpenConnectEndpoint(configJson: String): Boolean = runCatching {
-        val arr = org.json.JSONObject(configJson).optJSONArray("endpoints") ?: return@runCatching false
-        (0 until arr.length()).any { arr.optJSONObject(it)?.optString("type") == "openconnect" }
-    }.getOrDefault(false)
-
-    fun startOpenConnectStatus() {
-        stopOpenConnectStatus()
-        val gen = openConnectGen.incrementAndGet()
-        runCatching {
-            val client = CommandClient(PingHandler(), CommandClientOptions())
-            client.connect()
-            openConnectClient.getAndSet(client)?.runCatching { disconnect() }
-            val sub = client.subscribeOpenConnectStatus(OpenConnectHandler(gen))
-            openConnectSub.getAndSet(sub)?.runCatching { close() }
-            Log.i(TAG, "openconnect status subscribed (gen=$gen)")
-        }.onFailure { Log.w(TAG, "startOpenConnectStatus failed (gen=$gen): ${it.message}") }
-    }
-
-    fun stopOpenConnectStatus() {
-        openConnectGen.incrementAndGet()
-        val hadSub = openConnectSub.getAndSet(null)?.let { sub ->
-            sub.runCatching { close() }
-                .onFailure { Log.w(TAG, "openconnect sub close failed: ${it.message}") }
-            true
-        } ?: false
-        disconnectClient(openConnectClient, "stopOpenConnectStatus")
-        stopOpenConnectCallback()
-        for (tag in openConnectNotified.keys.toList()) {
-            host.cancelSignIn(tag)
-        }
-        openConnectNotified.clear()
-        if (hadSub || openConnectEndpoints.isNotEmpty()) {
-            openConnectEndpoints = emptyList()
-            emitOpenConnect()
-        }
-    }
-
-    /// Текущий снапшот для Dart (`ccGetOpenConnectStatus`).
-    fun openConnectSnapshot(): Map<String, Any> {
-        val m = HashMap<String, Any>()
-        m["endpoints"] = openConnectEndpoints
-        openConnectCallbackState?.let { m["callback"] = it }
-        return m
-    }
-
-    private fun emitOpenConnect() = openConnectEmitter.offer(openConnectSnapshot())
-
-    /// Колбэки приходят из Go-потока: ни одного исключения наружу (JNI abort).
-    private inner class OpenConnectHandler(private val gen: Int) : OpenConnectStatusHandler {
-        override fun onStatusUpdate(update: OpenConnectStatusUpdate?) {
-            runCatching {
-                if (gen != openConnectGen.get() || update == null) return@runCatching
-                val out = ArrayList<Map<String, Any>>()
-                val iter = update.endpoints() ?: return@runCatching
-                while (iter.hasNext()) {
-                    val e = iter.next() ?: continue
-                    out.add(openConnectEndpointMap(e))
-                }
-                openConnectEndpoints = out
-                syncOpenConnectSideEffects(out)
-                emitOpenConnect()
-            }.onFailure { Log.w(TAG, "openconnect onStatusUpdate failed: ${it.javaClass.simpleName}") }
-        }
-
-        override fun onError(message: String?) {
-            runCatching { Log.w(TAG, "openconnect status stream error (gen=$gen): $message") }
-        }
-    }
-
-    /// id висящего челленджа endpoint'а; пусто — нет.
-    @Suppress("UNCHECKED_CAST")
-    private fun pendingChallengeId(e: Map<String, Any>): String =
-        ((e["challenge"] as? Map<String, Any>)?.get("id") as? String) ?: ""
-
-    /// Уведомление «Sign-in required» на новый челлендж, снятие — когда его
-    /// нет; слушатель SSO гаснет, когда его челлендж исчез или сменился.
-    private fun syncOpenConnectSideEffects(endpoints: List<Map<String, Any>>) {
-        val pending = HashMap<String, String>()
-        for (e in endpoints) {
-            val tag = e["tag"] as? String ?: continue
-            val id = pendingChallengeId(e)
-            if (tag.isNotEmpty() && id.isNotEmpty()) pending[tag] = id
-        }
-        for ((tag, id) in pending) {
-            if (openConnectNotified[tag] != id) {
-                openConnectNotified[tag] = id
-                host.showSignIn(tag)
-            }
-        }
-        for (tag in openConnectNotified.keys.toList()) {
-            if (!pending.containsKey(tag)) {
-                openConnectNotified.remove(tag)
-                host.cancelSignIn(tag)
-            }
-        }
-        openConnectCallback.get()?.let { cb ->
-            if (pending[cb.tag] != cb.challengeId) stopOpenConnectCallback()
-        }
-    }
-
-    private fun stringList(iter: StringIterator?): ArrayList<String> {
-        val out = ArrayList<String>()
-        while (iter != null && iter.hasNext()) iter.next()?.let { out.add(it) }
-        return out
-    }
-
-    /// Запись `OpenConnectEndpointStatus` в map канала. Значения полей формы,
-    /// ссылки и тексты шлюза в лог не пишутся.
-    private fun openConnectEndpointMap(e: OpenConnectEndpointStatus): HashMap<String, Any> {
-        val m = HashMap<String, Any>()
-        m["tag"] = e.endpointTag ?: ""
-        m["state"] = e.state ?: ""
-        m["state_text"] = e.stateText ?: ""
-        m["error"] = e.error ?: ""
-        e.authChallenge?.let { ch ->
-            val c = HashMap<String, Any>()
-            c["id"] = ch.id ?: ""
-            c["banner"] = ch.banner ?: ""
-            c["message"] = ch.message ?: ""
-            c["error"] = ch.error ?: ""
-            ch.form?.let { form ->
-                val fields = ArrayList<Map<String, Any>>()
-                val fi = form.fields()
-                while (fi != null && fi.hasNext()) {
-                    val f = fi.next() ?: continue
-                    val options = ArrayList<Map<String, Any>>()
-                    val oi = f.options()
-                    while (oi != null && oi.hasNext()) {
-                        val o = oi.next() ?: continue
-                        options.add(mapOf("value" to (o.value ?: ""), "label" to (o.label ?: "")))
-                    }
-                    fields.add(mapOf(
-                        "submission_key" to (f.submissionKey ?: ""),
-                        "name" to (f.name ?: ""),
-                        "label" to (f.label ?: ""),
-                        "kind" to (f.kind ?: ""),
-                        "value" to (f.value ?: ""),
-                        "options" to options,
-                    ))
-                }
-                c["form"] = fields
-            }
-            ch.browser?.let { b ->
-                c["browser"] = mapOf(
-                    "url" to (b.url ?: ""),
-                    "final_url" to (b.finalURL ?: ""),
-                    "callback_url_prefixes" to stringList(b.callbackURLPrefixes()),
-                    "cookie_names" to stringList(b.cookieNames()),
-                    "header_names" to stringList(b.headerNames()),
-                )
-            }
-            m["challenge"] = c
-        }
-        e.tunnelInfo?.let { t ->
-            m["tunnel"] = mapOf(
-                "server" to (t.server ?: ""),
-                "flavor" to (t.flavor ?: ""),
-                "transport" to (t.transport ?: ""),
-                "mtu" to t.mtu,
-                "connected_since" to t.connectedSince,
-            )
-        }
-        return m
-    }
-
-    /// Ответ формой: пары ключ → значение в порядке полей. `null` = успех,
-    /// иначе текст ошибки ядра. Блокирующий gRPC — звать с `Dispatchers.IO`.
-    fun submitOpenConnectForm(tag: String, challengeId: String, values: List<Pair<String, String>>): String? {
-        val client = ensurePingClient() ?: return "no command client"
-        return runCatching {
-            val fv = Libbox.newOpenConnectFormValues()
-            for ((k, v) in values) fv.add(k, v)
-            client.submitOpenConnectAuthResponse(tag, challengeId, Libbox.newOpenConnectAuthFormResponse(fv))
-            null
-        }.getOrElse { Log.w(TAG, "submitOpenConnectForm failed"); it.message ?: "failed" }
-    }
-
-    /// Ответ браузерного челленджа: URL редиректа. `null` = успех.
-    fun submitOpenConnectBrowser(tag: String, challengeId: String, finalUrl: String): String? {
-        val client = ensurePingClient() ?: return "no command client"
-        return runCatching {
-            val r = Libbox.newOpenConnectBrowserResult(finalUrl)
-            client.submitOpenConnectAuthResponse(tag, challengeId, Libbox.newOpenConnectBrowserAuthResponse(r))
-            null
-        }.getOrElse { Log.w(TAG, "submitOpenConnectBrowser failed"); it.message ?: "failed" }
-    }
-
-    /// Отмена челленджа: ядро начинает новый логин (у FortiGate — новый код).
-    fun cancelOpenConnectChallenge(tag: String, challengeId: String): String? {
-        val client = ensurePingClient() ?: return "no command client"
-        return runCatching { client.cancelOpenConnectAuthChallenge(tag, challengeId); null }
-            .getOrElse { Log.w(TAG, "cancelOpenConnectChallenge failed"); it.message ?: "failed" }
-    }
-
-    /// Слушатель SSO на `127.0.0.1:port` на время челленджа. Пойманный URL
-    /// уходит ядру отсюда же (Dart может быть в фоне). `null` — слушает,
-    /// иначе текст ошибки (порт занят).
-    fun startOpenConnectCallback(tag: String, challengeId: String, port: Int, prefixes: List<String>): String? {
-        openConnectCallback.get()?.let { cur ->
-            if (cur.tag == tag && cur.challengeId == challengeId) return null
-        }
-        stopOpenConnectCallback()
-        val server = OpenConnectCallbackServer(tag, challengeId, port, prefixes) { url ->
-            setCallbackState(tag, challengeId, "submitting", "")
-            val err = submitOpenConnectBrowser(tag, challengeId, url)
-            if (err == null) {
-                setCallbackState(tag, challengeId, "submitted", "")
-                stopOpenConnectCallback(keepState = true)
-            } else {
-                setCallbackState(tag, challengeId, "failed", err)
-            }
-        }
-        val err = server.start()
-        if (err != null) return err
-        openConnectCallback.set(server)
-        setCallbackState(tag, challengeId, "listening", "")
-        return null
-    }
-
-    fun stopOpenConnectCallback(keepState: Boolean = false) {
-        openConnectCallback.getAndSet(null)?.close()
-        if (!keepState && openConnectCallbackState != null) {
-            openConnectCallbackState = null
-            emitOpenConnect()
-        }
-    }
-
-    private fun setCallbackState(tag: String, challengeId: String, state: String, error: String) {
-        openConnectCallbackState = mapOf(
-            "tag" to tag, "challenge_id" to challengeId, "state" to state, "error" to error,
-        )
-        emitOpenConnect()
-    }
-
     // §581 — проверка устройства. Одна сессия за раз; ответы — в
     // `ccTailscalePingSink` (EventChannel `lxbox/cc/tailscale_ping`).
     private val tailscalePingClient = AtomicReference<CommandClient?>(null)
     private val tailscalePingSession = AtomicReference<TailscalePingSession?>(null)
     private val tailscalePingGen = AtomicInteger(0)
-    private val tailscalePingEmitter = SnapshotEmitter { UiSinks.ccTailscalePingSink }
+    private val tailscalePingEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTailscalePingSink }
 
     fun startTailscalePing(tag: String, peerIP: String) {
         stopTailscalePing()
         val gen = tailscalePingGen.incrementAndGet()
         runCatching {
-            val client = CommandClient(PingHandler(), CommandClientOptions())
+            val client = CommandClient(CcPingHandler(), CommandClientOptions())
             client.connect()
             tailscalePingClient.getAndSet(client)?.runCatching { disconnect() }
             val session = client.startTailscalePing(tag, peerIP, TailscalePingCallback(gen))
@@ -1130,7 +623,7 @@ class BoxCommandClient(private val host: Host) {
     private val connTestClient = AtomicReference<CommandClient?>(null)
     private val connTestSession = AtomicReference<ConnectionTestSession?>(null)
     private val connTestGen = AtomicInteger(0)
-    private val connTestEmitter = EventEmitter { UiSinks.ccConnectionTestSink }
+    private val connTestEmitter = EventEmitter(mainHandler) { UiSinks.ccConnectionTestSink }
 
     fun startConnectionTest(
         link: String,
@@ -1141,7 +634,7 @@ class BoxCommandClient(private val host: Host) {
         stopConnectionTest()
         val gen = connTestGen.incrementAndGet()
         runCatching {
-            val client = CommandClient(PingHandler(), CommandClientOptions())
+            val client = CommandClient(CcPingHandler(), CommandClientOptions())
             client.connect()
             connTestClient.getAndSet(client)?.runCatching { disconnect() }
             val request = Libbox.newConnectionTestRequest().apply {
@@ -1237,10 +730,7 @@ class BoxCommandClient(private val host: Host) {
 
     // ═══════════════════════ Imperative (unary) ═══════════════════════
     // Прямые методы CommandClient. Дёргаются из VpnPlugin через MethodChannel.
-    // Используем любой живой клиент (унарные RPC не зависят от подписок).
-
-    private fun anyClient(): CommandClient? =
-        statusClient.get() ?: screenClient.get() ?: profilerClient.get()
+    // Все идут через lifecycle-независимый pingClient (§209).
 
     /// §4.6 — per-node delay. ИНВАРИАНТ: `error` — единственный признак провала,
     /// `delay==0 && error==""` = успех 0мс. `timeout` — МИЛЛИСЕКУНДЫ.
@@ -1312,7 +802,7 @@ class BoxCommandClient(private val host: Host) {
             .getOrElse { Log.w(TAG, "urlTestGroup failed: ${it.message}"); false }
     }
 
-    /// §175/§209 — поднять pingClient лениво. Голый `PingHandler`: подписок нет,
+    /// §175/§209 — поднять pingClient лениво. Голый `CcPingHandler`: подписок нет,
     /// только unary RPC. Свой ctx/conn — disconnect рвёт лишь его вызовы.
     /// Идемпотентно (CAS): возвращает живой если есть.
     ///
@@ -1321,16 +811,7 @@ class BoxCommandClient(private val host: Host) {
     /// (urlTestOutbound + getPool/getGroups/getRules + select/close*) идут через
     /// него — работают и когда приложение в фоне. Дисконнект только в `cancelPing`
     /// / `resyncForReopen` / `shutdownAll` (явные события, не lifecycle-парковка).
-    private fun ensurePingClient(): CommandClient? {
-        pingClient.get()?.let { return it }
-        return runCatching {
-            val options = CommandClientOptions() // подписок нет — unary RPC
-            val client = CommandClient(PingHandler(), options)
-            client.connect()
-            if (pingClient.compareAndSet(null, client)) client
-            else { client.runCatching { disconnect() }; pingClient.get() }
-        }.getOrElse { Log.w(TAG, "ensurePingClient failed: ${it.message}"); null }
-    }
+    private fun ensurePingClient(): CommandClient? = ensureUnaryClient(pingClient)
 
     /// §175 — отмена масс-пинга: disconnect pingClient → ядро отменяет per-call
     /// ctx уже-ушедших в dial тестов (SPEC 015 §3.6, rc.5), in-flight рвутся, не
@@ -1372,31 +853,12 @@ class BoxCommandClient(private val host: Host) {
         }
     }
 
-    /// §122/SPEC015 — unary pull-снапшот групп. Закрывает дыру pull-vs-push:
-    /// если стартовый `SubscribeGroups`-push не доехал (гонка waitForStarted —
-    /// сервис не STARTED в момент подписки) или порвался, перечитать дерево групп
-    /// больше нечем (push-only). Формат Map ИДЕНТИЧЕН writeGroups (общий
-    /// `serializeGroup`) → Dart-парсер один. null ≠ пустой список: null = «не
-    /// смогли прочитать», []=«групп нет» (не трогаем state).
+    /// §122/SPEC015 — unary pull-снапшот групп (разбор и контракт null/[] —
+    /// `getGroupsVia`).
     ///
-    /// §209 — через `ensurePingClient()` (НЕ anyClient): pingClient
-    /// lifecycle-независим (не паркуется в фоне §164) → pull работает и в фоне.
-    fun getGroups(): List<Map<String, Any>>? {
-        val client = ensurePingClient() ?: run {
-            Log.w(TAG, "getGroups: no command client (paused/down)")
-            return null
-        }
-        return runCatching {
-            val out = ArrayList<Map<String, Any>>()
-            val it: OutboundGroupIterator = client.getGroups()
-            while (it.hasNext()) out.add(serializeGroup(it.next()))
-            out
-        }.getOrElse {
-            // не-STARTED / транспорт — НЕ ошибка приложения, просто пока нет данных.
-            Log.d(TAG, "getGroups unavailable: ${it.message}")
-            null
-        }
-    }
+    /// §209 — через `ensurePingClient()`: pingClient lifecycle-независим (не
+    /// паркуется в фоне §164) → pull работает и в фоне.
+    fun getGroups(): List<Map<String, Any>>? = getGroupsVia(ensurePingClient())
 
     /// §535 (ядро SPEC 097) — unary pull плоского списка outbound'ов и
     /// endpoint'ов. Единственный путь, по которому доезжают `endpointState` и
@@ -1544,65 +1006,6 @@ class BoxCommandClient(private val host: Host) {
         }
     }
 
-    /// §223 Часть B (#23) — native-fallback подтекста уведомления, когда UI не
-    /// открывался (старт с QS-плитки → нет Flutter-движка → Dart лейбл не
-    /// прислал). Один unary-pull `getGroups()` (через ensurePingClient —
-    /// lifecycle-независим, БЕЗ подписки): читаем «главную» группу и её
-    /// выбранную ноду, возвращаем готовую строку «<группа>: <нода>».
-    ///
-    /// Повторяет логику выбора selectedGroup из home_controller.dart:807
-    /// (Dart-источник): исключить GLOBAL → взять route.final если он валидный
-    /// selector, иначе первую группу. `null` = групп нет / RPC не удался
-    /// (caller оставит статусный fallback "Connected"). Ловит ТОЛЬКО начальную
-    /// ноду — последующее URLTest-переключение без UI вне скоупа (нет фонового
-    /// подписчика по энергомодели).
-    fun selectedNodeLabel(configRaw: String): String? {
-        val groups = getGroups() ?: return null
-        val selectors = groups.filter { (it["tag"] as? String) != "GLOBAL" }
-        if (selectors.isEmpty()) return null
-
-        val finalTag = routeFinalTag(configRaw)
-        val group = selectors.firstOrNull { (it["tag"] as? String) == finalTag }
-            ?: selectors.first()
-
-        val groupTag = group["tag"] as? String ?: return null
-        val node = (group["selected"] as? String).orEmpty()
-        return if (node.isNotEmpty()) "$groupTag: $node" else groupTag
-    }
-
-    /// Разбор route.final из сырого конфига — эквивалент Dart
-    /// RouteConfig.finalTag (config/route_config.dart). org.json надёжнее regex.
-    private fun routeFinalTag(configRaw: String): String? = runCatching {
-        org.json.JSONObject(configRaw)
-            .optJSONObject("route")
-            ?.optString("final")
-            ?.takeIf { it.isNotEmpty() }
-    }.getOrNull()
-
-    /// Сериализация одной группы в Map — единый формат для push (writeGroups) и
-    /// pull (getGroups). Менять формат — только здесь.
-    private fun serializeGroup(g: OutboundGroup): Map<String, Any> {
-        val items = ArrayList<Map<String, Any>>()
-        val gi = g.getItems()
-        while (gi.hasNext()) {
-            val item = gi.next()
-            items.add(mapOf(
-                "tag" to item.tag,
-                "type" to item.type,
-                "urlTestDelay" to item.urlTestDelay,
-                "urlTestTime" to item.urlTestTime,
-            ))
-        }
-        return mapOf(
-            "tag" to g.getTag(),
-            "type" to g.getType(),
-            "selectable" to g.getSelectable(),
-            "selected" to g.getSelected(),
-            "isExpand" to g.getIsExpand(),
-            "items" to items,
-        )
-    }
-
     // §209 — действия через ensurePingClient (lifecycle-независим). Команда
     // применяется в ЯДРЕ (оно одно) → подписки screen/profiler-клиентов увидят
     // результат через свои стримы. anyClient давал тихий `true` при null-клиенте
@@ -1733,30 +1136,11 @@ class BoxCommandClient(private val host: Host) {
     }
 
     // ═══════════════════════ Handlers ═══════════════════════
-    // Базовый no-op handler — все 11 колбэков в try/catch fail-safe. Конкретные
-    // клиенты переопределяют только нужные write*.
-
-    private abstract inner class BaseHandler(protected val gen: Int) : CommandClientHandler {
-        override fun connected() { runCatching { Log.d(TAG, "connected gen=$gen") } }
-        override fun disconnected(message: String) {
-            runCatching { Log.d(TAG, "disconnected gen=$gen: $message") }
-        }
-        override fun clearLogs() { runCatching { } }
-        override fun setDefaultLogLevel(level: Int) { runCatching { } }
-        override fun initializeClashMode(modeList: StringIterator?, currentMode: String?) { runCatching { } }
-        override fun updateClashMode(newMode: String?) { runCatching { } }
-        override fun writeLogs(messageList: LogIterator?) { runCatching { } }
-        override fun writeStatus(message: StatusMessage?) { runCatching { } }
-        override fun writeGroups(groups: OutboundGroupIterator?) { runCatching { } }
-        override fun writeOutbounds(outbounds: OutboundGroupItemIterator?) { runCatching { } }
-        override fun writeConnectionEvents(message: ConnectionEvents?) { runCatching { } }
-        // §261 — CommandClientHandler расширен writeDNSQuery. Только ProfilerHandler
-        // слушает DNS реально; остальные (status/screen/ping) — no-op.
-        override fun writeDNSQuery(query: DnsQuery?) { runCatching { } }
-    }
+    // База — `CcBaseHandler` (no-op, все колбэки fail-safe); конкретные клиенты
+    // переопределяют только нужные write*.
 
     /// statusClient — только writeStatus + реконнект на disconnected.
-    private inner class StatusHandler(gen: Int) : BaseHandler(gen) {
+    private inner class StatusHandler(gen: Int) : CcBaseHandler(gen) {
         override fun disconnected(message: String) {
             runCatching {
                 Log.d(TAG, "status disconnected gen=$gen: $message")
@@ -1791,7 +1175,7 @@ class BoxCommandClient(private val host: Host) {
     }
 
     /// screenClient — outbounds (плоский node-list) + groups (дерево) + connections.
-    private inner class ScreenHandler(gen: Int) : BaseHandler(gen) {
+    private inner class ScreenHandler(gen: Int) : CcBaseHandler(gen) {
         override fun writeOutbounds(outbounds: OutboundGroupItemIterator?) {
             runCatching {
                 if (gen != screenGen.get()) return
@@ -1832,7 +1216,7 @@ class BoxCommandClient(private val host: Host) {
     /// (оба — команды в options). writeConnectionEvents — дельты соединений;
     /// writeDNSQuery — per-event DNS-резолв (SPEC 018 v2), тело 1:1 из бывшего
     /// DnsHandler.onQuery. JNI-no-throw (§050/§151): body в runCatching.
-    private inner class ProfilerHandler(gen: Int) : BaseHandler(gen) {
+    private inner class ProfilerHandler(gen: Int) : CcBaseHandler(gen) {
         override fun writeConnectionEvents(message: ConnectionEvents?) {
             applyConnectionEvents(message, profilerGen, gen, profilerAccumulator)
         }
@@ -1944,10 +1328,6 @@ class BoxCommandClient(private val host: Host) {
             }.onFailure { Log.w(TAG, "writeDNSQuery failed: ${it.message}") }
         }
     }
-
-    /// §175 — pingClient: подписок нет, только unary `urlTestOutbound`. Все
-    /// колбэки — no-op из BaseHandler (fail-safe try/catch).
-    private inner class PingHandler : BaseHandler(0)
 
     /// §3.2 — применить дельты к аккумулятору, эмитить снапшот. getReset()=replace.
     ///
@@ -2077,70 +1457,14 @@ class BoxCommandClient(private val host: Host) {
 
     // ═══════════════════════ Emitters (по образцу core-log drainer) ═══════════════════════
 
-    private val statusEmitter = SnapshotEmitter { UiSinks.ccStatusSink }
-    private val outboundsEmitter = SnapshotEmitter { UiSinks.ccOutboundsSink }
-    private val groupsEmitter = SnapshotEmitter { UiSinks.ccGroupsSink }
-    private val connectionsEmitter = SnapshotEmitter { UiSinks.ccConnectionsSink }
+    private val statusEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccStatusSink }
+    private val outboundsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccOutboundsSink }
+    private val groupsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccGroupsSink }
+    private val connectionsEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccConnectionsSink }
     // §180 — DNS: событийный (НЕ coalesce), батч-доставка.
-    private val dnsQueriesEmitter = EventEmitter { UiSinks.ccDnsQueriesSink }
+    private val dnsQueriesEmitter = EventEmitter(mainHandler) { UiSinks.ccDnsQueriesSink }
     // §579 — состояние узлов Tailscale: снапшот, coalesce.
-    private val tailscaleEmitter = SnapshotEmitter { UiSinks.ccTailscaleSink }
-
-    /// Дросселированный эмиттер: queue + drop-newest + single Runnable + main-Handler + batch.
-    /// Для status/outbounds/groups/connections эмитим ПОСЛЕДНИЙ снапшот (coalesce —
-    /// промежуточные не нужны, UI рисует актуальное). sink.success на main-looper.
-    private inner class SnapshotEmitter(private val sinkProvider: () -> EventChannel.EventSink?) {
-        private val queue = LinkedBlockingQueue<Any>()
-        private val scheduled = AtomicBoolean(false)
-
-        fun offer(snapshot: Any) {
-            // coalesce: держим только последний снапшот (drop старые).
-            // §219 — после clear() размер всегда 0, проверка QUEUE_MAX была
-            // избыточна (в отличие от EventEmitter.offer без предварит. clear).
-            queue.clear()
-            queue.offer(snapshot)
-            if (scheduled.compareAndSet(false, true)) {
-                mainHandler.post(drainer)
-            }
-        }
-
-        private val drainer = Runnable {
-            scheduled.set(false)
-            val sink = sinkProvider() ?: run { queue.clear(); return@Runnable }
-            val latest = queue.poll() ?: return@Runnable
-            queue.clear()
-            runCatching { sink.success(latest) }
-                .onFailure { Log.w(TAG, "emitter sink.success failed: ${it.message}") }
-        }
-    }
-
-    /// §180 — событийный эмиттер для DNS: НЕ coalesce (в отличие от SnapshotEmitter,
-    /// который держит только последний снапшот). DNS-события дискретны — потеря
-    /// промежуточного резолва = пропавший домен в Live. Копим в очереди, drain
-    /// отдаёт БАТЧ списком (sink.success(List<Map>)), главный-Handler как у снапшота.
-    /// drop-newest при переполнении QUEUE_MAX (наблюдатель, не аудит — как буфер
-    /// observable ядра 256). Контракт sink: Dart-сторона разворачивает список.
-    private inner class EventEmitter(private val sinkProvider: () -> EventChannel.EventSink?) {
-        private val queue = LinkedBlockingQueue<Any>()
-        private val scheduled = AtomicBoolean(false)
-
-        fun offer(event: Any) {
-            if (queue.size < QUEUE_MAX) queue.offer(event)
-            if (scheduled.compareAndSet(false, true)) {
-                mainHandler.post(drainer)
-            }
-        }
-
-        private val drainer = Runnable {
-            scheduled.set(false)
-            val sink = sinkProvider() ?: run { queue.clear(); return@Runnable }
-            val batch = ArrayList<Any>()
-            queue.drainTo(batch)
-            if (batch.isEmpty()) return@Runnable
-            runCatching { sink.success(batch) }
-                .onFailure { Log.w(TAG, "dns emitter sink.success failed: ${it.message}") }
-        }
-    }
+    private val tailscaleEmitter = SnapshotEmitter(mainHandler) { UiSinks.ccTailscaleSink }
 }
 
 /// §659 — заголовки диагностического GET (kernel SPEC 058): только User-Agent

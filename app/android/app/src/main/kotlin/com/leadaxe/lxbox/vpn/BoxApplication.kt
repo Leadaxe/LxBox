@@ -86,6 +86,14 @@ class BoxApplication : Application() {
         // `auto_record_wifi_history` storage flag. Dart запускает на
         // app init если flag true; toggle в Diagnostics дёргает на лету.
         wifiObserver = WifiNetworkObserver(this)
+
+        // §745 — клиент ядра роли UI. Закрывается до закрытия командного
+        // сервера: сервис зовёт слушателей `CoreSession`, не зная, кто
+        // слушает. WARN-строки клиента идут в журнал приложения, который
+        // ведёт сервис, — остаток общей памяти между сторонами; связка здесь,
+        // чтобы ни одна сторона не ссылалась на другую.
+        CoreSession.addBeforeCloseListener { UiCoreSession.close() }
+        UiCoreSession.warningSink = { text -> BoxService.appLogWarning(text) }
     }
 
     /**

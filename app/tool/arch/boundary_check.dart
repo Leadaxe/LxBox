@@ -106,10 +106,23 @@ String _kbase(String name) => '${_kotlinRoot}com/leadaxe/lxbox/$name';
 bool _isKotlinUi(String p) =>
     p == _kbase('MainActivity.kt') ||
     p == _kbase('vpn/VpnPlugin.kt') ||
+    // §745 — клиент ядра роли UI и его держатель.
+    p == _kbase('vpn/BoxCommandClient.kt') ||
+    p == _kbase('vpn/UiCoreSession.kt') ||
     (_under(p, _kbase('vpn/Taildrop')) && p.endsWith('Activity.kt')) ||
     _under(p, _kbase('editor/'));
 
 final _vpnPluginRe = RegExp(r'\bVpnPlugin\b');
+final _uiCoreSessionRe = RegExp(r'\bUiCoreSession\b');
+
+/// §745 C — кто обращается к каким полям `UiSinks`: файл → разрешённые поля
+/// (null — любые). Файл вне списка к `UiSinks` не обращается.
+final _uiSinksUsers = <String, Set<String>?>{
+  _kbase('vpn/VpnPlugin.kt'): null,
+  _kbase('vpn/BoxCommandClient.kt'): null,
+  _kbase('vpn/BoxService.kt'): {'coreLogSink'},
+  _kbase('vpn/ServiceCommandClient.kt'): {'ccOpenConnectSink'},
+};
 final _eventSinkRe = RegExp(r'\bEventSink\b');
 final _sharedPrefsRe = RegExp(r'\bgetSharedPreferences\(');
 final _boxServiceRe = RegExp(r'\bBoxService\.(\w+)');
@@ -177,18 +190,60 @@ final rules = <Rule>[
   Rule(
     id: 'kt-eventsink-type',
     description:
-        'EventSink как тип поля/параметра — только UiSinks.kt и '
-        'VpnPlugin.kt',
+        'EventSink как тип поля/параметра — только UiSinks.kt, '
+        'VpnPlugin.kt и CommandClientShared.kt (эмиттеры)',
     applies: _kt,
     allow: {
       _kbase('vpn/UiSinks.kt'): 'держатель приёмников UI',
       _kbase('vpn/VpnPlugin.kt'): 'onListen/onCancel и локальный statusSink',
-      _kbase('vpn/BoxCommandClient.kt'):
+      _kbase('vpn/CommandClientShared.kt'):
           'существующее, разобрать: SnapshotEmitter/EventEmitter принимают '
-          'sinkProvider: () -> EventSink?',
+          'sinkProvider: () -> EventSink? (общие для двух клиентов, §745)',
     },
     check: (p, code, i) =>
         _eventSinkRe.hasMatch(code[i]) ? 'тип EventSink' : null,
+  ),
+  Rule(
+    id: 'kt-vpnplugin-coresession',
+    description:
+        'VpnPlugin.kt ходит в CoreSession.client только за openconnect '
+        '(строка со словом openConnect) и не знает ServiceCommandClient',
+    applies: (p) => p == _kbase('vpn/VpnPlugin.kt'),
+    check: (p, code, i) => vpnPluginServiceClientUse(code[i]),
+  ),
+  Rule(
+    id: 'kt-uicoresession-ref',
+    description:
+        'UiCoreSession упоминается только в UiCoreSession.kt, VpnPlugin.kt '
+        'и BoxApplication.kt — сервисная сторона о клиенте UI не знает',
+    applies: _kt,
+    allow: {
+      _kbase('vpn/UiCoreSession.kt'): 'сам держатель',
+      _kbase('vpn/VpnPlugin.kt'): 'единственный вызывающий клиента UI',
+      _kbase('vpn/BoxApplication.kt'):
+          'initUiSide: слушатель «перед закрытием» и приёмник журнала',
+    },
+    check: (p, code, i) =>
+        _uiCoreSessionRe.hasMatch(code[i]) ? 'ссылка на UiCoreSession' : null,
+  ),
+  Rule(
+    id: 'kt-uisinks-member',
+    description:
+        'UiSinks: VpnPlugin.kt и BoxCommandClient.kt — любые поля, '
+        'BoxService.kt — coreLogSink, ServiceCommandClient.kt — '
+        'ccOpenConnectSink, остальные файлы — никаких',
+    applies: (p) => _kt(p) && p != _kbase('vpn/UiSinks.kt'),
+    check: (p, code, i) {
+      final members = uiSinksMembers(code[i]);
+      if (members.isEmpty) return null;
+      if (!_uiSinksUsers.containsKey(p)) return 'UiSinks.${members.first}';
+      final ok = _uiSinksUsers[p];
+      if (ok == null) return null;
+      for (final m in members) {
+        if (!ok.contains(m)) return 'UiSinks.$m';
+      }
+      return null;
+    },
   ),
   Rule(
     id: 'kt-sharedprefs',
@@ -208,8 +263,8 @@ final rules = <Rule>[
     id: 'kt-ui-boxservice',
     description:
         'UI-файлы (VpnPlugin, MainActivity, Taildrop*Activity, '
-        'editor/) не ссылаются на BoxService. (кроме coreLogsVerbose, '
-        'doForceStop)',
+        'editor/, BoxCommandClient, UiCoreSession) не ссылаются на '
+        'BoxService. (кроме coreLogsVerbose, doForceStop)',
     applies: _isKotlinUi,
     check: (p, code, i) {
       final m = _boxServiceRe.firstMatch(code[i]);

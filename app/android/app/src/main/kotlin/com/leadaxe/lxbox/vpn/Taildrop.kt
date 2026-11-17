@@ -183,7 +183,7 @@ object Taildrop {
 
     private fun runSend(
         ctx: Context,
-        cc: BoxCommandClient,
+        cc: ServiceCommandClient,
         id: Int,
         job: SendJob,
         tag: String,

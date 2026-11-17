@@ -143,3 +143,68 @@ Openconnect в этом шаге целиком остаётся у сервис
 - `app/tool/arch/README.md` — новые правила.
 - `docs/spec/tasks/122F-commandclient-migration/` — только если там описан
   единственный экземпляр клиента.
+
+## Итог
+
+Реализация разделов A, B, C (17.11.2026). Проверено сборкой и unit-тестами;
+эмулятор и телефон не проверялись — сценарии раздела «Проверка» открыты.
+
+**Сделано**
+
+- A. `BoxCommandClient.kt` (2152 → 1476 строк) — роль UI, в конструкторе
+  приёмник WARN-строк вместо `Host`. `ServiceCommandClient.kt` (455) — сервисная
+  роль, держатель `CoreSession.client`, свой unary-клиент. Общее —
+  `CommandClientShared.kt` (397): полоса `CommandLane` (`lxbox-cc`, одна на
+  процесс) с приёмником предупреждений, no-op обработчик, разрыв клиента,
+  ленивый unary-клиент, эмиттеры, разбор типов ядра в map, unary-вызовы обеих
+  ролей (`getGroups`, удаление и отмена приёма Taildrop, разовый снимок
+  входящих). У каждого клиента поверх — обёртка в одну строку. Код перенесён
+  без изменений; `anyClient()` и `stopStatus()` удалены как мёртвые.
+- B. `UiCoreSession` (`client`, `isUp`, `ensure()`, `close()`,
+  `closeOffMain()`): `ensure()` — в `statusReceiver` на `Started` до передачи
+  события в Dart, в `onAttachedToEngine`, в каждом обработчике `cc*` роли UI
+  (37 мест). Закрытие — слушатель `CoreSession` «перед закрытием» (регистрирует
+  `BoxApplication.initUiSide`, сервис зовёт в `closeCommandServerAtomic` до
+  своего `shutdownAll()`), `Stopped`, `onDetachedFromEngine`. Там же
+  обнуляются `ccTailscalePingSink` и `ccConnectionTestSink`.
+- C. Правила `kt-vpnplugin-coresession`, `kt-uicoresession-ref`,
+  `kt-uisinks-member`; `BoxCommandClient.kt` и `UiCoreSession.kt` добавлены в
+  UI-файлы правила `kt-ui-boxservice`.
+
+**Отклонения от спеки**
+
+- Обработчиков openconnect, ходящих в `CoreSession.client`, пять, а не шесть:
+  «запрос открытия» (`ccTakeOpenConnectOpenRequest`) клиента не касается, он
+  читает `UiLaunchRequests`. Пять идут через один аксессор
+  `VpnPlugin.openConnectControl()` и узкий интерфейс `OpenConnectControl` —
+  так в `VpnPlugin.kt` осталась одна строка с `CoreSession.client`, и правило
+  сторожа проверяет признак в самой строке, без списка номеров.
+- Исключение «`EventSink` как тип» выдано `CommandClientShared.kt`, а не
+  `ServiceCommandClient.kt`: эмиттеры общие, сервисный клиент тип не называет.
+  Доступ сервисного клиента к `UiSinks` ограничен полем `ccOpenConnectSink`
+  отдельным правилом `kt-uisinks-member`.
+- На `Stopped` клиент UI закрывается, только если текущий
+  `TunnelState.status` не `Started`: запоздалый `Stopped` прошлого туннеля
+  после нового `Started` (быстрый перезапуск, §122) иначе закрыл бы клиента
+  нового туннеля вместе со счётчиком экранов.
+- На `Stopped` и в `onDetachedFromEngine` (главный поток) ссылка снимается
+  сразу, а `shutdownAll()` идёт в отдельной нити (`closeOffMain`), как
+  `cancelPing`: главный поток в ядро не ходит (§732). Слушатель «перед
+  закрытием» закрывает синхронно, в потоке остановки.
+- Приёмник журнала клиенту UI отдаёт `BoxApplication.initUiSide`
+  (`UiCoreSession.warningSink`), а не `VpnPlugin`: UI-файлам запрещено
+  ссылаться на `BoxService`.
+- Unit-тест проверяет обобщённый держатель `ClientHolder`, на котором
+  построен `UiCoreSession`, с подменной фабрикой: сам `BoxCommandClient` в
+  JVM-тесте не создать (Android `Handler`, libbox).
+- Unary-клиент у каждой роли свой. Раньше он был общий, и `ccCancelPing` /
+  `ccResyncForReopen` рвали его вместе с сервисными вызовами (подпись узла,
+  Taildrop из уведомлений); теперь не рвут.
+
+**Не проверено**
+
+- Эмулятор и телефон: все шесть сценариев раздела «Проверка», в том числе
+  время от `Started` до первых групп, старт без UI, openconnect без UI,
+  50 циклов старт-стоп.
+- `docs/spec/tasks/122F-commandclient-migration/` не менялся: единственный
+  экземпляр клиента там не описан.

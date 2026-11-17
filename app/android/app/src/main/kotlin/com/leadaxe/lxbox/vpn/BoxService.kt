@@ -82,19 +82,18 @@ class BoxService(
             current?.appLogLine("WARN $text")
         }
 
-        /// §742 — приёмник WARN-строк полосы `BoxCommandClient.lane`: прежний
+        /// §742 — приёмник WARN-строк полосы `CommandLane.lane`: прежний
         /// `appLogWarning` (сервиса нет — молчим). Ставится и снимается вместе
         /// с `current`.
         private val laneWarningSink: (String) -> Unit = { text -> appLogWarning(text) }
 
-        /// §742 — зависимости `BoxCommandClient` от сервиса: уведомления
-        /// «Sign-in required» (контекст приложения) и журнал приложения.
-        private val commandClientHost = object : BoxCommandClient.Host {
+        /// §742 — зависимости `ServiceCommandClient` от сервиса: уведомления
+        /// «Sign-in required» (контекст приложения).
+        private val commandClientHost = object : ServiceCommandClient.Host {
             override fun showSignIn(tag: String) =
                 ServiceNotification.showSignIn(BoxApplication.application, tag)
             override fun cancelSignIn(tag: String) =
                 ServiceNotification.cancelSignIn(BoxApplication.application, tag)
-            override fun logWarning(text: String) = appLogWarning(text)
         }
 
         /// §732 — полоса для pause/wake/rebind ядра. Эти вызовы синхронно
@@ -540,12 +539,15 @@ class BoxService(
     private fun closeCommandServerAtomic(reason: String, trace: StopTrace? = null) {
         // §122 Фаза 0 — сначала закрыть CommandClient-канал (его сокет-соединения к
         // CommandServer), потом сам сервер. Идемпотентно (getAndSet-паттерн внутри).
+        // §745 — порядок прежний: клиент UI (слушатели «перед закрытием»; кто
+        // слушает, сервис не знает), сервисный клиент, потом сервер.
+        CoreSession.notifyBeforeClose()
         runCatching { CoreSession.client?.shutdownAll() }
             .onFailure { Log.w(TAG, "closeCommandServerAtomic($reason): commandClient shutdown failed: ${it.message}") }
         CoreSession.close()
         if (current === this) {
             current = null
-            BoxCommandClient.laneWarningSink = null
+            CommandLane.warningSink = null
         }
         val cs = commandServer.getAndSet(null) ?: return
 
@@ -735,18 +737,21 @@ class BoxService(
             .onFailure { Log.w(TAG, "taildrop clip surfaces failed: ${it.javaClass.simpleName}") }
 
         // §122 Фаза 0 — поднять CommandClient-канал. ПОСЛЕ startCommandServer()
-        // и Started: command.sock существует только когда сервер запущен. statusClient
-        // always-on (watchdog + скорость); screen/profiler — по сигналам из Dart.
+        // и Started: command.sock существует только когда сервер запущен.
+        // §745 — здесь только сервисный клиент (openconnect, подпись узла,
+        // Taildrop из уведомлений). Статус-стрим, экран и профайлер — клиент
+        // UI: его создаёт сторона UI по broadcast `Started` (`UiCoreSession`),
+        // без движка Flutter он не поднимается. Нативных читателей у
+        // статус-стрима нет.
         runCatching {
-            val cc = BoxCommandClient(commandClientHost)
+            val cc = ServiceCommandClient(commandClientHost)
             CoreSession.open(cc)
             current = this
-            BoxCommandClient.laneWarningSink = laneWarningSink
-            cc.startStatus()
+            CommandLane.warningSink = laneWarningSink
             // §654 C — статус openconnect (второй фактор / SSO): подписка, если
             // в конфиге есть такой endpoint; Dart для этого не нужен.
             cc.syncOpenConnectStatus(ConfigManager.load())
-        }.onFailure { Log.w(TAG, "BoxCommandClient.startStatus failed: ${it.message}") }
+        }.onFailure { Log.w(TAG, "ServiceCommandClient start failed: ${it.message}") }
 
         // §223 Часть B (#23) — если UI не открывался (старт с QS-плитки → нет
         // Flutter-движка → Dart не прислал лейбл), через ~3с сами читаем
