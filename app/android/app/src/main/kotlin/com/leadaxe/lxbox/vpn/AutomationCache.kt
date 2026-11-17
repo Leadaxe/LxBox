@@ -22,13 +22,4 @@ object AutomationCache {
     /// Файл открывается на переданном контексте, как раньше в каждом месте.
     fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-
-    /// §750 — файл `lxbox_assistant`: индекс ассистента (производное зеркало
-    /// от Dart, `setAssistantIndex`). Здесь только открытие файла — правило
-    /// boundary_check `kt-sharedprefs` держит `getSharedPreferences` в трёх
-    /// файлах; ключи и разбор — в `appfunctions/AssistantIndex.kt`.
-    const val ASSISTANT_PREF_NAME = "lxbox_assistant"
-
-    fun assistantPrefs(ctx: Context): SharedPreferences =
-        ctx.applicationContext.getSharedPreferences(ASSISTANT_PREF_NAME, Context.MODE_PRIVATE)
 }

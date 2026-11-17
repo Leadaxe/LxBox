@@ -5,47 +5,6 @@ import androidx.appfunctions.AppFunctionSerializable
 // §750 — типы ответов функций ассистента (AppFunctions). KDoc — английский,
 // описывает только смысл полей; KSP кладёт его в схему.
 
-/** A routing direction of L×Box: a named group of exits that traffic can go through. */
-@AppFunctionSerializable(isDescribedByKDoc = true)
-data class DirectionInfo(
-    /** The direction identifier, such as "vpn-1". */
-    val tag: String,
-    /** The direction name set by the user. */
-    val name: String,
-    /** The number of exits in the direction. */
-    val exitCount: Int,
-    /** The name of the exit selected now, as set by the subscription provider or the user; empty when the VPN is off. */
-    val currentExit: String,
-)
-
-/** A private network connection configured in L×Box (WireGuard, AmneziaWG, OpenVPN, OpenConnect or Tailscale). */
-@AppFunctionSerializable(isDescribedByKDoc = true)
-data class ConnectionInfo(
-    /** The connection identifier. */
-    val id: String,
-    /** The connection name set by the user or the provider. */
-    val name: String,
-    /** The connection type: "wireguard", "amneziawg", "openvpn", "openconnect" or "tailscale". */
-    val type: String,
-    /** Whether the connection is turned on in L×Box. */
-    val enabled: Boolean,
-    /** The connection state: "up", "connecting", "idle", "needs_login", "down", "disabled" or "unknown". */
-    val state: String,
-)
-
-/** An overview of the L×Box network setup. */
-@AppFunctionSerializable(isDescribedByKDoc = true)
-data class NetworkOverview(
-    /** The tunnel state: "stopped", "starting", "started" or "stopping". */
-    val vpnStatus: String,
-    /** Where traffic without a matching rule goes: a direction identifier, "direct" or "block". */
-    val defaultRoute: String,
-    /** The routing directions. */
-    val directions: List<DirectionInfo>,
-    /** The private network connections. */
-    val connections: List<ConnectionInfo>,
-)
-
 /** Exits of a routing direction. */
 @AppFunctionSerializable(isDescribedByKDoc = true)
 data class ExitList(
@@ -117,21 +76,6 @@ data class AppMatch(
     val label: String,
 )
 
-/** How the saved routing rules route an app. */
-@AppFunctionSerializable(isDescribedByKDoc = true)
-data class AppRoute(
-    /** The app package name. */
-    val app: String,
-    /** Where the app traffic goes: a direction identifier, "direct" or "block". */
-    val target: String,
-    /** The name of the target: the direction name set by the user, "Direct" or "Block". */
-    val targetName: String,
-    /** The name of the rule that routes the app, set by the user; empty when no rule matches and the default route applies. */
-    val ruleName: String,
-    /** Whether the rule also has other conditions (domain, network, Wi-Fi), so the route depends on them. */
-    val conditional: Boolean,
-)
-
 /** The result of selecting an exit in a routing direction. */
 @AppFunctionSerializable(isDescribedByKDoc = true)
 data class ExitSelection(
@@ -141,4 +85,13 @@ data class ExitSelection(
     val exit: String,
     /** Whether the selection changed. */
     val changed: Boolean,
+)
+
+/** The answer of an L×Box API route. */
+@AppFunctionSerializable(isDescribedByKDoc = true)
+data class ApiResponse(
+    /** The status code of the route, as in HTTP: 200 is success, 4xx is a rejected request. */
+    val status: Int,
+    /** The answer body as a JSON string. */
+    val body: String,
 )

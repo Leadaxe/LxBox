@@ -118,5 +118,8 @@
     <string name="clip_too_large">Слишком большой для отправки</string>
     <string name="clip_copied">Скопировано</string>
 
-    <string name="appfunctions_display_description">Включение и выключение VPN, проверка подключения.</string>
+    <string name="appfunctions_display_description">Включение и выключение VPN, проверки сети, чтение настроек маршрутизации и — с вашего разрешения — их изменение.</string>
+    <!-- §750 мост шлюза ассистента: окно L×Box не открылось -->
+    <string name="assistant_channel_name">Запросы ассистента</string>
+    <string name="assistant_open_app_title">Откройте L×Box, чтобы ассистент продолжил</string>
 </resources>

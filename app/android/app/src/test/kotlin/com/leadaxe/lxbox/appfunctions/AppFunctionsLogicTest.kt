@@ -58,8 +58,8 @@ class AppFunctionsLogicTest {
             listOf(
                 "startVpn", "stopVpn", "getVpnStatus",
                 // §750
-                "getNetworkOverview", "listExits", "checkUrl", "checkExit",
-                "findApps", "getAppRoute", "selectExit",
+                "listExits", "checkUrl", "checkExit",
+                "findApps", "selectExit", "getApiHelp", "callApi",
             ).map {
                 "com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions#$it"
             },

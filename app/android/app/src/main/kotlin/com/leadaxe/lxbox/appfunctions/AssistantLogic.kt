@@ -10,15 +10,17 @@ import org.json.JSONObject
 class AssistantError(val code: String, message: String) : Exception(message) {
     companion object {
         const val VPN_OFF = "vpn_off"
-        const val NO_INDEX = "no_index"
         const val NOT_FOUND = "not_found"
         const val BUSY = "busy"
         const val INVALID_ARGUMENT = "invalid_argument"
         const val CORE_ERROR = "core_error"
+        /// §750 — Dart-часть не поднялась за отведённое время ([AssistantBridge]).
+        const val APP_NOT_OPEN = "app_not_open"
     }
 }
 
-/// §750 — индекс для натива (пишет Dart методом `setAssistantIndex`).
+/// §750 — индекс для натива: Dart собирает по требованию и передаёт
+/// аргументом `index` вызовов `assistantOverview` / `assistantAppRoute`.
 data class IndexDirection(
     val tag: String,
     val name: String,
@@ -95,7 +97,7 @@ object AssistantLogic {
     const val APPS_LIMIT = 10
     const val APP_QUERY_MIN = 2
 
-    const val MSG_NO_INDEX = "Open L×Box once to finish setup."
+    const val MSG_BAD_INDEX = "The index is empty or not valid JSON."
     const val MSG_VPN_OFF = "The VPN is off. Start it first."
     const val MSG_CORE_DOWN = "The VPN core is not reachable yet. Try again in a few seconds."
 
@@ -443,5 +445,60 @@ object AssistantLogic {
             }
             else -> CONN_UNKNOWN
         }
+    }
+
+    // ═══════════════════════ §750 мост шлюза в Dart ═══════════════════════
+    // Чистая часть [AssistantBridge]: разбор ответа Dart и решение
+    // «вызвать / открыть окно / ждать / сдаться».
+
+    /// Сколько ждать Dart-часть после попытки открыть окно.
+    const val BRIDGE_WAIT_MS = 10_000L
+    const val BRIDGE_POLL_MS = 200L
+    /// Предел одного вызова `assistantCall`.
+    const val BRIDGE_CALL_TIMEOUT_MS = 30_000L
+
+    const val MSG_APP_NOT_OPEN = "L×Box is not open. Open the app and repeat."
+    const val MSG_BRIDGE_TIMEOUT = "L×Box did not answer in time. Repeat the request."
+    const val MSG_BRIDGE_BAD_REPLY = "L×Box returned an unexpected answer."
+
+    /// Ответ шлюза: `status` — как HTTP-код обработчика, `body` — JSON строкой.
+    data class ApiResult(val status: Int, val body: String)
+
+    /// Разбор ответа Dart `{"status": Int, "body": String}`; иное — null.
+    fun parseBridgeReply(reply: Any?): ApiResult? {
+        val m = reply as? Map<*, *> ?: return null
+        val status = (m["status"] as? Number)?.toInt() ?: return null
+        val body = m["body"] as? String ?: ""
+        return ApiResult(status, body)
+    }
+
+    /// «Движок есть, контроллеры ещё не подняты» — повторить позже.
+    fun isNotReady(r: ApiResult): Boolean = r.status == 503 && r.body.contains("not_ready")
+
+    enum class BridgeStep { LAUNCH, WAIT, GIVE_UP }
+
+    /// Что делать, когда моста нет или Dart ответил `not_ready`: окно ещё не
+    /// открывали — открыть (один раз); открывали — ждать до [BRIDGE_WAIT_MS]
+    /// с момента попытки, потом сдаться.
+    fun bridgeStep(launched: Boolean, sinceLaunchMs: Long): BridgeStep = when {
+        !launched -> BridgeStep.LAUNCH
+        sinceLaunchMs < BRIDGE_WAIT_MS -> BridgeStep.WAIT
+        else -> BridgeStep.GIVE_UP
+    }
+
+    private val API_METHODS = setOf("GET", "POST", "PUT", "PATCH", "DELETE")
+
+    /// Проверка аргументов `callApi`: метод (без учёта регистра) → верхний
+    /// регистр; путь начинается с `/`. Иначе [AssistantError.INVALID_ARGUMENT].
+    fun validateApiCall(method: String, path: String): Pair<String, String> {
+        val m = method.trim().uppercase(java.util.Locale.ROOT)
+        if (m !in API_METHODS) {
+            throw AssistantError(AssistantError.INVALID_ARGUMENT, "The method must be GET, POST, PUT, PATCH or DELETE.")
+        }
+        val p = path.trim()
+        if (!p.startsWith("/")) {
+            throw AssistantError(AssistantError.INVALID_ARGUMENT, "The path must start with /.")
+        }
+        return m to p
     }
 }

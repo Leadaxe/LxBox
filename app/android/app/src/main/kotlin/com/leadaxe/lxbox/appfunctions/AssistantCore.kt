@@ -15,6 +15,7 @@ import io.nekohasekai.libbox.ConnectionTestSession
 import io.nekohasekai.libbox.ConnectionTestStage
 import io.nekohasekai.libbox.Libbox
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -56,8 +57,11 @@ object AssistantCore {
 
     private fun tunnelUp(): Boolean = TunnelState.status == VpnStatus.Started
 
-    private fun requireIndex(ctx: Context): ParsedIndex =
-        AssistantIndex.load(ctx) ?: throw AssistantError(AssistantError.NO_INDEX, AssistantLogic.MSG_NO_INDEX)
+    /// Индекс приходит аргументом вызова (Dart собирает его по требованию,
+    /// §750: никакого хранения). Пустой или битый → `invalid_argument`.
+    private fun requireIndex(indexJson: String): ParsedIndex =
+        AssistantLogic.parseIndex(indexJson)
+            ?: throw AssistantError(AssistantError.INVALID_ARGUMENT, AssistantLogic.MSG_BAD_INDEX)
 
     /// Сервисный клиент работающего ядра; туннель не поднят → `vpn_off`.
     private fun requireCore(): ServiceCommandClient {
@@ -116,36 +120,34 @@ object AssistantCore {
         return cur
     }
 
-    /// Направление по аргументу: тег, иначе подпись из индекса (без учёта
-    /// регистра). Возвращает тег или null.
-    private fun resolveDirection(index: ParsedIndex?, live: Map<String, LiveGroup>?, arg: String): String? {
+    /// Направление по аргументу — только тег (§750: поиска по подписи нет):
+    /// живая группа, при остановленном туннеле — группа сохранённого
+    /// конфига. Возвращает тег или null.
+    private fun resolveDirection(live: Map<String, LiveGroup>?, arg: String): String? {
         val a = arg.trim()
         if (a.isEmpty()) return null
         if (live?.containsKey(a) == true) return a
-        if (index?.directions?.any { it.tag == a } == true) return a
-        index?.directions?.firstOrNull { it.name.equals(a, ignoreCase = true) }?.let { return it.tag }
         if (live == null && configMembers(a) != null) return a
         return null
     }
 
-    /// Выходы Направления [tag]: живые → индекс → сохранённый конфиг.
-    private fun exitsOf(index: ParsedIndex?, live: Map<String, LiveGroup>?, tag: String): List<String> =
+    /// Выходы Направления [tag]: живые группы ядра → сохранённый конфиг.
+    private fun exitsOf(live: Map<String, LiveGroup>?, tag: String): List<String> =
         live?.get(tag)?.members
-            ?: index?.directions?.firstOrNull { it.tag == tag }?.exits?.takeIf { it.isNotEmpty() }
             ?: configMembers(tag)
             ?: emptyList()
 
-    // ═══════════════════════ getNetworkOverview ═══════════════════════
+    // ═══════════════════════ обзор сети (Debug API /assistant/overview) ═══════════════════════
 
-    suspend fun overview(ctx: Context): Map<String, Any?> = withContext(Dispatchers.IO) {
-        val index = requireIndex(ctx)
+    suspend fun overview(ctx: Context, indexJson: String): Map<String, Any?> = withContext(Dispatchers.IO) {
+        val index = requireIndex(indexJson)
         val up = tunnelUp()
         val live = liveGroups()
         val directions = index.directions.map { d ->
             mapOf(
                 "tag" to AssistantLogic.clean(d.tag),
                 "name" to AssistantLogic.clean(d.name.ifEmpty { d.tag }),
-                "exit_count" to exitsOf(index, live, d.tag).size,
+                "exit_count" to exitsOf(live, d.tag).size,
                 "current_exit" to if (live != null) AssistantLogic.clean(leafOf(live, d.tag)) else "",
             )
         }
@@ -194,11 +196,10 @@ object AssistantCore {
 
     suspend fun listExits(ctx: Context, direction: String, query: String?): Map<String, Any?> =
         withContext(Dispatchers.IO) {
-            val index = AssistantIndex.load(ctx)
             val live = liveGroups()
-            val tag = resolveDirection(index, live, direction)
+            val tag = resolveDirection(live, direction)
                 ?: throw AssistantError(AssistantError.NOT_FOUND, "No such direction.")
-            val r = AssistantLogic.filterExits(exitsOf(index, live, tag), query)
+            val r = AssistantLogic.filterExits(exitsOf(live, tag), query)
             mapOf(
                 "direction" to AssistantLogic.clean(tag),
                 "exits" to r.exits,
@@ -214,7 +215,7 @@ object AssistantCore {
             val cc = requireCore()
             val live = liveGroups()
                 ?: throw AssistantError(AssistantError.CORE_ERROR, AssistantLogic.MSG_CORE_DOWN)
-            val tag = resolveDirection(AssistantIndex.load(ctx), live, direction)
+            val tag = resolveDirection(live, direction)
                 ?.takeIf { live.containsKey(it) }
                 ?: throw AssistantError(AssistantError.NOT_FOUND, "No such direction.")
             val group = live.getValue(tag)
@@ -247,7 +248,7 @@ object AssistantCore {
             }
             val cc = requireCore()
             val live = liveGroups()
-            val tag = resolveDirection(AssistantIndex.load(ctx), live, direction)
+            val tag = resolveDirection(live, direction)
                 ?.takeIf { live == null || live.containsKey(it) }
                 ?: throw AssistantError(AssistantError.NOT_FOUND, "No such direction.")
             val exit = live?.let { AssistantLogic.clean(leafOf(it, tag)) } ?: ""
@@ -293,10 +294,10 @@ object AssistantCore {
         }
     }
 
-    suspend fun appRoute(ctx: Context, appPackage: String): Map<String, Any?> = withContext(Dispatchers.IO) {
+    suspend fun appRoute(ctx: Context, indexJson: String, appPackage: String): Map<String, Any?> = withContext(Dispatchers.IO) {
         val pkg = appPackage.trim()
         if (pkg.isEmpty()) throw AssistantError(AssistantError.INVALID_ARGUMENT, "The app package is empty.")
-        val index = requireIndex(ctx)
+        val index = requireIndex(indexJson)
         val r = AssistantLogic.appRoute(index, pkg)
         mapOf(
             "app" to AssistantLogic.clean(pkg, 200),
@@ -316,7 +317,10 @@ object AssistantCore {
         val cc = requireCore()
         if (!checkRunning.compareAndSet(false, true)) return urlReport(AssistantLogic.OUTCOME_BUSY)
         try {
-            return withContext(Dispatchers.IO) { runUrlCheck(cc, link, appPackage?.trim().orEmpty()) }
+            // §750 — runInterruptible: отмена корутины прерывает ожидание
+            // итога (latch), клиент и сессия освобождаются сразу, а не через
+            // 20 с; до правки флаг «идёт проверка» держался всё это время.
+            return runInterruptible(Dispatchers.IO) { runUrlCheck(cc, link, appPackage?.trim().orEmpty()) }
         } finally {
             checkRunning.set(false)
         }
@@ -342,6 +346,9 @@ object AssistantCore {
             val finished = collector.done.await(CHECK_URL_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             return collector.report(finished)
         } catch (e: AssistantError) {
+            throw e
+        } catch (e: InterruptedException) {
+            // Отмена корутины (runInterruptible) — не ошибка ядра.
             throw e
         } catch (t: Exception) {
             Log.w(TAG, "checkUrl failed: ${t.javaClass.simpleName}")

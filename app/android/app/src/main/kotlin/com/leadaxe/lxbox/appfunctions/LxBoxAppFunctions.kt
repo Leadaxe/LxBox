@@ -98,41 +98,9 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
     // `AssistantError` → наследник `AppFunctionException` ([assistant]).
 
     /**
-     * Returns an overview of the L×Box network setup: the tunnel state, the
-     * default route, the routing directions with their selected exits, and the
-     * private network connections with their states.
-     */
-    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
-    suspend fun getNetworkOverview(): NetworkOverview {
-        ensureEnabled()
-        val m = assistant { AssistantCore.overview(applicationContext) }
-        return NetworkOverview(
-            vpnStatus = m.str("vpn_status"),
-            defaultRoute = m.str("default_route"),
-            directions = m.maps("directions").map {
-                DirectionInfo(
-                    tag = it.str("tag"),
-                    name = it.str("name"),
-                    exitCount = it.int("exit_count"),
-                    currentExit = it.str("current_exit"),
-                )
-            },
-            connections = m.maps("connections").map {
-                ConnectionInfo(
-                    id = it.str("id"),
-                    name = it.str("name"),
-                    type = it.str("type"),
-                    enabled = it.bool("enabled"),
-                    state = it.str("state"),
-                )
-            },
-        )
-    }
-
-    /**
      * Lists the exits of a routing direction.
      *
-     * @param direction The direction identifier or name.
+     * @param direction The direction identifier, such as "vpn-1".
      * @param query Text to look for in exit names, ignoring case; all exits when empty.
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
@@ -180,7 +148,7 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
      * Checks the actual exit of a routing direction: the public IP address and
      * its country.
      *
-     * @param direction The direction identifier or name.
+     * @param direction The direction identifier, such as "vpn-1".
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
     suspend fun checkExit(direction: String): ExitCheck {
@@ -208,28 +176,10 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
     }
 
     /**
-     * Returns how the saved routing rules route an app.
-     *
-     * @param appPackage The app package name.
-     */
-    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
-    suspend fun getAppRoute(appPackage: String): AppRoute {
-        ensureEnabled()
-        val m = assistant { AssistantCore.appRoute(applicationContext, appPackage) }
-        return AppRoute(
-            app = m.str("app"),
-            target = m.str("target"),
-            targetName = m.str("target_name"),
-            ruleName = m.str("rule_name"),
-            conditional = m.bool("conditional"),
-        )
-    }
-
-    /**
      * Selects an exit in a routing direction of the running VPN. The selection
      * lasts until the VPN restarts.
      *
-     * @param direction The direction identifier or name.
+     * @param direction The direction identifier, such as "vpn-1".
      * @param exit The exact exit name from the list of exits.
      */
     @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
@@ -241,6 +191,40 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
             exit = m.str("exit"),
             changed = m.bool("changed"),
         )
+    }
+
+    // ═══════════════════════ §750 шлюз к Debug API (исполняет Dart) ═══════════════════════
+    // Мост — [AssistantBridge]: нет Dart-части — открыть окно и ждать; не
+    // дождались — уведомление и `app_not_open`. Политику проверяет Dart.
+
+    /**
+     * Returns the list of L×Box API routes available to assistants: method, path, purpose and parameters.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun getApiHelp(): ApiResponse {
+        ensureEnabled()
+        val r = assistant { AssistantBridge.call(applicationContext, "GET", "/assistant/help", null) }
+        return ApiResponse(status = r.status, body = r.body)
+    }
+
+    /**
+     * Calls an L×Box API route from the list of routes available to assistants.
+     * Returns the status code of the route and its JSON answer. Routes that
+     * change settings run only when the user has allowed changes in the L×Box
+     * settings; otherwise they answer with status 403.
+     *
+     * @param method The request method: GET, POST, PUT, PATCH or DELETE.
+     * @param path The route path starting with "/", with the query string if any.
+     * @param body The request body as a JSON string; none when empty.
+     */
+    @AppFunctionDeclaration(isDescribedByKDoc = true, isEnabled = false)
+    suspend fun callApi(method: String, path: String, body: String?): ApiResponse {
+        ensureEnabled()
+        val r = assistant {
+            val (m, p) = AssistantLogic.validateApiCall(method, path)
+            AssistantBridge.call(applicationContext, m, p, body?.takeIf { it.isNotBlank() })
+        }
+        return ApiResponse(status = r.status, body = r.body)
     }
 
     /// Исполнить операцию ассистента: холодный процесс → инициализация
@@ -257,7 +241,10 @@ abstract class LxBoxAppFunctions : AppFunctionService() {
                 AssistantError.NOT_FOUND -> AppFunctionElementNotFoundException(msg)
                 AssistantError.INVALID_ARGUMENT -> AppFunctionInvalidArgumentException(msg)
                 AssistantError.BUSY -> AppFunctionLimitExceededException(msg)
-                AssistantError.VPN_OFF, AssistantError.NO_INDEX -> AppFunctionNotSupportedException(msg)
+                AssistantError.VPN_OFF,
+                // §750 — окно L×Box не открылось: функция сейчас недоступна
+                // в этом состоянии приложения (ближайший класс rc01).
+                AssistantError.APP_NOT_OPEN -> AppFunctionNotSupportedException(msg)
                 else -> AppFunctionAppUnknownException(msg)
             }
         }
@@ -299,8 +286,5 @@ private fun Map<String, Any?>.bool(key: String): Boolean = this[key] as? Boolean
 @Suppress("UNCHECKED_CAST")
 private fun Map<String, Any?>.sub(key: String): Map<String, Any?> =
     this[key] as? Map<String, Any?> ?: emptyMap()
-@Suppress("UNCHECKED_CAST")
-private fun Map<String, Any?>.maps(key: String): List<Map<String, Any?>> =
-    (this[key] as? List<*>)?.mapNotNull { it as? Map<String, Any?> } ?: emptyList()
 private fun Map<String, Any?>.strs(key: String): List<String> =
     (this[key] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()

@@ -21,8 +21,10 @@ object AppFunctionsLogic {
     val FUNCTION_IDS: List<String> = listOf(
         "startVpn", "stopVpn", "getVpnStatus",
         // §750 — функции ассистента над работающим ядром.
-        "getNetworkOverview", "listExits", "checkUrl", "checkExit",
-        "findApps", "getAppRoute", "selectExit",
+        "listExits", "checkUrl", "checkExit",
+        "findApps", "selectExit",
+        // §750 — шлюз к Debug API (исполняет Dart).
+        "getApiHelp", "callApi",
     ).map { "$DECLARING_CLASS#$it" }
 
     fun statusValue(s: VpnStatus): String = when (s) {

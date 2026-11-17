@@ -287,4 +287,52 @@ class AssistantLogicTest {
         assertEquals("needs_login", AssistantLogic.connectionState("openconnect", true, true, "auth-pending"))
         assertEquals("down", AssistantLogic.connectionState("openconnect", true, true, "error"))
     }
+
+    // ─────────── §750 мост шлюза в Dart ───────────
+
+    @Test
+    fun bridgeReplyParsing() {
+        assertEquals(
+            AssistantLogic.ApiResult(200, "{\"ok\":true}"),
+            AssistantLogic.parseBridgeReply(mapOf("status" to 200, "body" to "{\"ok\":true}")),
+        )
+        // Dart-int может приехать Long.
+        assertEquals(403, AssistantLogic.parseBridgeReply(mapOf("status" to 403L, "body" to "{}"))!!.status)
+        // Нет тела — пустая строка.
+        assertEquals("", AssistantLogic.parseBridgeReply(mapOf("status" to 204))!!.body)
+        assertNull(AssistantLogic.parseBridgeReply(null))
+        assertNull(AssistantLogic.parseBridgeReply("x"))
+        assertNull(AssistantLogic.parseBridgeReply(mapOf("body" to "{}")))
+    }
+
+    @Test
+    fun notReadyOnlyFor503WithMarker() {
+        assertTrue(AssistantLogic.isNotReady(AssistantLogic.ApiResult(503, "{\"error\":\"not_ready\"}")))
+        assertFalse(AssistantLogic.isNotReady(AssistantLogic.ApiResult(503, "{\"error\":\"core_down\"}")))
+        assertFalse(AssistantLogic.isNotReady(AssistantLogic.ApiResult(200, "not_ready")))
+    }
+
+    @Test
+    fun bridgeStepLaunchesOnceThenWaitsThenGivesUp() {
+        assertEquals(AssistantLogic.BridgeStep.LAUNCH, AssistantLogic.bridgeStep(false, 0))
+        assertEquals(AssistantLogic.BridgeStep.WAIT, AssistantLogic.bridgeStep(true, 0))
+        assertEquals(AssistantLogic.BridgeStep.WAIT,
+            AssistantLogic.bridgeStep(true, AssistantLogic.BRIDGE_WAIT_MS - 1))
+        assertEquals(AssistantLogic.BridgeStep.GIVE_UP,
+            AssistantLogic.bridgeStep(true, AssistantLogic.BRIDGE_WAIT_MS))
+    }
+
+    @Test
+    fun apiCallValidation() {
+        assertEquals("PATCH" to "/rules/1", AssistantLogic.validateApiCall(" patch ", "/rules/1"))
+        assertEquals("GET" to "/rules?q=a", AssistantLogic.validateApiCall("Get", "/rules?q=a"))
+        for ((m, p) in listOf("HEAD" to "/rules", "" to "/rules", "GET" to "rules", "GET" to "")) {
+            try {
+                AssistantLogic.validateApiCall(m, p)
+                throw AssertionError("expected invalid_argument for $m $p")
+            } catch (e: AssistantError) {
+                assertEquals(AssistantError.INVALID_ARGUMENT, e.code)
+            }
+        }
+    }
 }

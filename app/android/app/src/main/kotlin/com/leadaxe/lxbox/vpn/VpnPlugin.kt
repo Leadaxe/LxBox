@@ -793,22 +793,16 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 com.leadaxe.lxbox.appfunctions.AppFunctionsGate.setEnabled(context, enabled)
                 result.success(true)
             }
-            // §750 — индекс ассистента (сводка от Dart) и операции ассистента
-            // для Debug API. Тумблер «AI assistant control» здесь НЕ
-            // проверяется: у Debug API свой доступ. Ошибка операции — успех с
-            // `{error: {code, message}}`, не `result.error`.
-            "setAssistantIndex" -> {
-                val json = call.argument<String>("json") ?: ""
-                val appContext = context
-                pluginScope.launch {
-                    withContext(Dispatchers.IO) {
-                        com.leadaxe.lxbox.appfunctions.AssistantIndex.save(appContext, json)
-                    }
-                    result.success(true)
+            // §750 — операции ассистента для Debug API. Тумблер «AI assistant
+            // control» здесь НЕ проверяется: у Debug API свой доступ. Ошибка
+            // операции — успех с `{error: {code, message}}`, не `result.error`.
+            // Индекс (`index`, JSON) Dart собирает по требованию и шлёт
+            // аргументом — натив его не хранит.
+            "assistantOverview" -> {
+                val index = call.argument<String>("index") ?: ""
+                assistantCall(result) {
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.overview(it, index)
                 }
-            }
-            "assistantOverview" -> assistantCall(result) {
-                com.leadaxe.lxbox.appfunctions.AssistantCore.overview(it)
             }
             "assistantListExits" -> {
                 val direction = call.argument<String>("direction") ?: ""
@@ -837,9 +831,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
             }
             "assistantAppRoute" -> {
+                val index = call.argument<String>("index") ?: ""
                 val app = call.argument<String>("app") ?: ""
                 assistantCall(result) {
-                    com.leadaxe.lxbox.appfunctions.AssistantCore.appRoute(it, app)
+                    com.leadaxe.lxbox.appfunctions.AssistantCore.appRoute(it, index, app)
                 }
             }
             "assistantSelectExit" -> {
