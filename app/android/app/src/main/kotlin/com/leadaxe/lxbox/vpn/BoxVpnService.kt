@@ -117,6 +117,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// владелец состояния туннеля), затем побочный эффект на стороне сервиса.
         internal fun setCurrentStatus(s: VpnStatus, revoked: Boolean = false) {
             TunnelState.setStatus(s, revoked)
+            // §747 — метка §276 переживает смену процесса `:bg`: пишется та, что
+            // получилась в состоянии (Starting / Started её снимают).
+            runCatching {
+                if (s != VpnStatus.Stopping) {
+                    NativeCache.setTunnelRevoked(BoxApplication.application, TunnelState.revoked)
+                }
+            }
             if (s == VpnStatus.Stopped) {
                 // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
                 // работает VPN; «Поделиться» и «Send to device» скрываются.

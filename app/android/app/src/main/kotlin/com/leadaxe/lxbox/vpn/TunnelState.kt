@@ -81,6 +81,16 @@ object TunnelState {
         seq++
     }
 
+    /// §747 — новый процесс-владелец: вернуть метку §276, пережившую смену
+    /// процесса (её хранит `NativeCache`). Только пока туннель `Stopped`:
+    /// `Starting` / `Started` метку снимают, как и раньше.
+    @Synchronized
+    internal fun restoreRevoked() {
+        if (state.status != VpnStatus.Stopped || state.revoked) return
+        state = state.copy(revoked = true)
+        seq++
+    }
+
     /// §069 — snapshot `allow_bypass` при `establish()` / сброс в onDestroy.
     @Synchronized
     internal fun setSessionAllowBypass(v: Boolean) {

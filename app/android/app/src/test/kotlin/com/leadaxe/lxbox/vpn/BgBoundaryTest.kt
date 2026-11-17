@@ -223,6 +223,28 @@ class BgBoundaryTest {
         assertTrue(c.snapshot.sessionAllowBypass)
     }
 
+    @Test
+    fun `revoked mark survives a new owner process until the next start`() {
+        // Новый процесс `:bg`: состояние с нуля, метка — из сохранённого.
+        TunnelState.clock = { 700L }
+        TunnelState.restoreRevoked()
+        assertEquals(VpnStatus.Stopped, TunnelState.status)
+        assertTrue(TunnelState.revoked)
+        val restored = TunnelState.wire()
+        assertTrue(restored.snapshot.revoked)
+        // Старт туннеля метку снимает, как и раньше.
+        TunnelState.setStatus(VpnStatus.Starting)
+        assertFalse(TunnelState.revoked)
+        // При идущем туннеле восстановление ничего не делает.
+        TunnelState.restoreRevoked()
+        assertFalse(TunnelState.revoked)
+        // Обычный Stopped без отзыва — без метки; отзыв — с меткой.
+        TunnelState.setStatus(VpnStatus.Stopped)
+        assertFalse(TunnelState.revoked)
+        TunnelState.setStatus(VpnStatus.Stopped, revoked = true)
+        assertTrue(TunnelState.revoked)
+    }
+
     // ───────────── завершение `:bg` ─────────────
 
     private val idle = BgExitState(

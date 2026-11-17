@@ -72,6 +72,10 @@ class BoxApplication : Application() {
      * поднятый ради записи настройки или плитки, библиотеку ядра не грузит.
      */
     private fun initServiceSide() {
+        // §747/§276 — метка «туннель отобрало другое VPN-приложение» от
+        // прежнего процесса `:bg`: окно спросит её через `getVpnStatus`.
+        runCatching { if (NativeCache.isTunnelRevoked(this)) TunnelState.restoreRevoked() }
+
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
 

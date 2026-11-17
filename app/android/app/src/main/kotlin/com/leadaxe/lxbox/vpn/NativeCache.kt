@@ -87,6 +87,19 @@ object NativeCache {
             .apply()
     }
 
+    // §747 — метка §276 «последний Stopped пришёл из onRevoke» («Taken by
+    // another VPN»). Состояние туннеля живёт в памяти `:bg`, а процесс после
+    // остановки завершается или перезапускается; без записи новый процесс
+    // отдавал бы revoked=false, и окно на resume показывало бы обычный
+    // Disconnected. Снимается стартом туннеля.
+    fun isTunnelRevoked(ctx: Context): Boolean = prefs(ctx).getBoolean("tunnel_revoked", false)
+
+    fun setTunnelRevoked(ctx: Context, revoked: Boolean) {
+        val p = prefs(ctx)
+        if (p.getBoolean("tunnel_revoked", false) == revoked) return
+        p.edit().putBoolean("tunnel_revoked", revoked).apply()
+    }
+
     /// §747 — см. `BootReceiver.flushPrefs`.
     fun flush(ctx: Context) {
         prefs(ctx).edit().commit()
