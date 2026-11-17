@@ -167,9 +167,9 @@ fun bgMayRecycle(s: BgExitState, coreLoaded: Boolean, coreIdleMs: Long): Boolean
 ///
 /// **Граница завершения** ([enter] / [dying]). Решение «завершаемся» и вход
 /// вызова окна сериализованы одним замком: либо вызов вошёл раньше и отменил
-/// завершение, либо решение принято — и тогда вызов не исполняется вовсе, а
-/// ждёт гибели процесса; окно получает `DeadObjectException` и повторяет его в
-/// новый процесс (`BgClient`). Наполовину исполненных вызовов не бывает.
+/// завершение, либо решение принято — и тогда вызов не исполняется вовсе:
+/// окно получает отказ `BG_EXITING` и повторяет вызов, пока не попадёт в новый
+/// процесс (`BgClient`). Наполовину исполненных вызовов при этом не бывает.
 /// Команда старта, пришедшая Intent'ом (плитка, приёмник), процесс поднимет
 /// сама система.
 ///
@@ -258,18 +258,11 @@ object BgLifecycle {
     }
 
     /// Вызов окна входит в процесс. `false` — процесс уже решил завершиться:
-    /// исполнять вызов нельзя (см. [park]).
+    /// исполнять вызов нельзя — провайдер отвечает отказом `BG_EXITING`.
     fun enter(): Boolean = synchronized(gate) {
         if (dying) return false
         activeCalls++
         true
-    }
-
-    /// Вызов пришёл в завершающийся процесс: ждать его гибели, ничего не
-    /// исполняя. Окно получит `DeadObjectException` и повторит вызов в новый
-    /// процесс. Гибель — дело миллисекунд; срок — страховка.
-    fun park() {
-        runCatching { Thread.sleep(30_000L) }
     }
 
     /// Долгий вызов продолжает исполняться на своём потоке после возврата
@@ -283,7 +276,9 @@ object BgLifecycle {
         if (!UiPresence.isAttached) {
             // С запасом на холодный старт окна: его первые вызовы приходят
             // раньше, чем движок подключится и окно назовёт себя (`uiAttached`).
-            check(ctx, DELAY_START_MS)
+            // Уже ждущую проверку не отодвигаем: иначе конец самого вызова
+            // `uiDetached` заменял бы короткую задержку «окно закрыто» на эту.
+            check(ctx, DELAY_START_MS, keepPending = true)
         } else if (BoxApplication.libboxLoaded && TunnelState.status == VpnStatus.Stopped) {
             // Окно подключено, туннеля нет, а ядро загружено (проба, проверка
             // конфига): проверить позже, не пора ли перезапуститься без него.
@@ -325,6 +320,9 @@ object BgLifecycle {
     fun quit(ctx: Context) {
         if (!enabled) return
         quitting = true
+        // Новые вызовы больше не исполняются: запоздалый вызов окна не должен
+        // ни выполниться наполовину, ни пережить процесс.
+        synchronized(gate) { dying = true }
         val app = ctx.applicationContext ?: ctx
         main.postDelayed({ exit(app, "quitApp") }, DELAY_QUIT_MS)
     }
@@ -376,16 +374,17 @@ object BgLifecycle {
         // Причина, у которой нет своего события об окончании (передача
         // Taildrop, идущий вызов, проба, недописанный ответ, ядро ещё не
         // простояло своё): перепроверить позже.
-        val waitsForCore = coreLoaded && s.uiAttached && s.tunnelStopped && !s.serviceAlive
+        // Причины с собственным событием (плитка, нативное окно, окно
+        // приложения, сервис) и «VPN желателен» опросом не ждём — иначе процесс
+        // под открытым окном просыпался бы каждые 5 с без конца.
+        val coreNotIdleYet = coreLoaded && s.uiAttached && s.tunnelStopped && !s.serviceAlive &&
+            coreIdleMs < CORE_IDLE_MS
         if (s.taildropBusy || s.activeCalls > 0 || s.probeActive || s.startPending ||
-            s.pendingReplies || waitsForCore
+            s.pendingReplies
         ) {
-            val delay = if (waitsForCore && coreIdleMs < CORE_IDLE_MS) {
-                (CORE_IDLE_MS - coreIdleMs + 1_000L).coerceAtLeast(DELAY_IDLE_MS)
-            } else {
-                DELAY_IDLE_MS
-            }
-            check(app, delay)
+            check(app, DELAY_IDLE_MS)
+        } else if (coreNotIdleYet) {
+            check(app, (CORE_IDLE_MS - coreIdleMs + 1_000L).coerceAtLeast(DELAY_IDLE_MS))
         }
     }
 

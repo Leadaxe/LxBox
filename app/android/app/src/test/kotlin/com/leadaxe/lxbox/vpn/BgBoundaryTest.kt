@@ -179,6 +179,32 @@ class BgBoundaryTest {
         assertNull(q.next())
     }
 
+    @Test
+    fun `an unencodable reply becomes an error reply, other frames are dropped`() {
+        val cause = IllegalArgumentException("Unsupported value")
+        val bytes = BgEventPipe.unencodable(EventFrames.REPLY, mapOf("id" to 42L, "r" to Any()), cause)!!
+        val m = BgCodec.decode(bytes) as Map<*, *>
+        assertEquals(42L, (m["id"] as Number).toLong())
+        assertEquals(BgControlProvider.ERROR_CALL_FAILED, m["ec"])
+        assertFalse(m.containsKey("r"))
+        // Событие потока Dart просто теряется; ответ без номера — тоже.
+        assertNull(BgEventPipe.unencodable("lxbox/cc/groups", Any(), cause))
+        assertNull(BgEventPipe.unencodable(EventFrames.REPLY, mapOf("r" to 1), cause))
+    }
+
+    @Test
+    fun `only old parcels are orphans`() {
+        val now = 1_000_000_000L
+        val tenMin = BgControlProvider.XFER_ORPHAN_MS
+        // Свежая посылка может принадлежать вызову в пути.
+        assertFalse(BgControlProvider.xferOrphan(now - 1_000, now, tenMin))
+        assertFalse(BgControlProvider.xferOrphan(now, now, tenMin))
+        assertTrue(BgControlProvider.xferOrphan(now - tenMin, now, tenMin))
+        assertTrue(BgControlProvider.xferOrphan(now - 3 * tenMin, now, tenMin))
+        // Время изменения далеко в будущем (перевели часы) — тоже сирота.
+        assertTrue(BgControlProvider.xferOrphan(now + 2 * tenMin, now, tenMin))
+    }
+
     // ───────────── копия состояния туннеля в окне ─────────────
 
     private fun wire(epoch: Long, seq: Long, status: VpnStatus, started: Long = 0L) =

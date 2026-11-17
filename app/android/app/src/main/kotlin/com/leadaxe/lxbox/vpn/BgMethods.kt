@@ -82,6 +82,14 @@ object BgMethods {
             "resetNetwork" -> { BoxVpnService.resetNetwork(ctx); true }
             "clearDnsCache" -> { BoxVpnService.clearDnsCache(ctx); true }
             "clearStaleNotification" -> { BoxVpnService.clearStaleNotification(ctx); true }
+            // §638 — первая половина Quit: снять «VPN желателен» и будильник
+            // сторожа. Окно закрывается только после этого подтверждения —
+            // иначе сторож поднял бы VPN вопреки «VPN service will stop».
+            "quitPrepare" -> {
+                BootReceiver.setVpnDesired(ctx, false)
+                VpnWatchdog.disarm(ctx)
+                true
+            }
             "quitApp" -> quitApp(ctx)
             // Файл конфига переписан окном — сбросить кэш.
             "configSaved" -> { ConfigManager.invalidate(); true }

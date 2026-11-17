@@ -40,6 +40,23 @@ object BgClient {
     private const val DEAD_RETRY_PAUSE_MS = 50L
     private const val DEAD_RETRY_PAUSE_MAX_MS = 500L
 
+    /// Методы, которые после `DeadObjectException` не повторяются: их двойное
+    /// исполнение видно пользователю (два файла в Downloads, две отправки).
+    private val NO_REPLAY = setOf("taildropSave", "taildropSendUris", "ccTaildropSendBytes")
+
+    /// `quitApp` отработал: `:bg` завершается, окно — следом. Вызовы после
+    /// этого не делаются — запоздалый `uiDetached` поднял бы новый `:bg`.
+    @Volatile
+    private var closed = false
+
+    fun shutDown() {
+        closed = true
+    }
+
+    /// Номер жизни канала событий: растёт, когда канал кончается.
+    @Volatile
+    private var channelGen = 0L
+
     /// Приёмник строк журнала приложения от стороны окна (повтор вызова после
     /// гибели `:bg`); ставит `VpnPlugin`, пока подключён движок.
     @Volatile
@@ -74,10 +91,18 @@ object BgClient {
     /// не поднялся, исключение в обработчике) — тоже [BgError] с кодом
     /// `BG_CALL_FAILED`. Не звать с главного потока.
     fun call(ctx: Context, method: String, args: Map<String, Any?>? = null): Any? {
-        val reply = raw(ctx, method, null, argsBundle(ctx, args))
+        val extras = argsBundle(ctx, args)
+        val reply = try {
+            raw(ctx, method, null, extras)
+        } finally {
+            // Посылку с аргументами удаляет отправитель: при повторе вызова
+            // она нужна снова, а при сбое не должна осиротеть.
+            BgControlProvider.dropFile(ctx, extras, BgControlProvider.KEY_ARGS_FILE)
+        }
         return BgCodec.decode(
             BgControlProvider.takeBytes(
                 ctx, reply, BgControlProvider.KEY_RESULT, BgControlProvider.KEY_RESULT_FILE,
+                delete = true,
             ),
         )
     }
@@ -98,15 +123,26 @@ object BgClient {
     /// (§747 G), а при обычном, «стабильном» соединении система вместе с
     /// умершим провайдером убивает и его клиента — окно.
     ///
-    /// Вызов, попавший на смену процесса (`:bg` перезапускается, чтобы
-    /// сбросить ядро, или завершился и поднимается заново), получает
-    /// `DeadObjectException` и повторяется в новый процесс: `:bg` перед
-    /// завершением перестаёт исполнять вызовы (`BgLifecycle.enter`), так что
-    /// прерванный вызов не был исполнен и повтор безопасен. Наружу ошибка
-    /// выходит, только если и повторы не удались.
+    /// Вызов, попавший на смену процесса, повторяется:
+    /// - отказ `BG_EXITING` — `:bg` уже решил завершиться и вызов **не
+    ///   исполнял** (`BgLifecycle.enter`); повтор безопасен всегда;
+    /// - `DeadObjectException` — транзакция ушла в процесс, которого уже нет
+    ///   (система ещё не узнала о его гибели), либо процесс **упал посреди
+    ///   вызова**. Второй случай от первого отсюда не отличить, и при нём
+    ///   повтор исполнит метод второй раз. Для почти всех методов это
+    ///   безвредно (запись настройки, команда сервису под защитой статуса,
+    ///   чтение); методы из [NO_REPLAY], чьё двойное исполнение видно
+    ///   пользователю, после `DeadObjectException` не повторяются — вызов
+    ///   завершается ошибкой.
+    ///
+    /// Наружу ошибка выходит, только если и повторы не удались.
     private fun raw(ctx: Context, method: String, arg: String?, extras: Bundle?): Bundle {
+        val what = if (method == BgControlProvider.METHOD_INVOKE_ASYNC) "$method:$arg" else method
+        val name = if (method == BgControlProvider.METHOD_INVOKE_ASYNC) arg else method
         var attempt = 0
         while (true) {
+            if (closed) throw BgError(BgControlProvider.ERROR_CALL_FAILED, "the app is quitting")
+            var retry: String? = null
             val reply = try {
                 val client = ctx.contentResolver
                     .acquireUnstableContentProviderClient(BgControlProvider.uri(ctx))
@@ -117,26 +153,36 @@ object BgClient {
                     runCatching { client.close() }
                 }
             } catch (e: android.os.DeadObjectException) {
-                val what = if (method == BgControlProvider.METHOD_INVOKE_ASYNC) "$method:$arg" else method
-                if (++attempt > DEAD_RETRIES) {
-                    note("call $what failed: the service process is gone ($DEAD_RETRIES replays)")
-                    throw BgError(BgControlProvider.ERROR_CALL_FAILED, "service process is gone")
+                if (name in NO_REPLAY) {
+                    note("call $what failed: the service process died and the call is not replayable")
+                    throw BgError(BgControlProvider.ERROR_CALL_FAILED, "service process died during the call")
                 }
-                note("call $what replayed after DeadObject (attempt $attempt)")
-                runCatching {
-                    Thread.sleep((DEAD_RETRY_PAUSE_MS shl (attempt - 1).coerceAtMost(4))
-                        .coerceAtMost(DEAD_RETRY_PAUSE_MAX_MS))
-                }
-                continue
+                retry = "DeadObject"
+                null
             } catch (e: BgError) {
                 throw e
             } catch (t: Throwable) {
                 throw BgError(BgControlProvider.ERROR_CALL_FAILED, t.message ?: t.javaClass.simpleName)
-            } ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no reply")
-            reply.getString(BgControlProvider.KEY_ERROR_CODE)?.let { code ->
-                throw BgError(code, reply.getString(BgControlProvider.KEY_ERROR_MESSAGE))
             }
-            return reply
+            if (retry == null) {
+                reply ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no reply")
+                val code = reply.getString(BgControlProvider.KEY_ERROR_CODE) ?: return reply
+                if (code != BgControlProvider.ERROR_EXITING) {
+                    throw BgError(code, reply.getString(BgControlProvider.KEY_ERROR_MESSAGE))
+                }
+                retry = "BG_EXITING"
+            }
+            if (++attempt > DEAD_RETRIES) {
+                note("call $what failed: the service process is gone ($DEAD_RETRIES replays)")
+                throw BgError(BgControlProvider.ERROR_CALL_FAILED, "service process is gone")
+            }
+            note("call $what replayed after $retry (attempt $attempt)")
+            runCatching {
+                Thread.sleep(
+                    (DEAD_RETRY_PAUSE_MS shl (attempt - 1).coerceAtMost(4))
+                        .coerceAtMost(DEAD_RETRY_PAUSE_MAX_MS),
+                )
+            }
         }
     }
 
@@ -178,10 +224,19 @@ object BgClient {
             val id = nextId.incrementAndGet()
             val entry = Pending(done)
             pending[id] = entry
+            val extras = argsBundle(ctx, args).apply { putLong(BgControlProvider.KEY_ID, id) }
             try {
-                val extras = argsBundle(ctx, args).apply { putLong(BgControlProvider.KEY_ID, id) }
+                val gen = channelGen
                 raw(ctx, BgControlProvider.METHOD_INVOKE_ASYNC, method, extras)
                 entry.dispatched = true
+                // Канал кончился, пока запуск возвращался: принявший вызов
+                // процесс умер, а конец канала эту запись ещё не видел
+                // принятой — ответа не будет, ответить нужно здесь.
+                if (channelGen != gen && pending.remove(id) != null) {
+                    main.post {
+                        done(Result.failure(BgError(BgControlProvider.ERROR_CALL_FAILED, "service process is gone")))
+                    }
+                }
             } catch (e: BgError) {
                 // Ответить должен ровно один: кто снял запись, тот и отвечает.
                 if (pending.remove(id) == null) return@onLane
@@ -195,6 +250,10 @@ object BgClient {
                 } else {
                     main.post { done(Result.failure(e)) }
                 }
+            } finally {
+                // `:bg` читает аргументы до возврата запуска — посылка больше
+                // не нужна (запасной синхронный путь создаёт свою).
+                BgControlProvider.dropFile(ctx, extras, BgControlProvider.KEY_ARGS_FILE)
             }
         }
     }
@@ -297,6 +356,7 @@ object BgClient {
     fun disconnect() {
         reader?.stop()
         reader = null
+        channelGen++
         failDispatched("window detached")
     }
 
@@ -326,6 +386,7 @@ object BgClient {
             runCatching { r.input.close() }
             if (reader === r) {
                 reader = null
+                channelGen++
                 // Процесс `:bg` ушёл. Принятые им вызовы пропали вместе с ним
                 // (при перезапуске ради ядра таких нет: `:bg` дожидается
                 // ответов); вызовы, чей запуск ещё в пути, повторятся сами.

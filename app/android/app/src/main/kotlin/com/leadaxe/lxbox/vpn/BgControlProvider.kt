@@ -58,6 +58,8 @@ class BgControlProvider : ContentProvider() {
         const val METHOD_INVOKE_ASYNC = "invokeAsync"
 
         const val ERROR_CALL_FAILED = "BG_CALL_FAILED"
+        /// Процесс `:bg` уже решил завершиться; вызов НЕ исполнен — повторить.
+        const val ERROR_EXITING = "BG_EXITING"
         /// Канала событий нет — ответ асинхронного вызова некуда слать.
         const val ERROR_NO_PIPE = "BG_NO_PIPE"
 
@@ -80,9 +82,14 @@ class BgControlProvider : ContentProvider() {
             out.putString(fileKey, f.path)
         }
 
-        /// Достать байты, положенные [putBytes]; файл-посылка удаляется. Путь
-        /// принимается только из нашего каталога посылок.
-        fun takeBytes(ctx: Context, from: Bundle?, key: String, fileKey: String): ByteArray? {
+        /// Достать байты, положенные [putBytes]. Путь принимается только из
+        /// нашего каталога посылок. [delete] — удалить файл-посылку после
+        /// чтения: ответ читает один раз окно; посылку с аргументами удаляет
+        /// сам отправитель, когда вызов завершён, — при повторе вызова она
+        /// нужна снова.
+        fun takeBytes(
+            ctx: Context, from: Bundle?, key: String, fileKey: String, delete: Boolean,
+        ): ByteArray? {
             from ?: return null
             from.getByteArray(key)?.let { return it }
             val path = from.getString(fileKey) ?: return null
@@ -91,9 +98,32 @@ class BgControlProvider : ContentProvider() {
             return try {
                 f.readBytes()
             } finally {
-                f.delete()
+                if (delete) f.delete()
             }
         }
+
+        /// Удалить файл-посылку, если она была создана для [bundle].
+        fun dropFile(ctx: Context, bundle: Bundle?, fileKey: String) {
+            val path = bundle?.getString(fileKey) ?: return
+            val f = File(path)
+            if (f.canonicalFile.parentFile == xferDir(ctx).canonicalFile) f.delete()
+        }
+
+        /// Осиротевшие посылки (процесс умер между записью и чтением): внутри
+        /// бывает конфиг с ключами. Удаляются при старте процесса — те, что
+        /// старше [olderThanMs] (свежая может принадлежать вызову в пути).
+        fun sweepXfer(ctx: Context, olderThanMs: Long = XFER_ORPHAN_MS) {
+            val now = System.currentTimeMillis()
+            for (f in xferDir(ctx).listFiles() ?: return) {
+                if (xferOrphan(f.lastModified(), now, olderThanMs)) runCatching { f.delete() }
+            }
+        }
+
+        const val XFER_ORPHAN_MS = 10 * 60 * 1000L
+
+        /// Посылка осиротела: старше срока (или время изменения из будущего).
+        fun xferOrphan(modifiedAt: Long, now: Long, olderThanMs: Long): Boolean =
+            now - modifiedAt >= olderThanMs || modifiedAt > now + olderThanMs
     }
 
     override fun onCreate(): Boolean = true
@@ -103,10 +133,9 @@ class BgControlProvider : ContentProvider() {
         val out = Bundle()
         if (!BgLifecycle.enter()) {
             // Процесс уже решил завершиться (§747 G): вызов не исполняется.
-            // Окно получит DeadObjectException и повторит его в новый процесс.
+            // Окно по этому отказу повторит его — уже в новый процесс.
             Log.w(TAG, "call($method) not executed in pid ${android.os.Process.myPid()}: the process is exiting")
-            BgLifecycle.park()
-            return error(ERROR_CALL_FAILED, "service process is restarting")
+            return error(ERROR_EXITING, "service process is exiting")
         }
         try {
             when (method) {
@@ -134,7 +163,7 @@ class BgControlProvider : ContentProvider() {
     }
 
     private fun args(ctx: Context, extras: Bundle?): Map<*, *>? =
-        BgCodec.decode(takeBytes(ctx, extras, KEY_ARGS, KEY_ARGS_FILE)) as? Map<*, *>
+        BgCodec.decode(takeBytes(ctx, extras, KEY_ARGS, KEY_ARGS_FILE, delete = false)) as? Map<*, *>
 
     /// Запустить метод на своём потоке и ответить кадром в канале событий.
     private fun invokeAsync(ctx: Context, method: String, extras: Bundle?) {

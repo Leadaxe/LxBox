@@ -79,6 +79,9 @@ class BoxApplication : Application() {
         runCatching { QuickShortcuts.refresh(this) }
             .onFailure { android.util.Log.w(TAG, "QuickShortcuts.refresh failed: ${it.message}") }
 
+        // §747 — посылки вызовов, осиротевшие при гибели процесса.
+        sweepXferAsync()
+
         // §707 итер. 3 — принятое во входящие узлов с автосохранением (без
         // галки, до её включения, неудачи прошлых попыток) уходит в Downloads.
         // В фоне, одной очередью с другими разборами.
@@ -116,6 +119,9 @@ class BoxApplication : Application() {
         // app init если flag true; toggle в Diagnostics дёргает на лету.
         wifiObserver = WifiNetworkObserver(this)
 
+        // §747 — посылки вызовов, осиротевшие при гибели процесса.
+        sweepXferAsync()
+
         // §747 — ядро в этот процесс не загружается никогда: клиент экрана,
         // проба, проверка конфига живут в `:bg`. Первый вызов заранее
         // поднимает процесс `:bg` — к подключению движка он уже отвечает.
@@ -123,6 +129,11 @@ class BoxApplication : Application() {
         GlobalScope.launch(Dispatchers.IO) {
             runCatching { BgClient.call(this@BoxApplication, "tunnelSnapshot") }
         }
+    }
+
+    private fun sweepXferAsync() {
+        @Suppress("OPT_IN_USAGE")
+        GlobalScope.launch(Dispatchers.IO) { runCatching { BgControlProvider.sweepXfer(this@BoxApplication) } }
     }
 
     private fun baseSetupOptions(): SetupOptions {
@@ -310,10 +321,13 @@ class BoxApplication : Application() {
          * (значение прочтёт `Libbox.setup`). Не блокирует вызывающего.
          */
         fun reloadMemoryLimit(context: Context) {
-            if (!libboxLoaded) return
             val app = context.applicationContext
             @Suppress("OPT_IN_USAGE")
             GlobalScope.launch(Dispatchers.IO) {
+                // Ядро как раз загружается (`ensureLibbox` держит замок и мог
+                // прочесть прежнее значение) — дождаться и применить новое.
+                synchronized(libboxLock) { }
+                if (!libboxLoaded) return@launch
                 runCatching {
                     val opts = SetupOptions().apply {
                         oomKillerEnabled = true

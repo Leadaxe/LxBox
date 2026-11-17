@@ -278,10 +278,20 @@ object BgEventPipe {
                 val (stream, value) = frame
                 // Служебные кадры окно декодирует само; события Dart идут
                 // готовым конвертом EventChannel — окно их не перекодирует.
-                val payload = if (stream.startsWith("!")) BgCodec.encode(value)
-                else BgCodec.encodeEventEnvelope(value)
-                EventFrames.write(s.out, stream, payload)
-                s.out.flush()
+                // Значение, которое кодек не принял (чужой тип в ответе метода),
+                // роняет один кадр, а не весь канал: поток Dart теряет событие,
+                // вызов получает ошибку вместо ответа.
+                val payload = try {
+                    if (stream.startsWith("!")) BgCodec.encode(value)
+                    else BgCodec.encodeEventEnvelope(value)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "frame($stream) cannot be encoded: ${t.message}")
+                    unencodable(stream, value, t)
+                }
+                if (payload != null) {
+                    EventFrames.write(s.out, stream, payload)
+                    s.out.flush()
+                }
                 s.lock.lock()
                 s.writing = false
                 s.writingKept = false
@@ -300,6 +310,21 @@ object BgEventPipe {
             }
             drops.addAndGet(s.queues.dropped)
         }
+    }
+
+    /// Что отправить вместо кадра, который не удалось закодировать: ответу
+    /// вызова — ошибку с тем же номером (иначе вызов окна остался бы без
+    /// ответа), остальным — ничего.
+    internal fun unencodable(stream: String, value: Any?, cause: Throwable): ByteArray? {
+        if (stream != EventFrames.REPLY) return null
+        val id = (value as? Map<*, *>)?.get("id") as? Number ?: return null
+        return BgCodec.encode(
+            mapOf(
+                "id" to id.toLong(),
+                "ec" to BgControlProvider.ERROR_CALL_FAILED,
+                "em" to "reply cannot be encoded: ${cause.message}",
+            ),
+        )
     }
 
     /// Приёмник `EventChannel` для клиентов ядра в `:bg`: вместо движка

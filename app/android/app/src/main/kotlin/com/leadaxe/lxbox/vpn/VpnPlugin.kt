@@ -495,13 +495,21 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // оставляют zombie). Вызов идёт полосой — записи настроек,
                 // отправленные раньше, дойдут до `:bg` до его завершения.
                 result.success(true)
-                mainHandler.postDelayed({
-                    activity?.finishAffinity()
-                }, 50)
                 val quitStartedAt = SystemClock.elapsedRealtime()
                 val ctx = context
                 BgClient.onLane {
+                    // Окно закрывается только после подтверждения `:bg`, что
+                    // «VPN желателен» и сторож сняты: если вызов не прошёл,
+                    // закрыться и убить себя значило бы оставить сторожу
+                    // повод поднять VPN. Тогда окно остаётся открытым.
+                    val prepared = runCatching { BgClient.call(ctx, "quitPrepare") }
+                        .onFailure { Log.e(TAG, "[vpn] quitApp: the service side did not confirm — not quitting: ${it.message}") }
+                        .isSuccess
+                    if (!prepared) return@onLane
+                    mainHandler.post { activity?.finishAffinity() }
                     BgClient.callOr(ctx, "quitApp", null, false)
+                    // `:bg` завершается; новых вызовов не делаем.
+                    BgClient.shutDown()
                     val elapsed = SystemClock.elapsedRealtime() - quitStartedAt
                     mainHandler.postDelayed({
                         android.os.Process.killProcess(android.os.Process.myPid())
