@@ -92,7 +92,15 @@ Operator's decision, 2026-07-24.
 
 ### 4. Build and release
 
-- Local build: `./scripts/build-local-apk.sh`; details — `BUILD.md`.
+- **No local APK builds** (owner's rule, 17.11.2026): agents, their subagents
+  and child sessions do not run `scripts/build-local-apk.sh`, `flutter build apk`
+  or `gradlew assemble*`. Every APK comes from CI: after the change is in
+  `develop`, `gh workflow run ci.yml --ref develop -f run_mode=build-fast -f abi=arm64-v8a`
+  → `gh run download` (artifact `android-apks-release`). Temporary `build/*`
+  branches are not pushed to origin. An emulator check therefore runs after the
+  merge, on the CI build; before the merge write «not checked on the emulator»
+  in the spec. `scripts/build-local-apk.sh` stays for the owner's own use;
+  details — `BUILD.md`.
 - Release, version in `pubspec.yaml`, build code from `scripts/version-code.sh`
   (never by hand) — `RELEASE_PROCESS.md`.
 
