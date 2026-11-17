@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Done — на эмуляторе не проверено |
+| **Статус** | Done — эмулятор 17.11.2026: 5 из 5 сценариев OK |
 | **Дата** | 2026-11-17 |
 | **Повод** | issue [#171](https://github.com/Leadaxe/LxBox/issues/171) п.16 (скриншоты 17.11.2026): автор принял серые «Lazy tunnel build = on» и «Built tunnels limit = 12» за действующие |
 | **Связанные** | 709 — `#enable` у объявления переменной и секция WireGuard блока `lx` |
@@ -52,4 +52,19 @@ VPN Settings → Core → WireGuard. При «Suspend idle tunnels» = Off бл�
 - `test/widgets/template_var_inactive_look_test.dart`: условие ложно —
   переключатель «выкл», в списке «Not in effect», значения в модели прежние;
   условие истинно — на экране сохранённые значения.
-- Эмулятор — не проверено.
+- **Эмулятор, 17.11.2026.** APK — артефакт CI `android-apks-release`
+  (run 44113233434, коммит 17217856, 743 в нём есть), arm64, чистый AVD
+  (Pixel 6, API 34). Перед проверкой выставлены не-дефолтные значения:
+  «Built tunnels limit» = 12, «Suspend active-route tunnels» = 15 minutes.
+  Скриншоты — `.claude/emu-shots/743-emu-*.png` в основной папке проекта.
+
+  | # | Сценарий | Итог |
+  |---|---|---|
+  | 1 | Core → WireGuard, «Suspend idle tunnels» = Off | OK: «Suspend active-route tunnels», «Lazy tunnel build», «Built tunnels limit» серые; переключатель Lazy нарисован «выкл»; у обоих списков «Not in effect»; нажатия на переключатель и списки ничего не открывают и не меняют (01). В конфиге `lx` секции `wg` нет |
+  | 2 | Suspend = 30 seconds | OK: строки активны, видны сохранённые 15 minutes, Lazy вкл., 12 (02). Второе условие: Lazy выкл. → у лимита «Not in effect», Lazy вкл. → снова 12 (03) |
+  | 3 | Снова Off | OK: вид «недействующий» и после повторного входа на экран; в хранилище `wg_build_max=12`, `wg_idle_suspend_reachable=15m`, `wg_lazy_build=true` — не изменились |
+  | 4 | Русский интерфейс | OK: «Не действует» у списков, переключатель «Ленивая сборка туннелей» «выкл» (04) |
+  | 5 | Другое место с `#enable` — Sniff guard | OK: при TLS = Off и QUIC = Off «Only nodes with a masked SNI» и «Remember relays across restarts» серые и «выкл» (сохранённые оба «вкл»), нажатие не действует (05); при одном Off из двух строки активны (условие «или»); QUIC вернули — оба снова «вкл» (06), в хранилище `sniff_guard_persist=true` |
+
+  Других переменных с `#enable` в `wizard_template.json` нет (остальные
+  `#enable` — у элементов шаблона: rule_set, DNS-серверы).
