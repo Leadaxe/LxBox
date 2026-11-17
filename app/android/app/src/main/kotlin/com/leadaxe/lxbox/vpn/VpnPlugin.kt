@@ -124,6 +124,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// `:bg` перезапущен.
     private var bgEpoch: Long? = null
 
+    /// Идёт подключение к `:bg` ([attachToBg]): второе не начинается.
+    private var attaching = false
+
+    /// §747 — подписи уведомления, которые Dart передал `:bg` (метод → его
+    /// аргументы): `:bg` держит их в памяти, и после его перезапуска окно
+    /// передаёт их заново.
+    private val notificationLabels = LinkedHashMap<String, Map<String, Any?>?>()
+
     /// §747 — потоки данных, которые Dart сейчас слушает (имя `EventChannel`).
     /// Главный поток.
     private val listening = HashSet<String>()
@@ -207,20 +215,49 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// §747 — открыть канал событий и назвать себя `:bg` (Binder-метка: `:bg`
     /// узнает и о гибели процесса окна), затем забрать снимок состояния
     /// туннеля (broadcast не липкий — окно, открытое при работающем туннеле,
-    /// иначе видело бы `Stopped`). Зовётся при подключении движка и когда
-    /// `:bg` оказался перезапущен (новая метка запуска в снимке) — тогда
-    /// новому процессу заново называются слушаемые потоки.
+    /// иначе видело бы `Stopped`).
+    ///
+    /// Зовётся при подключении движка и всякий раз, когда процесс `:bg`
+    /// оказался другим: оборвался канал событий (`:bg` перезапустился, чтобы
+    /// сбросить ядро после остановки туннеля, или умер) либо в снимке новая
+    /// метка запуска. Новый процесс ничего не знает об окне, поэтому ему
+    /// заново передаётся всё, что `:bg` держит в памяти от окна: слушаемые
+    /// потоки данных и подписи уведомления. Dart этого не замечает.
     private fun attachToBg() {
+        if (attaching) return
+        attaching = true
         val ctx = context
         val streams = listening.toList()
+        val labels = notificationLabels.toMap()
         BgClient.onLane {
-            BgClient.connect(ctx, uiToken) { stream, payload -> onFrame(stream, payload) }
+            BgClient.connect(
+                ctx, uiToken,
+                onFrame = { stream, payload -> onFrame(stream, payload) },
+                onLost = { onBgLost() },
+            )
             for (name in streams) {
                 BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false)
             }
+            for ((method, args) in labels) BgClient.callOr(ctx, method, args, true)
             val wire = fetchTunnelWire()
-            BgClient.onMain { if (wire != null && attached) applyTunnelWire(wire) }
+            BgClient.onMain {
+                attaching = false
+                if (wire != null && attached) {
+                    // Метка запуска этого процесса — от самого подключения:
+                    // повторно подключаться из-за неё не нужно.
+                    bgEpoch = wire.epoch
+                    applyTunnelWire(wire)
+                }
+            }
         }
+    }
+
+    /// Главный поток. Канал событий оборвался, а движок подключён: процесс
+    /// `:bg` ушёл — подключиться к новому.
+    private fun onBgLost() {
+        if (!attached) return
+        Log.i(TAG, "[bg] event channel ended — re-attaching to the service process")
+        attachToBg()
     }
 
     /// Главный поток. Кадр канала событий: поток Dart — готовый конверт события
@@ -258,7 +295,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         val prev = bgEpoch
         bgEpoch = w.epoch
         if (prev != null && prev != w.epoch) {
-            Log.w(TAG, "[bg] service process restarted — re-attaching")
+            Log.i(TAG, "[bg] service process restarted — re-attaching")
             attachToBg()
         }
     }
@@ -276,6 +313,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         Log.d(TAG, "[vpn] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
         attached = false
+        attaching = false
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
         for (channel in streamChannels) channel.setStreamHandler(null)
@@ -302,6 +340,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         Log.d(TAG, "onMethodCall: ${call.method}")
+        if (call.method == "setNotificationTitle" || call.method == "setNotificationText") {
+            @Suppress("UNCHECKED_CAST")
+            notificationLabels[call.method] = call.arguments as? Map<String, Any?>
+        }
         when (call.method) {
             // §747 — обработчики, которым нужна сервисная сторона (файлы
             // настроек, состояние туннеля, ядро и его клиенты, проба, Taildrop):

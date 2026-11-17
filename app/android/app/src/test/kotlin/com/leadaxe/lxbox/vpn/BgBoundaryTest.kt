@@ -236,6 +236,7 @@ class BgBoundaryTest {
         watchdogPending = false,
         probeActive = false,
         startPending = false,
+        pendingReplies = false,
     )
 
     @Test
@@ -255,6 +256,57 @@ class BgBoundaryTest {
         assertFalse(bgMayExit(idle.copy(watchdogPending = true)))
         assertFalse(bgMayExit(idle.copy(probeActive = true)))
         assertFalse(bgMayExit(idle.copy(startPending = true)))
+        assertFalse(bgMayExit(idle.copy(pendingReplies = true)))
+    }
+
+    // ───────────── перезапуск `:bg` под открытым окном ─────────────
+
+    private val underWindow = idle.copy(uiAttached = true)
+    private val longIdle = BgLifecycle.CORE_IDLE_MS
+
+    @Test
+    fun `bg restarts under the window only to drop a loaded idle core`() {
+        assertTrue(bgMayRecycle(underWindow, coreLoaded = true, coreIdleMs = longIdle))
+        // Ядро не загружено — перезапускаться незачем.
+        assertFalse(bgMayRecycle(underWindow, coreLoaded = false, coreIdleMs = longIdle))
+        // Ядром только что пользовались без туннеля (проба, проверка конфига).
+        assertFalse(bgMayRecycle(underWindow, coreLoaded = true, coreIdleMs = longIdle - 1))
+        // Без окна это обычное завершение, а не перезапуск.
+        assertFalse(bgMayRecycle(idle, coreLoaded = true, coreIdleMs = longIdle))
+        assertTrue(bgMayExit(idle))
+    }
+
+    @Test
+    fun `a new tunnel start cancels the restart`() {
+        // Команда старта отправлена, сервис ещё не создан.
+        assertFalse(bgMayRecycle(underWindow.copy(startPending = true), true, longIdle))
+        // Сервис создан, туннель поднимается.
+        assertFalse(bgMayRecycle(underWindow.copy(serviceAlive = true), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(tunnelStopped = false), true, longIdle))
+    }
+
+    @Test
+    fun `every other reason to live cancels the restart`() {
+        assertFalse(bgMayRecycle(underWindow.copy(probeActive = true), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(nativeWindows = 1), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(taildropBusy = true), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(activeCalls = 1), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(pendingReplies = true), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(holds = 1), true, longIdle))
+        assertFalse(bgMayRecycle(underWindow.copy(watchdogPending = true), true, longIdle))
+    }
+
+    @Test
+    fun `pipe reports replies that are not written yet`() {
+        val q = PipeQueues()
+        assertFalse(q.hasReliable)
+        q.latest("lxbox/cc/status", "s")
+        q.log("l")
+        assertFalse(q.hasReliable)
+        q.reliable(EventFrames.REPLY, 1)
+        assertTrue(q.hasReliable)
+        q.next()
+        assertFalse(q.hasReliable)
     }
 
     // ───────────── роль процесса ─────────────

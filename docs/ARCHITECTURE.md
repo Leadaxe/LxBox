@@ -1940,11 +1940,32 @@ before starting its own command server.
   is closed, a native window is destroyed, a call without a window has finished) `BgLifecycle`
   schedules a check and, if `bgMayExit` holds, flushes the settings files and ends the process.
   Reasons to live: the tunnel is not `Stopped` or the service instance exists; a start command
-  was just sent and the service is not created yet; the window process is attached; an open
+  was just sent and the service is not created yet (the mark is cleared when the service is
+  created or the tunnel reaches `Stopped`; a 20 s timer covers a start that never arrives); the window process is attached; an open
   native window of `:bg`; a bound tile; a call in progress; a Taildrop transfer or inbox sweep;
   “VPN desired” with a stopped tunnel (the watchdog is about to restart it); a running probe.
   The tile, auto-start, the watchdog alarm, automation commands and the window's calls start a
   new `:bg` when needed.
+- **`:bg` under an open window drops the core.** An attached window is a reason to live but
+  not a reason to keep `libbox.so` loaded. When the tunnel is stopped and the core is loaded,
+  `:bg` ends the same way (`bgMayRecycle`: every condition of `bgMayExit` except the window
+  itself, plus the core unused for `CORE_IDLE_MS` = 30 s by the probe or a config check), and
+  the window brings up a new, light `:bg` at once: the end of the event channel makes
+  `VpnPlugin.attachToBg` run again — `uiAttached`, a new pipe, the stream subscriptions Dart
+  holds, the notification labels (everything `:bg` keeps in memory from the window). Dart sees
+  neither events nor errors; the copy of `TunnelState` stays `Stopped`. The new process loads
+  the core lazily, on the first need.
+- **The exit boundary** (`BgLifecycle.enter` / `dying`). The decision to end and the entry of a
+  window call are serialized by one lock: either the call entered first and cancelled the exit,
+  or the decision is made and the call is not executed at all — it waits for the process to
+  die. The window's provider connection is *unstable*
+  (`acquireUnstableContentProviderClient`; with a stable one the system kills the client of a
+  dead provider), so the call gets a `DeadObjectException` and `BgClient` repeats it into the
+  new process. There are no half-executed calls and no error reaches Dart. A start sent right
+  after a stop therefore either cancels the exit (the status is no longer `Stopped`, or a start
+  is on its way) or is repeated into the new process; a start that comes as an Intent (the
+  tile, a receiver) makes the system start the process. `:bg` does not end while replies of
+  long calls are still unwritten in the event channel.
 - **`quitApp`**: `:bg` stops the tunnel, drops “VPN desired” and the watchdog alarm, then ends;
   `:ui` closes its activities and ends. Settings read once per process (`core_logs_enabled`,
   `memory_limit`) therefore apply from the next tunnel start.
@@ -1985,10 +2006,11 @@ manifest carries `:ui` or `:bg` (`manifest-process`). The merged manifest is che
 Android build. The same checker guards the Dart layer direction and freezes the list of UI files
 that call the bridge directly. An exception is added in the checker itself, with a reason.
 
-**Known limits.** `:ui` does not watch `:bg` for death beyond the end of the event channel: if
-`:bg` is killed while the tunnel is up, pending long calls fail at once, but the window keeps its
-last tunnel snapshot until the next `getVpnStatus` (Dart asks on resume), which starts a new
-`:bg` and returns `Stopped`.
+**Known limits.** If `:bg` is killed while the tunnel is up, the long calls it had accepted
+fail at once and the window re-attaches to a new `:bg` (which reports `Stopped`); Dart learns
+the new status from the next `getVpnStatus` (it asks on resume) — no status event is sent for a
+tunnel that died with its process. The counters of `taildropServiceStats` (Debug API) live in
+the memory of `:bg` and start from zero in a new process.
 
 ### Structured Concurrency
 

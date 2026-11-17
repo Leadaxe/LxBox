@@ -101,7 +101,12 @@ class BgControlProvider : ContentProvider() {
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
         val ctx = context?.applicationContext ?: return error(ERROR_CALL_FAILED, "no context")
         val out = Bundle()
-        BgLifecycle.callStarted()
+        if (!BgLifecycle.enter()) {
+            // Процесс уже решил завершиться (§747 G): вызов не исполняется.
+            // Окно получит DeadObjectException и повторит его в новый процесс.
+            BgLifecycle.park()
+            return error(ERROR_CALL_FAILED, "service process is restarting")
+        }
         try {
             when (method) {
                 METHOD_UI_ATTACHED -> {

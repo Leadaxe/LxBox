@@ -236,6 +236,21 @@ class BoxApplication : Application() {
 
         private val libboxLock = Any()
 
+        @Volatile
+        private var lastCoreUseAt = 0L
+
+        /**
+         * §747 G — ядром пользуются без туннеля (проба, проверка и
+         * форматирование конфига): `BgLifecycle` не перезапускает процесс ради
+         * сброса ядра, пока оно не простоит без дела.
+         */
+        fun noteCoreUse() {
+            lastCoreUseAt = android.os.SystemClock.elapsedRealtime()
+        }
+
+        /** Сколько миллисекунд ядром не пользовались без туннеля. */
+        fun coreIdleMs(): Long = android.os.SystemClock.elapsedRealtime() - lastCoreUseAt
+
         /** §747 — `Libbox.setup` этого процесса отработал. */
         @Volatile
         var libboxLoaded: Boolean = false
@@ -253,6 +268,7 @@ class BoxApplication : Application() {
          * вызовы не пропускает.
          */
         fun ensureLibbox() {
+            noteCoreUse()
             if (libboxLoaded) return
             synchronized(libboxLock) {
                 if (libboxLoaded) return

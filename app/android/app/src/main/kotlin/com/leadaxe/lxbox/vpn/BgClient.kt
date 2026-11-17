@@ -32,6 +32,10 @@ import java.util.concurrent.atomic.AtomicLong
 object BgClient {
     private const val TAG = "BgClient"
 
+    /// Сколько раз повторить вызов, попавший на смену процесса `:bg`.
+    private const val DEAD_RETRIES = 3
+    private const val DEAD_RETRY_PAUSE_MS = 50L
+
     private val lane = Executors.newSingleThreadExecutor { r ->
         Thread(r, "lxbox-bg-lane").apply { isDaemon = true }
     }
@@ -75,16 +79,46 @@ object BgClient {
         return extras
     }
 
+    /// Один вызов провайдера. Соединение с провайдером — «нестабильное»
+    /// (`acquireUnstableContentProviderClient`): процесс `:bg` завершается сам
+    /// (§747 G), а при обычном, «стабильном» соединении система вместе с
+    /// умершим провайдером убивает и его клиента — окно.
+    ///
+    /// Вызов, попавший на смену процесса (`:bg` перезапускается, чтобы
+    /// сбросить ядро, или завершился и поднимается заново), получает
+    /// `DeadObjectException` и повторяется в новый процесс: `:bg` перед
+    /// завершением перестаёт исполнять вызовы (`BgLifecycle.enter`), так что
+    /// прерванный вызов не был исполнен и повтор безопасен. Наружу ошибка
+    /// выходит, только если и повторы не удались.
     private fun raw(ctx: Context, method: String, arg: String?, extras: Bundle?): Bundle {
-        val reply = try {
-            ctx.contentResolver.call(BgControlProvider.uri(ctx), method, arg, extras)
-        } catch (t: Throwable) {
-            throw BgError(BgControlProvider.ERROR_CALL_FAILED, t.message ?: t.javaClass.simpleName)
-        } ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no reply")
-        reply.getString(BgControlProvider.KEY_ERROR_CODE)?.let { code ->
-            throw BgError(code, reply.getString(BgControlProvider.KEY_ERROR_MESSAGE))
+        var attempt = 0
+        while (true) {
+            val reply = try {
+                val client = ctx.contentResolver
+                    .acquireUnstableContentProviderClient(BgControlProvider.uri(ctx))
+                    ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no provider")
+                try {
+                    client.call(method, arg, extras)
+                } finally {
+                    runCatching { client.close() }
+                }
+            } catch (e: android.os.DeadObjectException) {
+                if (++attempt > DEAD_RETRIES) {
+                    throw BgError(BgControlProvider.ERROR_CALL_FAILED, "service process is gone")
+                }
+                Log.w(TAG, "call($method): service process died — retry $attempt")
+                runCatching { Thread.sleep(DEAD_RETRY_PAUSE_MS) }
+                continue
+            } catch (e: BgError) {
+                throw e
+            } catch (t: Throwable) {
+                throw BgError(BgControlProvider.ERROR_CALL_FAILED, t.message ?: t.javaClass.simpleName)
+            } ?: throw BgError(BgControlProvider.ERROR_CALL_FAILED, "no reply")
+            reply.getString(BgControlProvider.KEY_ERROR_CODE)?.let { code ->
+                throw BgError(code, reply.getString(BgControlProvider.KEY_ERROR_MESSAGE))
+            }
+            return reply
         }
-        return reply
     }
 
     /// [call], который не бросает: сбой — в лог и [fallback].
@@ -99,8 +133,17 @@ object BgClient {
 
     private val nextId = AtomicLong(0)
 
+    /// Ждущий ответа долгий вызов. [dispatched] — `:bg` принял его к
+    /// исполнению (вызов-запуск вернулся): только такой вызов пропадает вместе
+    /// с процессом. Пока запуск в пути (в том числе повторяется в новый
+    /// процесс), конец канала событий его не касается.
+    private class Pending(val done: (Result<Any?>) -> Unit) {
+        @Volatile
+        var dispatched = false
+    }
+
     /// Ждущие ответа долгие вызовы: номер → приёмник (зовётся на главном потоке).
-    private val pending = ConcurrentHashMap<Long, (Result<Any?>) -> Unit>()
+    private val pending = ConcurrentHashMap<Long, Pending>()
 
     /// Долгий вызов: запустить метод в `:bg` и получить ответ кадром канала
     /// событий. [done] зовётся на главном потоке ровно один раз. Запуск идёт
@@ -114,13 +157,18 @@ object BgClient {
     ) {
         onLane {
             val id = nextId.incrementAndGet()
-            pending[id] = done
+            val entry = Pending(done)
+            pending[id] = entry
             try {
                 val extras = argsBundle(ctx, args).apply { putLong(BgControlProvider.KEY_ID, id) }
                 raw(ctx, BgControlProvider.METHOD_INVOKE_ASYNC, method, extras)
+                entry.dispatched = true
             } catch (e: BgError) {
-                pending.remove(id)
+                // Ответить должен ровно один: кто снял запись, тот и отвечает.
+                if (pending.remove(id) == null) return@onLane
                 if (e.code == BgControlProvider.ERROR_NO_PIPE) {
+                    // Новый `:bg` ещё не получил канал событий (окно заново
+                    // подключается после его перезапуска) — синхронным вызовом.
                     longPool.execute {
                         val reply = runCatching { call(ctx, method, args) }
                         main.post { done(reply) }
@@ -169,6 +217,7 @@ object BgClient {
     private class Reader(
         readEnd: ParcelFileDescriptor,
         val onFrame: (String, ByteArray) -> Unit,
+        val onLost: () -> Unit,
     ) {
         val input = DataInputStream(
             ParcelFileDescriptor.AutoCloseInputStream(readEnd).buffered(64 * 1024),
@@ -194,11 +243,20 @@ object BgClient {
     /// только после доставки предыдущего, так что медленный главный поток
     /// тормозит чтение, а не копит кадры в памяти окна.
     ///
+    /// [onLost] — канал оборвался не по [disconnect]: процесс `:bg` ушёл
+    /// (перезапустился, чтобы сбросить ядро, или умер); зовётся на главном
+    /// потоке, окно в ответ подключается заново.
+    ///
     /// Блокирует (вызов `:bg`); звать с полосы. `false` — `:bg` не ответил.
-    fun connect(ctx: Context, token: IBinder, onFrame: (String, ByteArray) -> Unit): Boolean {
+    fun connect(
+        ctx: Context,
+        token: IBinder,
+        onFrame: (String, ByteArray) -> Unit,
+        onLost: () -> Unit,
+    ): Boolean {
         disconnect()
         val pipe = runCatching { ParcelFileDescriptor.createPipe() }.getOrNull() ?: return false
-        val r = Reader(pipe[0], onFrame)
+        val r = Reader(pipe[0], onFrame, onLost)
         reader = r
         Thread({ read(r) }, "lxbox-event-read").apply { isDaemon = true }.start()
         val ok = runCatching {
@@ -220,7 +278,7 @@ object BgClient {
     fun disconnect() {
         reader?.stop()
         reader = null
-        failPending("window detached")
+        failDispatched("window detached")
     }
 
     private fun read(r: Reader) {
@@ -249,8 +307,11 @@ object BgClient {
             runCatching { r.input.close() }
             if (reader === r) {
                 reader = null
-                // Процесс `:bg` ушёл вместе с идущими вызовами.
-                failPending("service process is gone")
+                // Процесс `:bg` ушёл. Принятые им вызовы пропали вместе с ним
+                // (при перезапуске ради ядра таких нет: `:bg` дожидается
+                // ответов); вызовы, чей запуск ещё в пути, повторятся сами.
+                failDispatched("service process is gone")
+                if (!r.stopped) main.post { if (!r.stopped) r.onLost() }
             }
         }
     }
@@ -258,7 +319,7 @@ object BgClient {
     private fun reply(payload: ByteArray) {
         val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
         val id = (m["id"] as? Number)?.toLong() ?: return
-        val done = pending.remove(id) ?: return
+        val done = pending.remove(id)?.done ?: return
         val code = m["ec"] as? String
         val result: Result<Any?> =
             if (code != null) Result.failure(BgError(code, m["em"] as? String))
@@ -266,10 +327,13 @@ object BgClient {
         main.post { done(result) }
     }
 
-    private fun failPending(why: String) {
-        for (id in pending.keys.toList()) {
-            val done = pending.remove(id) ?: continue
-            main.post { done(Result.failure(BgError(BgControlProvider.ERROR_CALL_FAILED, why))) }
+    private fun failDispatched(why: String) {
+        for ((id, entry) in pending.entries.toList()) {
+            if (!entry.dispatched) continue
+            if (pending.remove(id) == null) continue
+            main.post {
+                entry.done(Result.failure(BgError(BgControlProvider.ERROR_CALL_FAILED, why)))
+            }
         }
     }
 }

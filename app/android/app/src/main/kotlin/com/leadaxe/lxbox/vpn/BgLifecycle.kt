@@ -112,6 +112,9 @@ data class BgExitState(
     /// Сервису только что отправлена команда старта, а его экземпляр ещё не
     /// создан: завершиться сейчас — значит потерять старт.
     val startPending: Boolean,
+    /// В канале событий ждут записи ответы вызовов окна: завершиться сейчас —
+    /// значит оставить вызов без ответа.
+    val pendingReplies: Boolean,
 )
 
 /// §747 G — можно ли процессу `:bg` завершиться: туннель остановлен, сервис
@@ -119,7 +122,18 @@ data class BgExitState(
 fun bgMayExit(s: BgExitState): Boolean =
     s.tunnelStopped && !s.serviceAlive && !s.uiAttached && s.nativeWindows == 0 &&
         s.holds == 0 && s.activeCalls == 0 && !s.taildropBusy && !s.watchdogPending &&
-        !s.probeActive && !s.startPending
+        !s.probeActive && !s.startPending && !s.pendingReplies
+
+/// §747 G — можно ли процессу `:bg` перезапуститься под открытым окном, чтобы
+/// сбросить загруженное ядро: туннель остановлен, а `libbox.so` из живого
+/// процесса не выгрузить. Те же причины жить, что в [bgMayExit], кроме самого
+/// окна; перезапуск нужен, только если ядро загружено ([coreLoaded]) и им не
+/// пользовались без туннеля (проба, проверка конфига) последние
+/// [BgLifecycle.CORE_IDLE_MS] — иначе редактор конфига грузил бы ядро заново
+/// на каждую проверку.
+fun bgMayRecycle(s: BgExitState, coreLoaded: Boolean, coreIdleMs: Long): Boolean =
+    coreLoaded && s.uiAttached && coreIdleMs >= BgLifecycle.CORE_IDLE_MS &&
+        bgMayExit(s.copy(uiAttached = false))
 
 /// §747 G — завершение ненужного процесса `:bg`.
 ///
@@ -129,6 +143,20 @@ fun bgMayExit(s: BgExitState): Boolean =
 /// проверяет [bgMayExit] и, если жить незачем, завершается сам. Плитку,
 /// автозапуск, сторожа, команды автоматизации и вызовы окна система поднимает
 /// в новом процессе.
+///
+/// **Перезапуск под открытым окном.** Подключённое окно — причина жить, но не
+/// причина держать ядро: после остановки туннеля (или пробы, проверки
+/// конфига) процесс с загруженным ядром завершается так же ([bgMayRecycle]),
+/// а окно, увидев конец канала событий, тут же поднимает новый `:bg` — лёгкий,
+/// без `libbox.so`, — и заново называет себя, открывает канал и подписки.
+///
+/// **Граница завершения** ([enter] / [dying]). Решение «завершаемся» и вход
+/// вызова окна сериализованы одним замком: либо вызов вошёл раньше и отменил
+/// завершение, либо решение принято — и тогда вызов не исполняется вовсе, а
+/// ждёт гибели процесса; окно получает `DeadObjectException` и повторяет его в
+/// новый процесс (`BgClient`). Наполовину исполненных вызовов не бывает.
+/// Команда старта, пришедшая Intent'ом (плитка, приёмник), процесс поднимет
+/// сама система.
 ///
 /// Работает только в процессе с ролью `:bg` ([ProcessRole]).
 object BgLifecycle {
@@ -142,11 +170,24 @@ object BgLifecycle {
     const val DELAY_START_MS = 15_000L
     /// Сколько процесс ждёт создания сервиса после команды старта.
     private const val START_GRACE_MS = 20_000L
+    /// Сколько ядро должно простоять без дела без туннеля (проба, проверка и
+    /// форматирование конфига), прежде чем процесс перезапустится ради него.
+    const val CORE_IDLE_MS = 30_000L
     /// Задержка самозавершения после `quitApp`: ответ вызова успевает уйти.
     private const val DELAY_QUIT_MS = 150L
 
     private val main = Handler(Looper.getMainLooper())
-    private val activeCalls = AtomicInteger(0)
+
+    /// Замок границы завершения: счёт идущих вызовов, пометка «старт в пути»
+    /// и решение завершиться меняются и читаются под ним.
+    private val gate = Any()
+    private var activeCalls = 0
+
+    /// Решение завершиться принято: новые вызовы не исполняются.
+    @Volatile
+    var dying = false
+        private set
+
     private val nativeWindows = AtomicInteger(0)
     private val holds = AtomicInteger(0)
 
@@ -164,7 +205,9 @@ object BgLifecycle {
     /// процесса здесь оставило бы систему с обещанным, но не начатым
     /// foreground-сервисом — на [START_GRACE_MS] процесс удерживается.
     fun startRequested() {
-        startPendingUntil = android.os.SystemClock.elapsedRealtime() + START_GRACE_MS
+        synchronized(gate) {
+            startPendingUntil = android.os.SystemClock.elapsedRealtime() + START_GRACE_MS
+        }
     }
 
     /// Команда старта дошла: сервис создан (дальше процесс держит сам сервис —
@@ -199,16 +242,39 @@ object BgLifecycle {
         check(app, DELAY_START_MS)
     }
 
+    /// Вызов окна входит в процесс. `false` — процесс уже решил завершиться:
+    /// исполнять вызов нельзя (см. [park]).
+    fun enter(): Boolean = synchronized(gate) {
+        if (dying) return false
+        activeCalls++
+        true
+    }
+
+    /// Вызов пришёл в завершающийся процесс: ждать его гибели, ничего не
+    /// исполняя. Окно получит `DeadObjectException` и повторит вызов в новый
+    /// процесс. Гибель — дело миллисекунд; срок — страховка.
+    fun park() {
+        runCatching { Thread.sleep(30_000L) }
+    }
+
+    /// Долгий вызов продолжает исполняться на своём потоке после возврата
+    /// запустившего его быстрого.
     fun callStarted() {
-        activeCalls.incrementAndGet()
+        synchronized(gate) { activeCalls++ }
     }
 
     fun callFinished(ctx: Context) {
-        activeCalls.decrementAndGet()
-        // Окно подключено — оно и держит процесс; проверять нечего. Иначе —
-        // с запасом на холодный старт окна: его первые вызовы приходят раньше,
-        // чем движок подключится и окно назовёт себя (`uiAttached`).
-        if (!UiPresence.isAttached) check(ctx, DELAY_START_MS)
+        synchronized(gate) { activeCalls-- }
+        if (!UiPresence.isAttached) {
+            // С запасом на холодный старт окна: его первые вызовы приходят
+            // раньше, чем движок подключится и окно назовёт себя (`uiAttached`).
+            check(ctx, DELAY_START_MS)
+        } else if (BoxApplication.libboxLoaded && TunnelState.status == VpnStatus.Stopped) {
+            // Окно подключено, туннеля нет, а ядро загружено (проба, проверка
+            // конфига): проверить позже, не пора ли перезапуститься без него.
+            // Уже ждущую проверку не отодвигаем — вызовы окна идут часто.
+            check(ctx, CORE_IDLE_MS + 1_000L, keepPending = true)
+        }
     }
 
     /// Удержание процесса (слушающая плитка). Парный вызов — [release].
@@ -224,12 +290,16 @@ object BgLifecycle {
     /// Запланировать проверку «можно ли завершиться» через [delayMs]. Новая
     /// проверка заменяет ожидающую; любое событие, вернувшее причину жить
     /// (старт туннеля, вызов, окно), проверка увидит сама.
-    fun check(ctx: Context, delayMs: Long) {
+    fun check(ctx: Context, delayMs: Long, keepPending: Boolean = false) {
         if (!enabled || quitting) return
         val app = ctx.applicationContext ?: ctx
         synchronized(this) {
+            if (keepPending && pending != null) return
             pending?.let { main.removeCallbacks(it) }
-            val r = Runnable { exitIfIdle(app) }
+            val r = Runnable {
+                synchronized(this) { pending = null }
+                exitIfIdle(app)
+            }
             pending = r
             main.postDelayed(r, delayMs)
         }
@@ -250,25 +320,51 @@ object BgLifecycle {
         uiAttached = UiPresence.isAttached,
         nativeWindows = nativeWindows.get(),
         holds = holds.get(),
-        activeCalls = activeCalls.get(),
+        activeCalls = activeCalls,
         taildropBusy = Taildrop.isBusy(),
         watchdogPending = runCatching { BootReceiver.isVpnDesired(app) }.getOrDefault(true),
         probeActive = ProbeSession.active,
         startPending = android.os.SystemClock.elapsedRealtime() < startPendingUntil,
+        pendingReplies = BgEventPipe.hasPendingReplies,
     )
 
     private fun exitIfIdle(app: Context) {
-        val s = state(app)
-        if (!bgMayExit(s)) {
-            Log.d(TAG, "stay: $s")
-            // Причина, у которой нет своего события об окончании (передача
-            // Taildrop, идущий вызов, проба): перепроверить позже.
-            if (s.taildropBusy || s.activeCalls > 0 || s.probeActive || s.startPending) {
-                check(app, DELAY_IDLE_MS)
+        val coreLoaded = BoxApplication.libboxLoaded
+        val coreIdleMs = BoxApplication.coreIdleMs()
+        var reason: String? = null
+        // Решение — под замком границы: вызов окна либо уже вошёл (и тогда
+        // причина жить видна в состоянии), либо войдёт после и будет ждать
+        // гибели процесса, не исполняясь.
+        val s = synchronized(gate) {
+            val st = state(app)
+            reason = when {
+                bgMayExit(st) -> "idle"
+                bgMayRecycle(st, coreLoaded, coreIdleMs) -> "drop the core under the open window"
+                else -> null
             }
+            if (reason != null) dying = true
+            st
+        }
+        val why = reason
+        if (why != null) {
+            exit(app, why)
             return
         }
-        exit(app, "idle")
+        Log.d(TAG, "stay: $s coreLoaded=$coreLoaded coreIdleMs=$coreIdleMs")
+        // Причина, у которой нет своего события об окончании (передача
+        // Taildrop, идущий вызов, проба, недописанный ответ, ядро ещё не
+        // простояло своё): перепроверить позже.
+        val waitsForCore = coreLoaded && s.uiAttached && s.tunnelStopped && !s.serviceAlive
+        if (s.taildropBusy || s.activeCalls > 0 || s.probeActive || s.startPending ||
+            s.pendingReplies || waitsForCore
+        ) {
+            val delay = if (waitsForCore && coreIdleMs < CORE_IDLE_MS) {
+                (CORE_IDLE_MS - coreIdleMs + 1_000L).coerceAtLeast(DELAY_IDLE_MS)
+            } else {
+                DELAY_IDLE_MS
+            }
+            check(app, delay)
+        }
     }
 
     private fun exit(app: Context, reason: String) {

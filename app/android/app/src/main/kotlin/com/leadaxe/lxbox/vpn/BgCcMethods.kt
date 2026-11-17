@@ -53,7 +53,16 @@ internal object BgCcMethods {
     private fun noClientError(): Map<String, String> =
         mapOf("error" to "error", "message" to NO_CLIENT)
 
-    fun handle(ctx: Context, method: String, a: BgArgs): Any? = when (method) {
+    fun handle(ctx: Context, method: String, a: BgArgs): Any? {
+        // §747 G — проба и работа с конфигом держат ядро «в деле»: процесс не
+        // перезапускается ради его сброса посреди серии замеров или правок.
+        if (method.startsWith("probe") || method == "formatConfig" || method == "checkConfig") {
+            BoxApplication.noteCoreUse()
+        }
+        return dispatch(ctx, method, a)
+    }
+
+    private fun dispatch(ctx: Context, method: String, a: BgArgs): Any? = when (method) {
         // ───── потоки данных окна: подписка и отписка EventChannel ─────
         "streamListen" -> StreamSinks.listen(a.str("stream"))
         "streamCancel" -> { StreamSinks.cancel(a.str("stream")); true }

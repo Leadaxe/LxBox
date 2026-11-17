@@ -39,6 +39,9 @@ internal class PipeQueues(
     val isEmpty: Boolean
         get() = reliable.isEmpty() && events.isEmpty() && latest.isEmpty() && log.isEmpty()
 
+    /// Ответы вызовов (и команды автоматизации), ещё не взятые на запись.
+    val hasReliable: Boolean get() = reliable.isNotEmpty()
+
     fun reliable(stream: String, value: Any?) {
         reliable.addLast(stream to value)
     }
@@ -123,6 +126,9 @@ object BgEventPipe {
         val ready = lock.newCondition()
         val queues = PipeQueues()
         var closed = false
+
+        /// Пишущий поток взял кадр, который нельзя терять, и ещё не дописал его.
+        var writingReliable = false
     }
 
     @Volatile
@@ -136,6 +142,20 @@ object BgEventPipe {
 
     /// Канал открыт: окно подключено и читает (или заморожено).
     val connected: Boolean get() = session != null
+
+    /// Ответ вызова окна ждёт записи или пишется: процессу рано завершаться
+    /// (`BgLifecycle`) — окно осталось бы без ответа. Дописанное в pipe окно
+    /// дочитает и после гибели `:bg`.
+    val hasPendingReplies: Boolean
+        get() {
+            val s = session ?: return false
+            s.lock.lock()
+            try {
+                return !s.closed && (s.queues.hasReliable || s.writingReliable)
+            } finally {
+                s.lock.unlock()
+            }
+        }
 
     /// Гейт «никто не слушает — не форматировать»: первой строкой проверяется
     /// в `BoxService.writeDebugMessage`.
@@ -230,6 +250,7 @@ object BgEventPipe {
                     }
                     if (s.closed) break
                     frame = next!!
+                    s.writingReliable = frame.first.startsWith("!")
                 } finally {
                     s.lock.unlock()
                 }
@@ -240,6 +261,11 @@ object BgEventPipe {
                 else BgCodec.encodeEventEnvelope(value)
                 EventFrames.write(s.out, stream, payload)
                 s.out.flush()
+                if (s.writingReliable) {
+                    s.lock.lock()
+                    s.writingReliable = false
+                    s.lock.unlock()
+                }
             }
         } catch (t: Throwable) {
             // EPIPE: окно закрыло читающий конец или процесс `:ui` умер.
