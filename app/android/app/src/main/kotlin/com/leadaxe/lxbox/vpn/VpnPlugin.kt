@@ -801,7 +801,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val id = call.argument<String>("stable_id") ?: ""
                 pluginScope.launch {
                     val err = withContext(Dispatchers.IO) {
-                        cc?.setTailscaleExitNode(tag, id) ?: "no command client"
+                        if (cc == null) "no command client" else cc.setTailscaleExitNode(tag, id)
                     }
                     result.success(err)
                 }
@@ -833,7 +833,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 val tag = call.argument<String>("tag") ?: ""
                 pluginScope.launch {
                     val err = withContext(Dispatchers.IO) {
-                        cc?.tailscaleLogout(tag) ?: "no command client"
+                        if (cc == null) "no command client" else cc.tailscaleLogout(tag)
                     }
                     result.success(err)
                 }

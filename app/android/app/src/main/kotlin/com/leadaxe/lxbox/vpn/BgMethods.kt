@@ -281,16 +281,20 @@ object BgMethods {
                     val k = m["key"] as? String ?: return@mapNotNull null
                     k to (m["value"] as? String ?: "")
                 }
-                openConnect()?.submitOpenConnectForm(a.str("tag"), a.str("challenge_id"), values)
-                    ?: NO_CLIENT
+                val cc = openConnect()
+                if (cc == null) NO_CLIENT else cc.submitOpenConnectForm(a.str("tag"), a.str("challenge_id"), values)
             }
-            "ccCancelOpenConnectChallenge" ->
-                openConnect()?.cancelOpenConnectChallenge(a.str("tag"), a.str("challenge_id"))
-                    ?: NO_CLIENT
-            "ccStartOpenConnectCallback" ->
-                openConnect()?.startOpenConnectCallback(
+            "ccCancelOpenConnectChallenge" -> {
+                val cc = openConnect()
+                if (cc == null) NO_CLIENT else cc.cancelOpenConnectChallenge(a.str("tag"), a.str("challenge_id"))
+            }
+            "ccStartOpenConnectCallback" -> {
+                val cc = openConnect()
+                if (cc == null) NO_CLIENT
+                else cc.startOpenConnectCallback(
                     a.str("tag"), a.str("challenge_id"), a.int("port", 8020), a.strings("prefixes"),
-                ) ?: NO_CLIENT
+                )
+            }
             "ccStopOpenConnectCallback" -> { openConnect()?.stopOpenConnectCallback(); true }
 
             // ───────────── окно: лог, проба, присутствие ─────────────
@@ -309,10 +313,9 @@ object BgMethods {
     /// §745 — openconnect целиком живёт на сервисном клиенте ядра.
     private fun openConnect(): OpenConnectControl? = CoreSession.client
 
-    /// Ответ трёх вызовов openconnect, когда выражение `клиент?.вызов()` дало
-    /// null. Выражение перенесено из `VpnPlugin` как было: null оно даёт и без
-    /// клиента, и при успехе вызова (тот отвечает null) — прежнее поведение
-    /// сохранено намеренно, см. «Итог» спеки 747.
+    /// Ответ вызова «null — успех, иначе текст ошибки», когда клиента ядра нет.
+    /// До 747 выражение `клиент?.вызов() ?: "no command client"` отдавало эту
+    /// строку и при успехе (вызов отвечает null) — исправлено: только без клиента.
     private const val NO_CLIENT = "no command client"
 
     /// Blocking stop: ждём, пока setStatus(Stopped) реально отработает, чтобы
