@@ -138,9 +138,11 @@ All of them are broadcast intents. The prefix is `com.leadaxe.lxbox.`.
 > a dialog.
 
 > **Only `START_VPN`, `STOP_VPN` and `TOGGLE_VPN` work without the app loaded.**
-> Every other command, and every outgoing event, needs the app process with its
-> UI engine up (the app was opened at least once since boot and not killed).
-> Without it such a command is skipped silently, with no `VPN_ERROR`.
+> Every other command, and every outgoing event, needs the app window process
+> with its UI engine up: the app is open, or was sent to the background with
+> Home. Once the window is closed (the task swiped away, the app finished) its
+> process ends (§747), and such a command is skipped silently, with no
+> `VPN_ERROR`, until the app is opened again.
 
 ---
 

@@ -1,7 +1,5 @@
 package com.leadaxe.lxbox.vpn
 
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import io.nekohasekai.libbox.CommandClient
 import io.nekohasekai.libbox.CommandClientOptions
@@ -17,12 +15,11 @@ import io.nekohasekai.libbox.TailscaleStatusUpdate
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
-/// §745 — то, что `VpnPlugin` вправе делать с сервисным клиентом: openconnect
+/// §745 — то, что сторона окна вправе делать с сервисным клиентом: openconnect
 /// целиком живёт у сервиса (слушатель SSO должен работать, пока пользователь в
-/// браузере, а UI в фоне), а UI читает снимок, отвечает на челлендж и
-/// поднимает слушатель на том же состоянии. Это перечисленный остаток общей
-/// памяти между сторонами (docs/ARCHITECTURE.md, «Process boundary»); при
-/// разделении на процессы эти пять вызовов станут командами сервису.
+/// браузере, а окно в фоне или закрыто), а окно читает снимок, отвечает на
+/// челлендж и поднимает слушатель на том же состоянии. §747 — эти пять вызовов
+/// приходят из процесса окна вызовом `BgControlProvider` (`BgMethods`).
 interface OpenConnectControl {
     fun openConnectSnapshot(): Map<String, Any>
     fun submitOpenConnectForm(tag: String, challengeId: String, values: List<Pair<String, String>>): String?
@@ -50,8 +47,9 @@ interface OpenConnectControl {
 /// **JNI-no-throw**: каждый колбэк ядра обёрнут в try/catch — исключение через
 /// JNI роняет процесс.
 ///
-/// Единственный приёмник Flutter, в который пишет сервисный клиент, —
-/// `UiSinks.ccOpenConnectSink` (остаток общей памяти, см. [OpenConnectControl]).
+/// §747 — в приёмники Flutter сервисный клиент не пишет (окно в другом
+/// процессе): о перемене состояния openconnect он сообщает через [Host], а
+/// снимок окно забирает вызовом (см. [OpenConnectControl]).
 class ServiceCommandClient(private val host: Host) : OpenConnectControl {
 
     /// §742 — то, что клиенту нужно от стороны, которая его создала.
@@ -68,7 +66,6 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
         private const val TAG = CC_LOG_TAG
     }
 
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     /// §209 — unary-клиент сервисной роли: свой, не общий с клиентом UI
     /// (`cancelPing` и `resyncForReopen` у UI рвут только клиент UI).

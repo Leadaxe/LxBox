@@ -103,14 +103,27 @@ const _frozenUiBridge = <String, String>{
 
 String _kbase(String name) => '${_kotlinRoot}com/leadaxe/lxbox/$name';
 
+/// §747 — файлы стороны окна (процесс `:ui`). Нативные окна Taildrop и
+/// автоматизации сюда не входят: они живут в `:bg`, рядом с клиентом сервиса.
 bool _isKotlinUi(String p) =>
     p == _kbase('MainActivity.kt') ||
+    p == _kbase('LanTransferSender.kt') ||
     p == _kbase('vpn/VpnPlugin.kt') ||
     // §745 — клиент ядра роли UI и его держатель.
     p == _kbase('vpn/BoxCommandClient.kt') ||
     p == _kbase('vpn/UiCoreSession.kt') ||
-    (_under(p, _kbase('vpn/Taildrop')) && p.endsWith('Activity.kt')) ||
+    p == _kbase('vpn/UiSinks.kt') ||
+    p == _kbase('vpn/UiLaunchRequests.kt') ||
+    // §747 — вызывающая сторона канала окно → сервис.
+    p == _kbase('vpn/BgClient.kt') ||
+    p == _kbase('vpn/WifiNetworkObserver.kt') ||
     _under(p, _kbase('editor/'));
+
+const _manifestPath = 'android/app/src/main/AndroidManifest.xml';
+const _manifestRuleId = 'manifest-process';
+const _manifestRuleDescription =
+    'каждый компонент исходного манифеста (кроме activity-alias) несёт '
+    'android:process ":ui" или ":bg"';
 
 final _vpnPluginRe = RegExp(r'\bVpnPlugin\b');
 final _uiCoreSessionRe = RegExp(r'\bUiCoreSession\b');
@@ -120,12 +133,14 @@ final _uiCoreSessionRe = RegExp(r'\bUiCoreSession\b');
 final _uiSinksUsers = <String, Set<String>?>{
   _kbase('vpn/VpnPlugin.kt'): null,
   _kbase('vpn/BoxCommandClient.kt'): null,
-  _kbase('vpn/BoxService.kt'): {'coreLogSink'},
-  _kbase('vpn/ServiceCommandClient.kt'): {'ccOpenConnectSink'},
+  // §747 — initUiSide отдаёт клиенту окна приёмник журнала; сервисная
+  // сторона к UiSinks не обращается вовсе (лог идёт через pipe, openconnect —
+  // событием).
+  _kbase('vpn/BoxApplication.kt'): {'appLogWarning'},
 };
+final _automationBridgeRe = RegExp(r'(?<![A-Za-z0-9_])AutomationBridge\b');
 final _eventSinkRe = RegExp(r'\bEventSink\b');
 final _sharedPrefsRe = RegExp(r'\bgetSharedPreferences\(');
-final _boxServiceRe = RegExp(r'\bBoxService\.(\w+)');
 final _removedRe = RegExp(
   r'\bBoxVpnService\.(?:currentStatus|currentRevoked|tunnelStartedElapsedMs|currentSessionAllowBypass)\b|\bBoxService\.commandClient\b',
 );
@@ -204,12 +219,30 @@ final rules = <Rule>[
         _eventSinkRe.hasMatch(code[i]) ? 'тип EventSink' : null,
   ),
   Rule(
-    id: 'kt-vpnplugin-coresession',
+    id: 'kt-ui-service-side',
     description:
-        'VpnPlugin.kt ходит в CoreSession.client только за openconnect '
-        '(строка со словом openConnect) и не знает ServiceCommandClient',
-    applies: (p) => p == _kbase('vpn/VpnPlugin.kt'),
-    check: (p, code, i) => vpnPluginServiceClientUse(code[i]),
+        'файлы стороны окна (:ui — VpnPlugin, MainActivity, BoxCommandClient, '
+        'UiCoreSession, UiSinks, BgClient, editor/ …) не трогают сервисную '
+        'сторону (:bg): CoreSession, ServiceCommandClient, BootReceiver, '
+        'NativeCache, AutomationCache, Taildrop*, ConfigManager, BoxService, '
+        'BgMethods и др.; из BoxVpnService — только константы',
+    applies: _isKotlinUi,
+    check: (p, code, i) => uiServiceSideUse(code[i]),
+  ),
+  Rule(
+    id: 'kt-automationbridge-ref',
+    description:
+        'AutomationBridge (канал Dart) упоминается только в '
+        'AutomationBridge.kt и VpnPlugin.kt — сервисная сторона шлёт команды '
+        'через AutomationRelay',
+    applies: _kt,
+    allow: {
+      _kbase('vpn/AutomationBridge.kt'): 'сам мост и AutomationRelay',
+      _kbase('vpn/VpnPlugin.kt'): 'ставит канал и принимает событие из :bg',
+    },
+    check: (p, code, i) => _automationBridgeRe.hasMatch(code[i])
+        ? 'ссылка на AutomationBridge'
+        : null,
   ),
   Rule(
     id: 'kt-uicoresession-ref',
@@ -220,8 +253,7 @@ final rules = <Rule>[
     allow: {
       _kbase('vpn/UiCoreSession.kt'): 'сам держатель',
       _kbase('vpn/VpnPlugin.kt'): 'единственный вызывающий клиента UI',
-      _kbase('vpn/BoxApplication.kt'):
-          'initUiSide: слушатель «перед закрытием» и приёмник журнала',
+      _kbase('vpn/BoxApplication.kt'): 'initUiSide: приёмник журнала клиента',
     },
     check: (p, code, i) =>
         _uiCoreSessionRe.hasMatch(code[i]) ? 'ссылка на UiCoreSession' : null,
@@ -230,8 +262,8 @@ final rules = <Rule>[
     id: 'kt-uisinks-member',
     description:
         'UiSinks: VpnPlugin.kt и BoxCommandClient.kt — любые поля, '
-        'BoxService.kt — coreLogSink, ServiceCommandClient.kt — '
-        'ccOpenConnectSink, остальные файлы — никаких',
+        'BoxApplication.kt — appLogWarning, остальные файлы (вся сервисная '
+        'сторона) — никаких',
     applies: (p) => _kt(p) && p != _kbase('vpn/UiSinks.kt'),
     check: (p, code, i) {
       final members = uiSinksMembers(code[i]);
@@ -258,20 +290,6 @@ final rules = <Rule>[
     },
     check: (p, code, i) =>
         _sharedPrefsRe.hasMatch(code[i]) ? 'getSharedPreferences(' : null,
-  ),
-  Rule(
-    id: 'kt-ui-boxservice',
-    description:
-        'UI-файлы (VpnPlugin, MainActivity, Taildrop*Activity, '
-        'editor/, BoxCommandClient, UiCoreSession) не ссылаются на '
-        'BoxService. (кроме coreLogsVerbose, doForceStop)',
-    applies: _isKotlinUi,
-    check: (p, code, i) {
-      final m = _boxServiceRe.firstMatch(code[i]);
-      if (m == null) return null;
-      const ok = {'coreLogsVerbose', 'doForceStop'};
-      return ok.contains(m.group(1)) ? null : 'BoxService.${m.group(1)}';
-    },
   ),
   Rule(
     id: 'removed-fields',
@@ -332,6 +350,15 @@ void main(List<String> args) {
     }
   }
 
+  // §747 F — правило не построчное: исходный манифест целиком.
+  final manifest = File(_manifestPath);
+  final manifestViolations = <String>[
+    if (!manifest.existsSync())
+      '$_manifestPath [$_manifestRuleId] файл не найден'
+    else
+      for (final v in manifestProcessViolations(manifest.readAsStringSync()))
+        '$_manifestPath [$_manifestRuleId] $v',
+  ];
   var total = 0;
   for (final r in rules) {
     for (final v in violations[r.id]!) {
@@ -339,6 +366,10 @@ void main(List<String> args) {
     }
     total += violations[r.id]!.length;
   }
+  for (final v in manifestViolations) {
+    stdout.writeln('FAIL: $v');
+  }
+  total += manifestViolations.length;
   for (final w in warnings) {
     stdout.writeln('warn: $w');
   }
@@ -352,6 +383,10 @@ void main(List<String> args) {
       '[${r.id}] ${r.description}',
     );
   }
+  stdout.writeln(
+    '  ${manifestViolations.length.toString().padLeft(3)}  '
+    '[$_manifestRuleId] $_manifestRuleDescription',
+  );
   appendStepSummary(
     '### boundary_check\n\nviolations: $total, '
     'warnings: ${warnings.length}\n',

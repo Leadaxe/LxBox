@@ -85,6 +85,20 @@ class BoxApplication : Application() {
         // «Send to device», оставшиеся включёнными после падения, скрываются.
         runCatching { TaildropClip.syncOnProcessStart(this) }
 
+        // §334/§316 — прошлый запуск ядра упал (непустой crash-файл): ядро
+        // загружается сразу, не дожидаясь старта туннеля. `Libbox.setup`
+        // архивирует репорт (его показывает баннер Dart при открытии окна), а
+        // `CrashRecovery` перед ним чистит кэши ядра — как раньше, при первом
+        // же запуске процесса после падения. В остальных случаях ядро здесь не
+        // грузится.
+        if (runCatching { CrashRecovery.crashedOnPreviousLaunch(filesDir) }.getOrDefault(false)) {
+            @Suppress("OPT_IN_USAGE")
+            GlobalScope.launch(Dispatchers.IO) {
+                runCatching { ensureLibbox() }
+                    .onFailure { android.util.Log.e(TAG, "initializeLibbox failed", it) }
+            }
+        }
+
         // §747 G — завершение процесса, когда он никому не нужен.
         BgLifecycle.install(this)
     }
@@ -112,16 +126,22 @@ class BoxApplication : Application() {
             runCatching { ensureLibbox() }
                 .onFailure { android.util.Log.e(TAG, "initializeLibbox failed", it) }
         }
+        // Параллельно — первый вызов `:bg`: он поднимает процесс `:bg` заранее
+        // (к подключению движка тот уже отвечает) и приносит настройку языка
+        // для локали рантайма окна (тексты ошибок проверки конфига и пробы).
+        @Suppress("OPT_IN_USAGE")
+        GlobalScope.launch(Dispatchers.IO) {
+            runCatching {
+                val lang = BgClient.callOr(this@BoxApplication, "getAppLanguage", null, L10n.SETTING_SYSTEM)
+                ensureLibbox()
+                L10n.setLibboxLocale(lang)
+            }.onFailure { android.util.Log.w(TAG, "ui core locale failed: ${it.message}") }
+        }
     }
 
     /** `Libbox.setup` процесса окна: только рантайм для клиента ядра. */
     private fun initializeLibboxForUi() {
         Libbox.setup(baseSetupOptions())
-        // Локаль ядра (тексты ошибок проверки конфига и пробы) — по настройке
-        // языка приложения; хранит её `:bg`.
-        runCatching {
-            L10n.setLibboxLocale(BgClient.callOr(this, "getAppLanguage", null, L10n.SETTING_SYSTEM))
-        }
     }
 
     private fun baseSetupOptions(): SetupOptions {

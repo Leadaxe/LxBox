@@ -258,6 +258,22 @@ Owner's decision, 2026-09-24.
   clients (status / screen / profiler) separate; push to an `EventSink` only from
   the main thread, one native sink per channel, fan-out via broadcast.
 - **VPN permission.** A refusal or revoke arrives as `onRevoke` — handle it.
+- **Two processes (§747).** The app runs as `com.leadaxe.lxbox:ui` (the window,
+  Flutter) and `com.leadaxe.lxbox:bg` (the VPN service, the core, the tile, the
+  receivers). There is no process named just `com.leadaxe.lxbox`.
+  - `adb shell pidof com.leadaxe.lxbox:bg` / `…:ui`; `adb logcat --pid=$(adb shell
+    pidof com.leadaxe.lxbox:bg)`; `adb shell dumpsys meminfo com.leadaxe.lxbox:bg`;
+    `adb shell ps -A | grep lxbox` must show at most these two.
+  - Each ends itself when not needed: `:ui` after the window is finished, `:bg`
+    a few seconds after the tunnel stops with no window. A missing process is
+    not a crash; check `ApplicationExitInfo` before concluding one.
+  - A new manifest component needs `android:process` (`:ui` or `:bg`); a plugin
+    that brings a component of its own is redeclared in
+    `app/android/app/src/main/AndroidManifest.xml` with `tools:node="merge"`.
+    The Android build fails on a component without it; the map of the sides and
+    the rules are in `ARCHITECTURE.md` → “Process boundary”.
+  - Native code of the window never calls service objects directly — only
+    `BgClient` (a `BgMethods` method), and never from the main thread.
 - **Signatures.** Debug and release APKs are signed differently: `adb install -r`
   fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`; `adb uninstall` wipes settings.
 - **`local.properties` `sdk.dir`** is rewritten by Flutter on every run — set

@@ -109,6 +109,10 @@ object ProbeSession : CommandServerHandler {
             return startResult("VPN is running — test uses the live tunnel instead")
         }
         stopInternal("restart")
+        // §747 — рантайм ядра в процессе окна грузится в фоне при старте
+        // процесса: дождаться (обычно уже готов).
+        runCatching { BoxApplication.ensureLibbox() }
+            .onFailure { return startResult(it.message ?: "core runtime is not available") }
         // §747 D — сокет ядра один на оба процесса, а туннель поднимает `:bg`:
         // спросить его («проба начинается»). Отказ — туннель уже не Stopped
         // (копия статуса в окне могла отстать).
