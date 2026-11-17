@@ -2,7 +2,8 @@
 
 **A patch on top of [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).**
 
-**Android TV remote**: the arrow keys no longer get stuck in option lists
+**An imported backup is no longer lost**: it shows up at once, without a
+restart. **Android TV remote**: the arrow keys no longer get stuck in option lists
 (theme, language and others) or in text fields of forms. **Comments in a
 server's JSON are kept** on the Source tab and in backups. Greyed-out
 dependent settings no longer look enabled. Inside a folder, a server whose
@@ -11,7 +12,8 @@ contract 1.1.172.
 
 **Патч поверх [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).**
 
-**Пульт Android TV**: стрелки больше не застревают в списках-переключателях
+**Импортированный бэкап больше не теряется**: он виден сразу, без
+перезапуска. **Пульт Android TV**: стрелки больше не застревают в списках-переключателях
 (тема, язык и другие) и в текстовых полях форм. **Комментарии в JSON
 сервера сохраняются** — на вкладке Source и в бэкапе. Серые зависимые
 настройки больше не выглядят включёнными. В папке сервер с недоступным
@@ -42,6 +44,16 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
 
 ## 🐛 Fixed
 
+- **Imported backup shows up at once and is no longer lost ([task 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
+  After Settings → Backup → Transfer to desktop → Import, the imported
+  servers did not appear until the app was restarted. Worse, changing
+  anything in the server list before a restart, such as turning a server
+  off, wrote the old list back and the imported servers were gone. The same
+  happened after a regular restore if «Restart now» was not tapped. Now the
+  app reloads its state right after the import and returns to the main
+  screen: everything imported is visible at once and later changes keep it.
+  The running VPN is not stopped; the config is rebuilt like after any
+  settings change.
 - **TV remote no longer gets stuck in option lists ([task 744](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).**
   In lists of round options — theme and language in App Settings →
   Appearance, background mode, detour mode, rule type and others — the arrow
@@ -101,6 +113,16 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
 
 ## 🐛 Исправлено
 
+- **Импортированный бэкап виден сразу и больше не теряется ([задача 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
+  После Settings → Backup → Transfer to desktop → Import импортированные
+  серверы не появлялись до перезапуска приложения. Хуже того: любая правка
+  списка серверов до перезапуска, например выключение сервера, записывала
+  старый список, и импортированное пропадало. То же случалось после
+  обычного восстановления, если не нажать «Restart now». Теперь приложение
+  сразу перечитывает состояние после импорта и возвращается на главный
+  экран: всё импортированное видно и сохраняется при дальнейших правках.
+  Работающий VPN не останавливается; конфиг пересобирается, как после любой
+  смены настроек.
 - **Пульт TV не застревает в списках-переключателях ([задача 744](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).**
   В списках-переключателях — тема и язык в App Settings → Appearance,
   фоновый режим, режим detour, тип правила и другие — стрелки сразу выбирали
