@@ -7,6 +7,7 @@ import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
+import '../handlers/assistant.dart';
 import '../handlers/backup.dart';
 import '../handlers/chains.dart';
 import '../handlers/directions.dart';
@@ -243,6 +244,8 @@ Router buildDebugRouter() {
     ..mount('/wifi_history', wifiHistoryHandler)
     ..mount('/profiler', profilerHandler)
     ..mount('/support', supportHandler) // §357 — тест support-ленты
-    ..mount('/taildrop', taildropHandler); // §707 итер. 5 — Taildrop узлов
+    ..mount('/taildrop', taildropHandler) // §707 итер. 5 — Taildrop узлов
+    // §750 — функции ИИ-ассистента: проверка адреса, выходы, подключения.
+    ..mount('/assistant', assistantHandler);
 }
 

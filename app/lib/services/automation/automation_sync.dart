@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import '../../vpn/box_vpn_client.dart';
+import '../assistant/assistant_index.dart';
 import '../settings_storage.dart';
 import 'event_emitter.dart';
 
@@ -30,5 +31,11 @@ Future<void> syncAutomationFromStorage({
       (Platform.isAndroid ? BoxVpnClient.I.setAppFunctionsEnabled : null);
   if (appFunctions != null) {
     await appFunctions(await SettingsStorage.getAppFunctionsEnabled());
+  }
+  // §750 — индекс ассистента для натива: полный ресинк на старте и после
+  // восстановления бэкапа / загрузки набора (там же, где AppFunctions).
+  // Тестовый вызов с inject-точками индекс не трогает.
+  if (setReceiver == null && setAppFunctions == null) {
+    await syncAssistantIndex();
   }
 }

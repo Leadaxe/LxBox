@@ -127,6 +127,16 @@ class _Methods {
   static const sendAutomationBroadcast = 'sendAutomationBroadcast';
   // §721 — тумблер Android AppFunctions (зеркало + состояние функций).
   static const setAppFunctionsEnabled = 'setAppFunctionsEnabled';
+  // §750 — индекс ассистента (Dart → native) и операции ассистента над
+  // работающим ядром (native → ответ Map/List; ошибка — `{"error":{...}}`).
+  static const setAssistantIndex = 'setAssistantIndex';
+  static const assistantOverview = 'assistantOverview';
+  static const assistantListExits = 'assistantListExits';
+  static const assistantCheckUrl = 'assistantCheckUrl';
+  static const assistantCheckExit = 'assistantCheckExit';
+  static const assistantFindApps = 'assistantFindApps';
+  static const assistantAppRoute = 'assistantAppRoute';
+  static const assistantSelectExit = 'assistantSelectExit';
   // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
   static const setAutomationActiveState = 'setAutomationActiveState';
 

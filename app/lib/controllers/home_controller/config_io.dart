@@ -144,6 +144,9 @@ mixin _ConfigIoMixin on ChangeNotifier {
           : _state.pingBatchGen,
     ));
     _addDebug(DebugSource.app, 'Config saved (${canonicalJson.length} bytes)');
+    // §750 — индекс ассистента вслед за конфигом (Направления, подключения,
+    // правила приложений). Не ждём: зеркало для натива, ошибки глотаются.
+    unawaited(syncAssistantIndex());
     return true;
   }
 

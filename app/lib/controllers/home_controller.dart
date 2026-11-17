@@ -10,6 +10,7 @@ import '../config/config_parse.dart';
 import '../models/direction.dart' show UrltestMode;
 import '../models/home_state.dart';
 import '../services/app_log.dart';
+import '../services/assistant/assistant_index.dart';
 import '../services/automation/event_emitter.dart';
 import '../services/config_staleness.dart';
 import '../services/error_format.dart';
