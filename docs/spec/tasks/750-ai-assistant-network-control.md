@@ -112,14 +112,18 @@ maxBytes, userAgent)` возвращает тело; первый чекер с�
 4. **Подтверждение изменений.** Предложение исполнителя, владелец:
    «согласен». Каждое изменение не подтверждается; изменения через шлюз
    разрешает отдельный тумблер, выключенный по умолчанию.
+5. **Никакого предрасчёта.** «Всё должно быть on-demand и отложено
+   запускаться, а не предрасчёт делаться». Сводка настроек для натива не
+   собирается ни на старте, ни при записи конфига; на запуск приложения и на
+   запись конфига задача не добавляет ничего.
 
 ## Solution
 
 ### Два слоя
 
 - **Нативные функции** — исполняются всегда, окно L×Box не нужно: старт,
-  стоп и статус VPN (§721), обзор сети, список выходов, проверка адреса,
-  проверка выхода, смена выхода, поиск приложения.
+  стоп и статус VPN (§721), список выходов, проверка адреса, проверка
+  выхода, смена выхода, поиск приложения.
 - **Шлюз к Debug API** — две функции: `getApiHelp` и `callApi`. Всё, что
   умеет разрешённая часть Debug API (правила, Направления, источники,
   действия), ассистент вызывает сам. Исполняет Dart, поэтому нужна живая
@@ -137,7 +141,6 @@ maxBytes, userAgent)` возвращает тело; первый чекер с�
 
 | Функция | Параметры | Ответ | Исполняет |
 |---------|-----------|-------|-----------|
-| `getNetworkOverview` | — | `NetworkOverview` | натив |
 | `listExits` | `direction: String`, `query: String?` | `ExitList` | натив |
 | `checkUrl` | `url: String`, `appPackage: String?` | `UrlCheckReport` | натив |
 | `checkExit` | `direction: String` | `ExitCheck` | натив |
@@ -146,16 +149,8 @@ maxBytes, userAgent)` возвращает тело; первый чекер с�
 | `getApiHelp` | — | `ApiHelp` | Dart |
 | `callApi` | `method: String`, `path: String`, `body: String?` | `ApiResponse` | Dart |
 
-**`getNetworkOverview`**: `vpnStatus`; `directions[]` — `tag`, `name`
-(подпись пользователя), `exitCount`, `currentExit` (пусто при остановленном
-туннеле); `connections[]` — `id`, `name`, `type` (`wireguard` / `amneziawg`
-/ `openvpn` / `openconnect` / `tailscale`), `enabled`, `state` (`up` /
-`connecting` / `idle` / `needs_login` / `down` / `disabled` / `unknown`; у
-OpenVPN всегда `unknown` — снимка состояния у натива нет); `defaultRoute` —
-куда идёт трафик без правила.
-
 **`listExits`**: имена выходов Направления, как они записаны (с флагом и
-названием). `direction` — тег или подпись. `query` — подстрока без учёта
+названием). `direction` — тег. `query` — подстрока без учёта
 регистра; ответ: `exits[]` (до 200), `total`, `truncated`.
 
 **`checkUrl`** — проверка §687 на глубину `http`, `fresh = true`, от имени
@@ -248,26 +243,20 @@ App Settings → Automation → Let assistants change settings.»
 
 После §747 мост становится межпроцессным (`:bg` → `:ui`), шаги те же.
 
-### Индекс для натива
+### Обзор сети — по требованию
 
-Нативному обзору нужны подписи Направлений и подключения (включая
-выключенные). Dart после каждой записи конфига и на старте передаёт нативу
-сводку методом канала `setAssistantIndex(json)`; натив хранит её в
-`SharedPreferences` `lxbox_assistant` (открывает `AutomationCache`, как
-требует правило границы). Это производное зеркало, не настройка; Kotlin
-`lxbox_settings.json` не открывает.
+`GET /assistant/overview` (ассистенту — через `callApi`): `vpn_status`;
+`directions[]` — `tag`, `name` (подпись пользователя), `exit_count`,
+`current_exit`; `connections[]` — `id`, `name`, `type` (`wireguard` /
+`amneziawg` / `openvpn` / `openconnect` / `tailscale`), `enabled`, `state`
+(`up` / `connecting` / `idle` / `needs_login` / `down` / `disabled` /
+`unknown`; у OpenVPN всегда `unknown`); `default_route`.
 
-```json
-{"v":1,"route_final":"vpn-1",
- "directions":[{"tag":"vpn-1","name":"Proxy","enabled":true}],
- "connections":[{"id":"Office","name":"Office","type":"wireguard","enabled":false}],
- "app_rules":[{"name":"Telegram","packages":["org.telegram.messenger"],
-               "package_regexes":[],"outbound":"vpn-2","conditional":false}]}
-```
-
-Выходы Направлений берутся из живых групп ядра, при остановленном туннеле —
-из сохранённого `singbox_config.json`. Индекса нет (приложение после
-обновления не открывали) — обзор отвечает «Open L×Box once to finish setup.»
+Обработчик в момент запроса собирает из настроек сводку (подписи
+Направлений, подключения включая выключенные, правила по приложениям) и
+передаёт её нативу аргументом вызова; натив добавляет живое состояние ядра
+(выходы, выбранный выход, состояния подключений). Сводка нигде не хранится
+и заранее не считается. Так же устроен `GET /assistant/app-route`.
 
 ### Что видит ассистент
 
@@ -306,19 +295,18 @@ App Settings → Automation, раздел «AI assistants» (Android 16+):
 | `POST /assistant/exit` `{direction, exit}` | смена выхода |
 | `POST /assistant/connection` `{id, enabled}` | включить/выключить подключение (флаг, пересборка, reload; при включении и остановленном туннеле — старт) |
 
-Чтения и проверки Dart берёт у натива методами канала (`assistantOverview`,
-`assistantCheckUrl`, …) — логика одна. Правила создаются существующим
+Проверки и живое состояние Dart берёт у натива методами канала
+(`assistantOverview`, `assistantCheckUrl`, …) — логика одна. Правила создаются существующим
 `POST /rules`.
 
 ### Файлы
 
 - Kotlin, `appfunctions/`: `LxBoxAppFunctions.kt`, `AssistantTypes.kt`,
-  `AssistantLogic.kt` (чистая логика), `AssistantIndex.kt`,
-  `AssistantCore.kt` (операции над ядром), `AssistantBridge.kt` (мост в Dart,
+  `AssistantLogic.kt` (чистая логика), `AssistantCore.kt` (операции над ядром), `AssistantBridge.kt` (мост в Dart,
   открытие окна, уведомление); `vpn/ServiceCommandClient.kt` (сервисные
   вызовы групп, состояний, выбора, GET через узел), `vpn/VpnPlugin.kt`
-  (методы канала, установка моста), `vpn/AutomationCache.kt`.
-- Dart, `lib/services/assistant/`: `assistant_index.dart`,
+  (методы канала, установка моста).
+- Dart, `lib/services/assistant/`: `assistant_index.dart` (сборка сводки),
   `assistant_actions.dart` (`setConnectionEnabled`),
   `assistant_gateway.dart` (политика, исполнение, справка);
   `lib/services/debug/handlers/assistant.dart`; тумблер —
@@ -333,7 +321,7 @@ App Settings → Automation, раздел «AI assistants» (Android 16+):
 - `docs/AUTOMATION.md` / `.ru.md` — раздел «AI assistants (AppFunctions)»:
   новый перечень функций, ссылка на гайд.
 - `docs/api/debug-api-reference.md` — раздел `/assistant`; `handlers/help.dart`.
-- `docs/ARCHITECTURE.md` — индекс ассистента (§ 5), шлюз и мост.
+- `docs/ARCHITECTURE.md` — шлюз и мост ассистента.
 - `docs/spec/features/014-AUTOMATION/` — функция `assistant-control` + строка
   в `FEATURE.md` (en/ru).
 - `docs/PRIVACY_POLICY.md` / `.ru.md` — что получает ассистент.
@@ -361,10 +349,10 @@ App Settings → Automation, раздел «AI assistants» (Android 16+):
 
 ## Verification
 
-1. JVM-тест `AssistantLogicTest`: очистка текста; разбор индекса; поиск
-   выходов; маршрут приложения по индексу; разбор `cdn-cgi/trace`; класс
+1. JVM-тест `AssistantLogicTest`: очистка текста; разбор сводки; поиск
+   выходов; маршрут приложения по сводке; разбор `cdn-cgi/trace`; класс
    стадии и совет; состояния подключений.
-2. Dart-тесты: сборка индекса; `setConnectionEnabled`; политика шлюза (по
+2. Dart-тесты: сборка сводки; `setConnectionEnabled`; политика шлюза (по
    строке на группу таблицы, `reveal`, выключенный тумблер изменений);
    исполнение через шлюз (чтение, изменение, закрытый маршрут, ответ больше
    предела); справка содержит только разрешённое; хендлеры `/assistant/*`.
