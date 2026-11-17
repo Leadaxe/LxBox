@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/home_controller.dart';
 import 'package:lxbox/models/home_state.dart';
 import 'package:lxbox/services/haptic_service.dart';
+import 'package:lxbox/services/settings_storage.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -53,6 +54,8 @@ void main() {
     controller.cancelMassPing();
     controller.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 50));
+    // §751 — запоминание Направления пишет настройки fire-and-forget.
+    await SettingsStorage.settleSavesForTesting();
     for (final ch in [methods, ccStatus, ccGroups]) {
       messenger.setMockMethodCallHandler(ch, null);
     }

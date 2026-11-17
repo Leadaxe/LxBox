@@ -58,28 +58,15 @@ void main() {
 
   tearDown(() async {
     controller.dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    // §751 — `_persistSort` пишет настройки fire-and-forget; дождаться всех
+    // начатых записей, иначе их `rename` упадёт на уже удалённой tempDir
+    // (PathNotFoundException «after test completion» на CI).
+    await SettingsStorage.settleSavesForTesting();
     for (final ch in [methods, ccStatus, ccGroups]) {
       messenger.setMockMethodCallHandler(ch, null);
     }
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
-
-  /// Ждать, пока фоновые сохранения настроек (`_persistSort` —
-  /// fire-and-forget) допишут файл: на медленном CI фиксированной паузы
-  /// не хватает, и `rename` из `_atomicSave` падает на уже удалённой tempDir.
-  /// Признак — файл настроек есть и `.tmp` нет три опроса подряд.
-  Future<void> settleSaves() async {
-    final deadline = DateTime.now().add(const Duration(seconds: 10));
-    var quiet = 0;
-    while (quiet < 3 && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      final names = tempDir.listSync().map((e) => e.path).toList();
-      final idle = names.any((n) => n.endsWith('lxbox_settings.json')) &&
-          !names.any((n) => n.endsWith('.tmp'));
-      quiet = idle ? quiet + 1 : 0;
-    }
-  }
 
   test('setSortMode с туннелем up НЕ поднимает configChangedNeedRestart',
       () async {
@@ -87,7 +74,6 @@ void main() {
     expect(controller.state.configChangedNeedRestart, isFalse);
 
     controller.setSortMode(NodeSortMode.nameAsc);
-    await settleSaves();
 
     expect(controller.state.sortMode, NodeSortMode.nameAsc);
     expect(controller.state.configChangedNeedRestart, isFalse,
@@ -101,9 +87,6 @@ void main() {
     controller.cycleSortMode();
     controller.cycleSortMode();
     controller.cycleSortMode();
-    // _persistSort — unawaited fire-and-forget save; дать ему завершиться
-    // до tearDown (иначе гонка с удалением tempDir).
-    await settleSaves();
 
     expect(controller.state.configChangedNeedRestart, isFalse);
   });

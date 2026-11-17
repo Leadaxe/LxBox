@@ -341,21 +341,31 @@ Future<void> _save() async {
   // при первом же импорте бэкапа.
   final data = Map<String, dynamic>.from(SettingsStorage._cache ?? {});
 
-  final main = await _file();
-  final bak = await _bakFile();
-  final tmp = await _tmpFile();
+  // §751 — запись считается начатой с первого `await` (путь к файлам), а не
+  // с `_atomicSave`: иначе ожидающий тест увидит пустой набор, пока путь ещё
+  // резолвится, и удалит каталог раньше записи.
+  final done = Completer<void>();
+  SettingsStorage._savesInFlight.add(done.future);
+  try {
+    final main = await _file();
+    final bak = await _bakFile();
+    final tmp = await _tmpFile();
 
-  SettingsStorage._pendingSave =
-      _atomicSave(data, main: main, bak: bak, tmp: tmp);
-  await SettingsStorage._pendingSave;
-  SettingsStorage._pendingSave = null;
+    SettingsStorage._pendingSave =
+        _atomicSave(data, main: main, bak: bak, tmp: tmp);
+    await SettingsStorage._pendingSave;
+    SettingsStorage._pendingSave = null;
 
-  // §113 — настройки записаны; если конфиг НЕ помечен грязным, выровнять его
-  // mtime, чтобы bootstrap mtime-compare не дал ложного «config changed»
-  // после kill. dirty=true (свёрнут посреди config-правки, пересборки ещё не
-  // было) → не трогаем: конфиг честно устарел, следующий старт пересоберёт.
-  if (!SettingsStorage.configDirty) {
-    await ConfigDirtyCheck.touchConfig();
+    // §113 — настройки записаны; если конфиг НЕ помечен грязным, выровнять его
+    // mtime, чтобы bootstrap mtime-compare не дал ложного «config changed»
+    // после kill. dirty=true (свёрнут посреди config-правки, пересборки ещё не
+    // было) → не трогаем: конфиг честно устарел, следующий старт пересоберёт.
+    if (!SettingsStorage.configDirty) {
+      await ConfigDirtyCheck.touchConfig();
+    }
+  } finally {
+    SettingsStorage._savesInFlight.remove(done.future);
+    done.complete();
   }
 }
 
