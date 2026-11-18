@@ -1939,16 +1939,26 @@ server. The `lxbox-cc` lane (`CommandLane`) is one for both clients.
 in-process again (`CoreSession.isUp || TunnelState.status != Stopped`), and `BoxService` stops it
 before starting its own command server.
 
-**Assistant gateway (§750).** The native AppFunctions (`AssistantCore`) talk to the core through
-the service-side client and never need Flutter. `getApiHelp` / `callApi` cross into Dart:
-`AssistantBridge` invokes `assistantCall` on the plugin channel (the one `AutomationBridge` uses);
-Dart's `assistant_gateway.dart` checks the allowlist and the `appfunctions_allow_changes` var and
-hands the request to the same handlers as the Debug API, past the HTTP server and its token.
-Without an engine the bridge starts `MainActivity`, waits up to 10 s, and otherwise posts a
-notification and fails the call. Nothing is precomputed: the settings summary the native overview
-needs is built per request and passed as a call argument. After the process split this seam
-becomes cross-process, like `AutomationBridge`.
+**Assistant (§750).** The AppFunctions run in `:bg` (`LxBoxAppFunctionService`); while a function
+executes it holds the process (`BgLifecycle.hold` — the system's binding to the functions
+service is not visible to `BgLifecycle`). The native operations (`AssistantCore`) talk to the
+core through the service client and never need Flutter. The same operations for the Debug API
+of the window are the `assistant*` methods of the plugin channel, forwarded to `BgMethods` as
+long calls; the `index` argument (a summary Dart builds per request) is not stored or logged,
+and above 256 KB it travels as a file like any other argument.
 
+**A call from `:bg` into Dart with a reply** (`UiCalls`) — the reverse direction, used by the
+assistant gateway (`getApiHelp` / `callApi` → `AssistantBridge` → Dart `assistantCall`, where
+`assistant_gateway.dart` checks the allowlist and the `appfunctions_allow_changes` var). The
+request goes to the window as a `!call` frame `{id, method, args}`; the window acknowledges it
+at once (`uiCallAck`), runs `invokeMethod` on the plugin channel and returns the outcome by the
+id (`uiCallReply`). The acknowledgement tells “no window, or a window frozen by the system”
+(nobody reads the pipe) from “Dart takes long”: the first is waited for 2 s, the second for the
+call's own limit. For the duration of the call the window process is held (`UiHold`) even with
+the tunnel stopped. When there is no bridge — the window is closed, has not attached, or did
+not acknowledge — the behavior promised by §750 is unchanged: one `startActivity(MainActivity)`,
+up to 10 s of waiting, then the “Open L×Box…” notification and `app_not_open`. The window runs
+only the methods of a fixed list (`assistantCall`).
 
 #### Ending a process that is not needed
 

@@ -45,6 +45,8 @@ dart run tool/arch/boundary_check.dart [--strict]
   `StreamSinks`, `ProbeSession`, `PProfClient`, `BootReceiver`, `NativeCache`,
   `AutomationCache`, `ConfigManager`, `BoxService`, `BgMethods`,
   `BgCcMethods`, `BgLifecycle`, `BgEventPipe`, `UiPresence`, `UiHold`,
+  `UiCalls`, `AssistantCore`, `AssistantBridge`, `AppFunctionsGate`,
+  `LxBoxAppFunctions` (§750 — ассистент целиком на сервисной стороне),
   `AutomationRelay`, `L10n` и обращения через точку к `Taildrop`,
   `TaildropClip`, `TaildropServiceFiles`. Из `BoxVpnService` разрешены только
   константы (`BROADCAST_STATUS`, `EXTRA_*`): имя члена целиком из заглавных

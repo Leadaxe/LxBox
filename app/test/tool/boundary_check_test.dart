@@ -215,6 +215,9 @@ void main() {
       expect(uiServiceSideUse('PProfClient.fetch(path, 5000)'), isNotNull);
       expect(uiServiceSideUse('L10n.str(ctx, id)'), isNotNull);
       expect(uiServiceSideUse('UiHold.sync(context)'), isNotNull);
+      expect(uiServiceSideUse('AssistantCore.overview(ctx, index)'), isNotNull);
+      expect(uiServiceSideUse('AssistantBridge.call(ctx, m, p, b)'), isNotNull);
+      expect(uiServiceSideUse('UiCalls.onAck(id)'), isNotNull);
     });
   });
 

@@ -9,7 +9,8 @@ final _serviceSideNameRe = RegExp(
   r'(?<![A-Za-z0-9_])(CoreSession|ScreenCoreSession|ServiceCommandClient|'
   r'BoxCommandClient|StreamSinks|ProbeSession|PProfClient|BootReceiver|'
   r'NativeCache|AutomationCache|ConfigManager|BoxService|BgMethods|'
-  r'BgCcMethods|BgLifecycle|BgEventPipe|UiPresence|UiHold|AutomationRelay|L10n)\b',
+  r'BgCcMethods|BgLifecycle|BgEventPipe|UiPresence|UiHold|UiCalls|AutomationRelay|L10n|'
+  r'AssistantCore|AssistantBridge|AppFunctionsGate|LxBoxAppFunctions)\b',
 );
 final _taildropObjectRe = RegExp(
   r'(?<![A-Za-z0-9_])(Taildrop|TaildropClip|TaildropServiceFiles)\.',
