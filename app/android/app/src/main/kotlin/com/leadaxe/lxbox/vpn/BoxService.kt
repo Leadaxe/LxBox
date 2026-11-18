@@ -34,6 +34,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import io.nekohasekai.libbox.StringIterator
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicReference
@@ -71,6 +72,10 @@ class BoxService(
         /// уведомления при старте без UI. Даём ядру устаканить `selected` у
         /// selector'ов после Started, прежде чем читать getGroups().
         private const val NOTIFICATION_SNAPSHOT_DELAY_MS = 3000L
+
+        /// §747 — сколько новый старт ждёт доводки force-stop прошлого туннеля
+        /// (сумма сроков её шагов).
+        private const val FORCE_TEARDOWN_WAIT_MS = 6_500L
 
         /// §707 итер. 4 — работающий сервис: строка в журнал приложения
         /// (AppLog) из нативных разборов вне сервиса (служебные файлы Taildrop).
@@ -301,6 +306,15 @@ class BoxService(
     // Android lifecycle (forwarded from BoxVpnService)
     // -------------------------------------------------------------------------
 
+    /// §747 — учёт стартов этого экземпляра: номера для `stopSelf(startId)` и
+    /// поколение исполняемого старта.
+    private val ledger = StartLedger()
+
+    /// Фоновая доводка последнего force-stop (закрытие ядра после объявления
+    /// Stopped).
+    @Volatile
+    private var forceTeardown: kotlinx.coroutines.Job? = null
+
     fun onCreate() {
         // Сервис может стартануть в свежем процессе без UI (через QS-tile
         // или launcher shortcut, после того как Android прибил предыдущий
@@ -333,6 +347,10 @@ class BoxService(
     /// сбрасывает счётчик (setStatus). Ручные старты (intent с action) счётчик
     /// не трогают.
     fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // §747 — каждый доставленный старт учтён: останавливаем себя только с
+        // номером (`stopSelf(startId)`), чтобы остановка не снесла старт,
+        // запрошенный позже и ещё не доставленный ([StartLedger]).
+        ledger.delivered(startId)
         Log.d(TAG, "[vpn] onStartCommand action=${intent?.action} status=${status.name} startId=$startId receiverRegistered=$receiverRegistered")
         if (intent?.action == BoxVpnService.ACTION_CLEAR_STALE_NOTIFICATION) {
             // §430 — bounce: стать foreground под тем же id (запись сервиса
@@ -409,7 +427,7 @@ class BoxService(
                     L10n.str(service, R.string.sticky_restart_storm_title),
                     L10n.str(service, R.string.sticky_restart_storm_text),
                 )
-                service.stopSelf()
+                service.stopSelf(ledger.stopToken())
                 return Service.START_NOT_STICKY
             }
         } else {
@@ -428,7 +446,7 @@ class BoxService(
             // ForegroundServiceStartNotAllowedException. Раньше это был краш
             // процесса; со sticky краш = ещё один рестарт. Останавливаемся тихо.
             Log.e(TAG, "[vpn §428] startForeground failed — stopSelf", t)
-            service.stopSelf()
+            service.stopSelf(ledger.stopToken())
             return Service.START_NOT_STICKY
         }
 
@@ -440,7 +458,7 @@ class BoxService(
             if (status == VpnStatus.Stopped) {
                 BgLifecycle.journal("start cancelled in pid ${android.os.Process.myPid()}: a Stop came before the service existed")
                 notification.stop()
-                service.stopSelf()
+                service.stopSelf(ledger.stopToken())
                 return Service.START_NOT_STICKY
             }
         }
@@ -455,6 +473,12 @@ class BoxService(
         if (intent != null) {
             BgLifecycle.journal("start reached the service in pid ${android.os.Process.myPid()}")
         }
+        // Сервис создан и исполняет старт (в том числе на прежнем экземпляре,
+        // если остановку прошлого туннеля система не исполнила из-за этого
+        // старта) — пометка «старт в пути» больше не нужна.
+        BgLifecycle.startSettled()
+        ledger.begin()
+        val previousTeardown = forceTeardown
         resetScope()
         setStatus(VpnStatus.Starting)
         // §345 — подтянуть persist-значение verbose (live-изменения дальше
@@ -493,6 +517,17 @@ class BoxService(
 
         serviceScope.launch {
             try {
+                // Force-stop прошлого туннеля объявляет Stopped раньше, чем
+                // закончит закрывать ядро: дождаться его, чтобы он не закрыл
+                // уже наше (командный сервер, fd) и не делил с нами сокет.
+                // Зависшее закрытие (ради него force-stop и существует) старт
+                // не держит дольше суммы сроков его шагов.
+                previousTeardown?.let { job ->
+                    if (job.isActive) {
+                        Log.w(TAG, "[vpn] start waits for the force-stop teardown of the previous tunnel")
+                        withTimeoutOrNull(FORCE_TEARDOWN_WAIT_MS) { job.join() }
+                    }
+                }
                 BoxApplication.ensureLibbox()
                 startCommandServer()
                 startSingbox()
@@ -506,15 +541,18 @@ class BoxService(
         return Service.START_STICKY
     }
 
-    fun onDestroy() {
-        Log.d(TAG, "[vpn] onDestroy status=${status.name} receiverRegistered=$receiverRegistered")
+    /// [current] — этот экземпляр сервиса последний (`BoxVpnService.live`):
+    /// общее состояние туннеля трогает только он. Если система создала новый
+    /// экземпляр раньше, чем уничтожила этот, состояние уже принадлежит новому.
+    fun onDestroy(current: Boolean = true) {
+        Log.d(TAG, "[vpn] onDestroy status=${status.name} receiverRegistered=$receiverRegistered current=$current")
         destroyed = true
         serviceScope.cancel()
         if (receiverRegistered) {
             runCatching { service.unregisterReceiver(receiver) }
             receiverRegistered = false
         }
-        if (TunnelState.status != VpnStatus.Stopped) {
+        if (current && TunnelState.status != VpnStatus.Stopped) {
             BoxVpnService.setCurrentStatus(VpnStatus.Stopped)
             runCatching { LxBoxTileService.refreshTile(service.applicationContext) }
                 .onFailure { Log.w(TAG, "refreshTile in onDestroy failed: ${it.message}") }
@@ -552,7 +590,7 @@ class BoxService(
             revoked = true,
         )
         serviceScope.cancel()
-        service.stopSelf()
+        service.stopSelf(ledger.stopToken())
     }
 
     // -------------------------------------------------------------------------
@@ -889,9 +927,17 @@ class BoxService(
                     trace.mark("finish skipped: destroyed=$destroyed status=${status.name}")
                     return@withContext
                 }
-                trace.mark("cleanup done → setStatus(Stopped) + stopSelf()")
+                // §747 — сначала остановка сервиса, потом объявление Stopped.
+                // Объявление будит ждущих (`stopAwait`, ответ окну), и они тут
+                // же шлют новый старт: остановка, дошедшая до системы после
+                // него, сносила сервис, уже принявший старт. Теперь система
+                // получает остановку раньше, чем кто-либо узнаёт о Stopped; а
+                // номер ([StartLedger.stopToken]) страхует обратный порядок —
+                // старт, запрошенный раньше (плитка, приёмник), остановку
+                // отменяет и исполняется на этом же экземпляре.
+                trace.mark("cleanup done → stopSelf(${ledger.stopToken()}) + setStatus(Stopped)")
+                service.stopSelf(ledger.stopToken())
                 setStatus(VpnStatus.Stopped)
-                service.stopSelf()
             }
         }
     }
@@ -973,7 +1019,10 @@ class BoxService(
         // блокирующего JNI-вызова не ограничивал ничего (таймаут кооперативный,
         // возвращается только вместе с вызовом). Теперь 2 с действуют.
         val trace = newStopTrace("doForceStop")
-        forceStopScope.launch {
+        // Поколение туннеля, который останавливаем: Stopped уже объявлен, и
+        // пока идёт доводка, может начаться новый старт.
+        val gen = ledger.generation
+        forceTeardown = forceStopScope.launch {
             trace.mark(stopSnapshot())
             trace.step("closeFileDescriptor", 2_000) { closeFileDescriptor("doForceStop") }
             trace.step("DefaultNetworkMonitor.stop", 2_000) {
@@ -985,8 +1034,13 @@ class BoxService(
                     trace.mark("finish skipped: destroyed")
                     return@withContext
                 }
-                trace.mark("teardown done → stopSelf()")
-                service.stopSelf()
+                if (!ledger.owns(gen)) {
+                    // Начался новый старт — сервис принадлежит ему.
+                    trace.mark("teardown done — a newer start owns the service, not stopping")
+                    return@withContext
+                }
+                trace.mark("teardown done → stopSelf(${ledger.stopToken()})")
+                service.stopSelf(ledger.stopToken())
             }
         }
     }
@@ -1023,8 +1077,9 @@ class BoxService(
                 receiverRegistered = false
             }
             notification.stop()
+            // §747 — остановка раньше объявления Stopped, как в doStop.
+            service.stopSelf(ledger.stopToken())
             setStatus(VpnStatus.Stopped, error = message, coreError = coreError)
-            service.stopSelf()
         }
     }
 

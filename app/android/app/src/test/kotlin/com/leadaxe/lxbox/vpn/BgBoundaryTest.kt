@@ -466,6 +466,54 @@ class BgBoundaryTest {
         assertEquals(0, calls.size)
     }
 
+    // ───────────── остановка сервиса и новый старт ─────────────
+
+    @Test
+    fun `a stop does not take down a start requested after it`() {
+        val ledger = StartLedger()
+        ledger.delivered(1)
+        val gen = ledger.begin()
+        // Туннель поколения 1 остановлен; новый старт (2) запрошен у системы,
+        // но сервису ещё не доставлен.
+        val token = ledger.stopToken()
+        assertEquals(1, token)
+        assertFalse(StartLedger.systemStops(token, lastRequested = 2))
+        // Нового старта нет — остановка исполняется.
+        assertTrue(StartLedger.systemStops(token, lastRequested = 1))
+        assertTrue(ledger.owns(gen))
+    }
+
+    @Test
+    fun `a stop covers the starts the service received but ignored`() {
+        val ledger = StartLedger()
+        ledger.delivered(1)
+        ledger.begin()
+        // Во время остановки пришёл старт 2: сервис его принял (обещание
+        // foreground выполнено) и не стал исполнять. Остановка сносит и его —
+        // иначе сервис остался бы запущенным без туннеля.
+        ledger.delivered(2)
+        assertEquals(2, ledger.stopToken())
+        assertTrue(StartLedger.systemStops(ledger.stopToken(), lastRequested = 2))
+        // А старт 3, запрошенный уже после, — нет.
+        assertFalse(StartLedger.systemStops(ledger.stopToken(), lastRequested = 3))
+        // Номера приходят по возрастанию; запоздавший меньший ничего не меняет.
+        ledger.delivered(1)
+        assertEquals(2, ledger.stopToken())
+    }
+
+    @Test
+    fun `a force-stop teardown of an older tunnel does not own a newer start`() {
+        val ledger = StartLedger()
+        ledger.delivered(1)
+        val old = ledger.begin()
+        assertTrue(ledger.owns(old))
+        // Force-stop объявил Stopped и доводит закрытие в фоне; начался старт 2.
+        ledger.delivered(2)
+        val fresh = ledger.begin()
+        assertFalse(ledger.owns(old))
+        assertTrue(ledger.owns(fresh))
+    }
+
     // ───────────── роль процесса ─────────────
 
     @Test

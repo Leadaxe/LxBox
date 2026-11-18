@@ -2026,6 +2026,21 @@ only the methods of a fixed list (`assistantCall`).
   ends, and `:ui` ends without making further calls (a late one would start a new `:bg`). Settings read once per process (`core_logs_enabled`,
   `memory_limit`) therefore apply from the next tunnel start.
 
+**A stop never takes down a later start** (`StartLedger`). The system numbers a start command
+(`startId`) when it is *requested* and delivers it later; `stopSelf()` without an id brings the
+service down together with a start that is requested but not delivered yet — and with a
+foreground start it kills the process (`ForegroundServiceDidNotStartInTimeException`). So the
+service stops itself only with an id, `stopSelf(ledger.stopToken())` — the last *delivered*
+start, which also covers the starts it received but did not execute (they came during a stop).
+The system ignores such a stop when a newer start is requested; that start then runs on the
+same instance. In `doStop` and `stopAndAlert` the stop is issued **before** `Stopped` is
+announced (the announcement wakes `stopAwait` and the window, which may send a start at once).
+A force-stop announces `Stopped` before it finishes closing the core, by design: its
+background teardown stops the service only if no newer start has begun (`ledger.owns`), and a
+new start waits for that teardown (bounded) before it creates its own command server. An
+`onDestroy` of an instance that is no longer `BoxVpnService.live` does not touch the shared
+tunnel state.
+
 **A start on its way.** Between `startForegroundService` and `onStartCommand` the tunnel is still
 `Stopped` and nothing receives `ACTION_STOP`. A Stop that arrives there marks the start as
 cancelled (`BoxVpnService` companion): `onStartCommand` still calls `startForeground` (the

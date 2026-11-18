@@ -425,11 +425,15 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun onBind(intent: Intent): IBinder? = super.onBind(intent) ?: android.os.Binder()
 
     override fun onDestroy() {
-        live = null
-        service.onDestroy()
+        // §747 — если система уже создала новый экземпляр, общее состояние
+        // (ссылка на живой сервис, статус туннеля, снимок allow_bypass)
+        // принадлежит ему: уничтожение прежнего его не затирает.
+        val current = live === this
+        if (current) live = null
+        service.onDestroy(current)
         // §069: runtime applied значение больше не действует — clear snapshot
         // чтобы Stats screen warning исчез при stop VPN.
-        TunnelState.setSessionAllowBypass(false)
+        if (current) TunnelState.setSessionAllowBypass(false)
         super.onDestroy()
         // §747 G — туннель остановлен, сервис уничтожен: если причин жить нет,
         // процесс `:bg` с задержкой завершится (память ядра возвращает только
