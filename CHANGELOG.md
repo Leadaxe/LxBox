@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.25.23] — 2026-11-17
+
 ### Added
 
 - **An AI assistant can diagnose and manage the network ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** On Android 16+ the set of functions for system assistants grows from three to ten: an address check by stages (`checkUrl`), the external IP and country of a Direction's exit (`checkExit`), the list of a Direction's exits and switching between them, an app search, and a gateway to a part of the Debug API (`getApiHelp`, `callApi`) — rules, Directions, sources and connections. Reading and checks sit behind «AI assistant control»; changing settings needs the new «Let assistants change settings» switch (App Settings → Automation → AI assistants), off by default. Config, keys, subscription links, backups and logs stay closed. Guide: [AI assistants and your network](docs/AI_ASSISTANT.md).
@@ -15,10 +17,10 @@
 - **Debug API: `/assistant/*` ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New routes for an agent on a computer: network overview with work connections and their state, a Direction's exits, the address check (URL Check), the exit check, an app search, which rule catches an app, switching the exit, turning a connection on or off.
   (RU: Debug API — новые маршруты `/assistant/*` для агента на компьютере: обзор сети с рабочими подключениями и их состоянием, выходы Направления, проверка адреса (URL Check), проверка выхода, поиск приложения, правило для приложения, смена выхода, включение и выключение подключения.)
 
-## [2.25.23] — 2026-11-17
-
 ### Changed
 
+- **Two processes: the tunnel and the window ([task 747](docs/spec/tasks/747-two-processes-ui-bg.md)).** The VPN service with the core runs in the `:bg` process, the window with Flutter in `:ui`; the window does not load the core at all and talks to `:bg` over a provider call and an event pipe. Closing the window ends `:ui` (VPN on: about 240 → 110 MB on the emulator); VPN off and window closed — no process left; VPN off and window open — `:bg` restarts without the core. While the VPN is on a minimised window is kept alive by the service, so background Dart work is unchanged. Cold start of the window about 1.5 s on the emulator. Checked on Android 14 and 16 emulators, not on phones; one unreproduced lost start in about a hundred attempts — the start path now leaves a trace in the log.
+  (RU: сервис VPN с ядром работает в процессе `:bg`, окно с Flutter — в `:ui`; окно ядро не загружает и общается с `:bg` вызовами и каналом событий. Закрытие окна завершает `:ui` (VPN включён: примерно 240 → 110 МБ на эмуляторе); VPN выключен и окно закрыто — процессов нет; VPN выключен и окно открыто — `:bg` перезапускается без ядра. Пока VPN включён, свёрнутое окно удерживается сервисом, фоновая работа Dart не меняется. Холодный старт окна около 1,5 с на эмуляторе. Проверено на эмуляторах Android 14 и 16, на телефонах нет; один невоспроизведённый потерянный старт примерно на сто попыток — путь старта теперь пишет след в журнал.)
 - **Comments in a server's JSON are kept ([task 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).** A server pasted or edited as JSON keeps its `//`, `/* */` and `#` comments: the Source tab shows the text as typed after pasting, saving and restoring a backup, and the «Comments were removed.» message is gone. Comments are skipped only when the app reads the JSON; the same server with and without comments is still one server in a backup. A pasted whole config keeps only its nodes, and that text is rebuilt without comments, as before.
   (RU: комментарии `//`, `/* */` и `#` в JSON сервера сохраняются: вкладка Source показывает текст как набран после вставки, сохранения и восстановления из бэкапа; сообщение «Comments were removed.» убрано.)
 - **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).** Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
