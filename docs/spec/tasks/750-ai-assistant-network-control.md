@@ -462,8 +462,11 @@ Dart-тесты ассистента (118) зелёные; маршруты `/as
   /assistant/connection`, `POST /rules`), `selectExit` несколько секунд
   отвечает «The VPN core is not reachable yet. Try again in a few seconds.»,
   а `checkUrl` / `checkExit` — `failed` с сырой ошибкой ядра «rpc error: …
-  invalid argument». После паузы всё отвечает. Сырую ошибку в этом окне стоит
-  заменить тем же «core is not reachable yet» — не сделано.
+  invalid argument». После паузы всё отвечает. Исправлено 18.11.2026: ошибку
+  связи с ядром (`rpc error: …`) `checkUrl` и `checkExit` отдают так же, как
+  `selectExit`, — ошибкой `core_error` «The VPN core is not reachable yet. Try
+  again in a few seconds.» (`AssistantLogic.isCoreTransportError`); на
+  эмуляторе после правки не проверено.
 - Уведомление «Open L×Box…» не показывается, пока приложению не выдано
   разрешение на уведомления (на свежей установке его нет); ошибка агенту
   приходит в любом случае.

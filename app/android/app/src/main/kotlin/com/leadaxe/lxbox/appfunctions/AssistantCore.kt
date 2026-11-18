@@ -254,6 +254,9 @@ object AssistantCore {
             val exit = live?.let { AssistantLogic.clean(leafOf(it, tag)) } ?: ""
             val r = cc.getUrlViaOutbound(tag, TRACE_URL, TRACE_TIMEOUT_MS, TRACE_MAX_BYTES, USER_AGENT)
             val err = r["error"] as? String ?: ""
+            if (AssistantLogic.isCoreTransportError(err)) {
+                throw AssistantError(AssistantError.CORE_ERROR, AssistantLogic.MSG_CORE_DOWN)
+            }
             if (err.isNotEmpty()) {
                 return@withContext exitCheck(AssistantLogic.OUTCOME_FAILED, exit = exit, error = AssistantLogic.cleanError(err))
             }
@@ -352,6 +355,9 @@ object AssistantCore {
             throw e
         } catch (t: Exception) {
             Log.w(TAG, "checkUrl failed: ${t.javaClass.simpleName}")
+            if (AssistantLogic.isCoreTransportError(t.message)) {
+                throw AssistantError(AssistantError.CORE_ERROR, AssistantLogic.MSG_CORE_DOWN)
+            }
             throw AssistantError(AssistantError.CORE_ERROR, AssistantLogic.cleanError(t.message ?: "Connection test failed."))
         } finally {
             session?.runCatching { cancel() }
@@ -456,6 +462,9 @@ object AssistantCore {
             val o = outcome.get()
             if (o == null) {
                 val err = streamError.get()
+                if (finished && AssistantLogic.isCoreTransportError(err)) {
+                    throw AssistantError(AssistantError.CORE_ERROR, AssistantLogic.MSG_CORE_DOWN)
+                }
                 return if (!finished || err == null) urlReport(AssistantLogic.OUTCOME_TIMEOUT, route = route)
                 else urlReport(AssistantLogic.OUTCOME_FAILED, error = AssistantLogic.cleanError(err), route = route)
             }

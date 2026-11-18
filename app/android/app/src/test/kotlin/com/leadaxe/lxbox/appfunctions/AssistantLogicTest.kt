@@ -53,6 +53,19 @@ class AssistantLogicTest {
         assertFalse(err.contains('\n'))
     }
 
+    @Test
+    fun coreTransportErrorIsToldFromCheckFailure() {
+        assertTrue(AssistantLogic.isCoreTransportError(
+            "get url via outbound: rpc error: code = Unknown desc = invalid argument"))
+        assertTrue(AssistantLogic.isCoreTransportError(
+            "connection test recv: rpc error: code = Unknown desc = invalid argument"))
+        assertFalse(AssistantLogic.isCoreTransportError(
+            "Get \"https://1.1.1.1/cdn-cgi/trace\": context deadline exceeded"))
+        assertFalse(AssistantLogic.isCoreTransportError("timeout"))
+        assertFalse(AssistantLogic.isCoreTransportError(""))
+        assertFalse(AssistantLogic.isCoreTransportError(null))
+    }
+
     // ── индекс ──
 
     @Test
