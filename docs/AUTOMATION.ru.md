@@ -334,8 +334,9 @@ the app and repeat.», и показывается уведомление.
 При выключенном VPN `checkUrl` и `checkExit` возвращают `outcome = vpn_off`,
 а `selectExit` завершается `AppFunctionNotSupportedException`.
 
-**Проверка через adb** (на устройстве должен быть сервис `app_function`:
-`adb shell cmd app_function help`):
+**Проверка через adb** (в системе должна быть shell-команда —
+`adb shell cmd app_function help` печатает список; в образе эмулятора
+Android 16, API 36.0, сервис есть, а команды нет):
 
 ```sh
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox

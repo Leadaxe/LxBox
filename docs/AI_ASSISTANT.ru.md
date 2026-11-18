@@ -36,8 +36,9 @@ L×Box даёт ИИ-ассистенту набор функций: прове�
 > ⚠️ AppFunctions — экспериментальный API Android. Google разрешает вызывать
 > функции приложений только ассистентам из своей программы раннего доступа,
 > поэтому на большинстве устройств голосовая просьба до L×Box пока не
-> доходит. Вход через Debug API и проверка командой
-> `adb shell cmd app_function` работают независимо от этого.
+> доходит. Вход через Debug API работает независимо от этого. Проверка
+> командой `adb shell cmd app_function` требует образа системы, где эта
+> команда есть: в образе эмулятора Android 16 (API 36.0) её нет.
 
 ## Разрешить ассистенту на устройстве
 
@@ -289,7 +290,8 @@ curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
 [Directions](api/debug-api-reference.md#directions-crud--directions), чтение и переключение
 источников и действия с VPN. Точный список возвращает `getApiHelp`.
 
-Проверка на устройстве с Android 16, без ассистента:
+Проверка без ассистента, на устройстве, в системе которого эта команда есть
+(`adb shell cmd app_function help` печатает список):
 
 ```bash
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox
