@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | In progress — код и документы в `develop`; CI 17.11.2026 зелёный (`checks` 44162361438, build-fast 44162010641); эмулятор Android 14 17.11: маршруты `/assistant/*` проверены (см. «Проверка на эмуляторе»); AppFunctions, шлюз `callApi`, мост и оба тумблера не проверены — нужен Android 16 |
+| Status | In progress — код и документы в `develop`; CI 17.11.2026 зелёный (`checks` 44162361438, build-fast 44162010641); эмулятор Android 14 17.11: маршруты `/assistant/*` проверены (см. «Проверка на эмуляторе»); эмулятор Android 16 (API 36.1) 18.11: все 10 функций AppFunctions, шлюз `callApi`, мост и оба тумблера проверены через `adb` (см. «Проверка AppFunctions на эмуляторе»); телефон и вызов из Gemini не проверены |
 | Start date | 2026-11-17 |
 | Source | Решение владельца 17.11.2026: развить управление сетью через ИИ-ассистента (три класса задач: «почему не открывается», «пусти приложение через выход/страну», «подключи к рабочей сети») |
 | Related specs | §721 (AppFunctions: старт/стоп/статус, тумблер «AI assistant control»), §687 (URL Check), §047 (Automation API), §747 (два процесса `:ui`/`:bg`), §712 (`package_name_regex`), §715 (значок пула = флаг в имени узла), фича `014-AUTOMATION` |
@@ -428,6 +428,52 @@ Dart-тесты ассистента (118) зелёные; маршруты `/as
 `android-36.1` (есть ли там команда — не проверено) или отладочный вызов
 своих функций из самого приложения через `AppFunctionManager` — отдельная
 задача, не начата.
+
+### Проверка AppFunctions на эмуляторе (18.11.2026)
+
+Эмулятор `LxBox_a161`: Android 16, API 36.1 (образ `google_apis`, arm64,
+сборка BE4B.251210.005), APK 2.25.22-dev.83 (код = `v2.25.23-rc.1`, два
+процесса). В этом образе `adb shell cmd app_function` есть. Вызовы —
+`execute-app-function … --brief-yaml`.
+
+| Что | Итог |
+|---|---|
+| `list-app-functions` | все 10 функций в индексе системы, `enabledByDefault: false` |
+| Тумблер «AI assistant control» выключен | любая функция — «The app function is disabled» (код 1002) |
+| Вкладка Automation | раздел AI assistants виден; второй тумблер неактивен, пока выключен первый; включение первого пишет зеркало `appfunctions_enabled=true` |
+| `getVpnStatus`, `startVpn`, `stopVpn` | `stopped` → `started` → `stopped`; без согласия на VPN `startVpn` — «VPN permission is not granted. Open L×Box and connect once.» |
+| `listExits` | список выходов Направления; `query` фильтрует (`total`, `truncated`); неизвестное Направление — «No such direction.» |
+| `findApps` | `chrome` → `com.android.chrome` |
+| `checkUrl` | VPN выключен — `vpn_off`; при включённом — маршрут (`direction`, `exit`), `failedStage` `connect` / `tunnel` / `tls` / `dns` и совет под стадию; `appPackage` принимается |
+| `checkExit` | VPN выключен — `vpn_off`; через `direct-out` — `ok` с `ip` и `country`; нерабочий выход — `failed` с текстом ошибки |
+| `selectExit` | `changed: true`, повтор — `changed: false`; неизвестный выход — «No such exit in this direction.» |
+| `getApiHelp` | `200`, тело справки шлюза |
+| `callApi`, чтение | `/assistant/overview`, `/assistant/app-route`, `/rules` — `200`; `/config` — `403` «not available to assistants» |
+| `callApi`, изменение, второй тумблер выключен | `403` «Changing settings is turned off in L×Box: …» |
+| `callApi`, изменение, второй тумблер включён | `POST /assistant/connection` выкл/вкл — `applied`; `POST /rules` (пакет + Wi-Fi SSID) — `201`, `app-route` показывает правило с `conditional: true`; `DELETE /rules/{id}` — `200`; `PUT /settings/vars` — `403` |
+| Шлюз, окно свёрнуто, туннель работает | отвечает сразу |
+| Шлюз, окно свёрнуто, туннель остановлен, процесс окна заморожен системой (`isFrozen=true`) | отвечает сразу |
+| Шлюз, процесса окна нет (убит), туннель работает | Android запрещает открыть окно из фона («Background activity launch blocked»); через 10–11 с ошибка «L×Box is not open. Open the app and repeat.» (код 3501) и уведомление «Open L×Box to let the assistant continue» (канал `lxbox_assistant`) |
+| Нативные функции без процесса окна | `getVpnStatus`, `listExits` отвечают |
+
+Наблюдения:
+
+- Сразу после изменения, которое перезагружает ядро (`POST
+  /assistant/connection`, `POST /rules`), `selectExit` несколько секунд
+  отвечает «The VPN core is not reachable yet. Try again in a few seconds.»,
+  а `checkUrl` / `checkExit` — `failed` с сырой ошибкой ядра «rpc error: …
+  invalid argument». После паузы всё отвечает. Сырую ошибку в этом окне стоит
+  заменить тем же «core is not reachable yet» — не сделано.
+- Уведомление «Open L×Box…» не показывается, пока приложению не выдано
+  разрешение на уведомления (на свежей установке его нет); ошибка агенту
+  приходит в любом случае.
+- Запрет открытия окна из фона получен при вызове из `adb shell`; у системного
+  ассистента привилегии могут быть другими — не проверено.
+
+Не проверено: успешный `checkUrl` (`outcome: ok`) — у эмулятора TLS до
+внешних сайтов не проходит ни через один выход; переход по тапу на
+уведомление; русские строки раздела; вызов из Gemini; релизная сборка тега
+(проверялась сборка ветки с тем же кодом); телефон.
 
 ## Unresolved / follow-up
 

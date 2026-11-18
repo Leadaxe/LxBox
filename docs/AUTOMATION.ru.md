@@ -336,7 +336,7 @@ the app and repeat.», и показывается уведомление.
 
 **Проверка через adb** (в системе должна быть shell-команда —
 `adb shell cmd app_function help` печатает список; в образе эмулятора
-Android 16, API 36.0, сервис есть, а команды нет):
+Android 16 она есть с API 36.1, в образе 36.0 сервис есть, а команды нет):
 
 ```sh
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox

@@ -37,7 +37,8 @@ Android version and does not depend on a system assistant.
 > assistants of its early access programme call app functions, so on most
 > devices a voice request does not reach L×Box yet. The Debug API path works
 > regardless. The `adb shell cmd app_function` check needs a system image
-> that ships the command: the Android 16 emulator image (API 36.0) does not.
+> that ships the command: the Android 16 emulator image has it from API 36.1,
+> the 36.0 image does not.
 
 ## Allow an assistant on the device
 

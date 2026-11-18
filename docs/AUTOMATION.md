@@ -345,7 +345,8 @@ With the VPN off, `checkUrl` and `checkExit` return `outcome = vpn_off`, and
 
 **Check with adb** (the system must ship the shell command —
 `adb shell cmd app_function help` prints the list; the Android 16 emulator
-image, API 36.0, has the service but not the command):
+image has it from API 36.1, the 36.0 image has the service but not the
+command):
 
 ```sh
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox
