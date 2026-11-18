@@ -341,8 +341,9 @@ Backup.
 With the VPN off, `checkUrl` and `checkExit` return `outcome = vpn_off`, and
 `selectExit` fails with `AppFunctionNotSupportedException`.
 
-**Check with adb** (the device must have the `app_function` service:
-`adb shell cmd app_function help`):
+**Check with adb** (the system must ship the shell command —
+`adb shell cmd app_function help` prints the list; the Android 16 emulator
+image, API 36.0, has the service but not the command):
 
 ```sh
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox

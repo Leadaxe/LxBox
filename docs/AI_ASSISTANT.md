@@ -35,8 +35,9 @@ Android version and does not depend on a system assistant.
 
 > ⚠️ AppFunctions is an experimental Android API. Google lets only the
 > assistants of its early access programme call app functions, so on most
-> devices a voice request does not reach L×Box yet. The Debug API path and
-> the `adb shell cmd app_function` check work regardless.
+> devices a voice request does not reach L×Box yet. The Debug API path works
+> regardless. The `adb shell cmd app_function` check needs a system image
+> that ships the command: the Android 16 emulator image (API 36.0) does not.
 
 ## Allow an assistant on the device
 
@@ -288,7 +289,8 @@ Functions an assistant on the device gets:
 [Directions](api/debug-api-reference.md#directions-crud--directions), reading and switching sources,
 and the VPN actions. `getApiHelp` returns the exact list.
 
-A check on a device with Android 16, without an assistant:
+A check without an assistant, on a device whose system has the command
+(`adb shell cmd app_function help` prints the list):
 
 ```bash
 adb shell cmd app_function list-app-functions --package com.leadaxe.lxbox

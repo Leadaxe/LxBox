@@ -400,6 +400,19 @@ App Settings → Automation, раздел «AI assistants» (Android 16+):
 (раздел AI assistants на Android 14 скрыт). JVM-тесты Kotlin после правок
 этапа 2 не запускались.
 
+**Дополнение 18.11.2026 (сессия задачи 747, эмулятор `LxBox_a16`, Android 16,
+API 36.0, сборка образа 13894323).** На ветке `task/747-two-processes`
+(`a5cc2e0b`) `AssistantLogicTest` (24) и `AppFunctionsLogicTest` (6) зелёные,
+Dart-тесты ассистента (118) зелёные; маршруты `/assistant/*` через границу
+процессов отвечают в прежней форме. `adb shell cmd app_function` на этом
+образе отвечает «No shell command implementation»: сервис есть
+(`dumpsys app_function`), shell-команд нет. Поэтому функции AppFunctions,
+шлюз `getApiHelp` / `callApi`, мост и тумблеры на устройстве по-прежнему не
+проверены и уходят в `v2.25.23-rc.1` в таком виде. Пути проверки: образ
+`android-36.1` (есть ли там команда — не проверено) или отладочный вызов
+своих функций из самого приложения через `AppFunctionManager` — отдельная
+задача, не начата.
+
 ## Unresolved / follow-up
 
 - Исполнение шлюза без окна (фоновый Dart-исполнитель) — после §747.
