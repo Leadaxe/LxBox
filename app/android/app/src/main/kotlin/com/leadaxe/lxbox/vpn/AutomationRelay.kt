@@ -21,6 +21,13 @@ object AutomationRelay {
             BgEventPipe.reliable(EventFrames.AUTOMATION, mapOf("name" to name, "args" to args))
         if (!sent) {
             Log.w(TAG, "[automation] handleAutomationAction($name) — no Flutter engine, skip")
+        } else if (!uiHoldWanted(TunnelState.status, true)) {
+            // Туннель остановлен — процесс окна не удерживается (`UiHold`) и,
+            // если окно свёрнуто, может быть заморожен системой: команда
+            // лежит в канале событий и исполнится, когда окно вернётся (или
+            // когда туннель стартует и удержание разбудит окно). При
+            // работающем туннеле окно живо и команда исполняется сразу.
+            Log.w(TAG, "[automation] $name sent while the tunnel is stopped — it runs when the window is awake")
         }
     }
 

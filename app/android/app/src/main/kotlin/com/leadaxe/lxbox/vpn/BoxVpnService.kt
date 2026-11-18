@@ -124,6 +124,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                     NativeCache.setTunnelRevoked(BoxApplication.application, TunnelState.revoked)
                 }
             }
+            // §747 — свёрнутое окно держится живым, пока туннель не Stopped.
+            runCatching { UiHold.sync(BoxApplication.application) }
             if (s == VpnStatus.Stopped) {
                 // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
                 // работает VPN; «Поделиться» и «Send to device» скрываются.

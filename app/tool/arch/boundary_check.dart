@@ -114,6 +114,8 @@ bool _isKotlinUi(String p) =>
     p == _kbase('vpn/AutomationBridge.kt') ||
     // §747 — вызывающая сторона канала окно → сервис и читатель канала событий.
     p == _kbase('vpn/BgClient.kt') ||
+    // §747 — пустой сервис-цель привязки, которой `:bg` держит окно живым.
+    p == _kbase('vpn/UiKeepAliveService.kt') ||
     p == _kbase('vpn/WifiNetworkObserver.kt') ||
     // Читатель Wi-Fi общий для окна и сервиса — типов ядра в нём нет.
     p == _kbase('vpn/WifiInfoReader.kt') ||

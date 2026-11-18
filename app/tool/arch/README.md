@@ -34,7 +34,8 @@ dart run tool/arch/boundary_check.dart [--strict]
 
 Файлы стороны окна (всё, что исполняется в `:ui`): `MainActivity.kt`,
 `LanTransferSender.kt`, `vpn/VpnPlugin.kt`, `vpn/UiLaunchRequests.kt`,
-`vpn/AutomationBridge.kt`, `vpn/BgClient.kt`, `vpn/WifiNetworkObserver.kt`,
+`vpn/AutomationBridge.kt`, `vpn/BgClient.kt`, `vpn/UiKeepAliveService.kt`,
+`vpn/WifiNetworkObserver.kt`,
 `vpn/WifiInfoReader.kt`, `vpn/WifiStateCache.kt`, `vpn/PermissionUtils.kt`,
 `editor/`. Клиент ядра экрана, проба и нативные окна Taildrop и автоматизации
 в список не входят: они живут в `:bg`.
@@ -43,7 +44,7 @@ dart run tool/arch/boundary_check.dart [--strict]
   `ScreenCoreSession`, `ServiceCommandClient`, `BoxCommandClient`,
   `StreamSinks`, `ProbeSession`, `PProfClient`, `BootReceiver`, `NativeCache`,
   `AutomationCache`, `ConfigManager`, `BoxService`, `BgMethods`,
-  `BgCcMethods`, `BgLifecycle`, `BgEventPipe`, `UiPresence`,
+  `BgCcMethods`, `BgLifecycle`, `BgEventPipe`, `UiPresence`, `UiHold`,
   `AutomationRelay`, `L10n` и обращения через точку к `Taildrop`,
   `TaildropClip`, `TaildropServiceFiles`. Из `BoxVpnService` разрешены только
   константы (`BROADCAST_STATUS`, `EXTRA_*`): имя члена целиком из заглавных

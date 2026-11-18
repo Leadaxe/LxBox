@@ -214,6 +214,7 @@ void main() {
       expect(uiServiceSideUse('ProbeSession.start(config)'), isNotNull);
       expect(uiServiceSideUse('PProfClient.fetch(path, 5000)'), isNotNull);
       expect(uiServiceSideUse('L10n.str(ctx, id)'), isNotNull);
+      expect(uiServiceSideUse('UiHold.sync(context)'), isNotNull);
     });
   });
 

@@ -394,6 +394,21 @@ class BgBoundaryTest {
         assertFalse(q.hasReliable)
     }
 
+    // ───────────── удержание процесса окна ─────────────
+
+    @Test
+    fun `the window is held only while the tunnel is not stopped and the window is attached`() {
+        for (status in listOf(VpnStatus.Starting, VpnStatus.Started, VpnStatus.Stopping)) {
+            assertTrue(uiHoldWanted(status, uiAttached = true))
+            // Окна нет (закрыто, не открывалось) — держать и воскрешать нечего.
+            assertFalse(uiHoldWanted(status, uiAttached = false))
+        }
+        // Туннель остановлен: удержания нет — окно завершается по закрытию,
+        // а `:bg` под ним может перезапуститься.
+        assertFalse(uiHoldWanted(VpnStatus.Stopped, uiAttached = true))
+        assertFalse(uiHoldWanted(VpnStatus.Stopped, uiAttached = false))
+    }
+
     // ───────────── роль процесса ─────────────
 
     @Test

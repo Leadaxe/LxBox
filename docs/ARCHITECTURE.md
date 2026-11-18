@@ -1090,6 +1090,8 @@ vpn/BgEvents.kt              # §747 the tunnel snapshot on the wire (BROADCAST_
 vpn/BgEventPipe.kt           # §747 :bg — the event channel to the window: one pipe, one writer thread, PipeQueues
                              #   (replies kept, snapshots coalesced, events and log bounded), BgEventPipe.Sink
 vpn/BgLifecycle.kt           # §747 ending :bg when nothing needs it (BgLifecycle, bgMayExit); UiPresence
+vpn/UiHold.kt                # §747 :bg — keeps the window process alive while the tunnel is up (a binding to
+                             #   UiKeepAliveService, the empty service of :ui)
 vpn/ConfigFile.kt            # §747 the config file: atomic write, read — used by both processes
 vpn/AutomationCache.kt       # §740 the single access point of the lxbox_automation prefs file
 vpn/BoxCommandClient.kt      # §122 — the screen client of the core through the libbox CommandClient (§745), in :bg (§747):
@@ -1802,9 +1804,9 @@ over the event channel, and every call that touches the core is forwarded to `:b
 |---|---|---|
 | **Service** | `:bg` | `BoxVpnService`, `BoxService`, `PlatformInterfaceWrapper`, `DefaultNetworkMonitor`, `ServiceNotification`, `BootReceiver`, `VpnWatchdog`, `LxBoxTileService`, `QuickShortcuts`, `LxBoxIntentReceiver`, `automation/` (receivers and edit activities), `appfunctions/`, `Taildrop*` (the inbox, notifications, `TaildropShareActivity`, `TaildropClipActivity`), `ConfigManager`, `NativeCache`, `AutomationCache`, `L10n`, `PProfClient`, `ProbeSession` |
 | **Service** — the core clients | `:bg` | `ServiceCommandClient` (holder `CoreSession`), `BoxCommandClient` (holder `ScreenCoreSession`), `CommandClientShared.kt`, `StreamSinks` |
-| **Service** — the seam | `:bg` | `BgControlProvider`, `BgMethods`, `BgCcMethods`, `BgEventPipe`, `UiPresence`, `BgLifecycle`, `AutomationRelay` |
+| **Service** — the seam | `:bg` | `BgControlProvider`, `BgMethods`, `BgCcMethods`, `BgEventPipe`, `UiPresence`, `UiHold`, `BgLifecycle`, `AutomationRelay` |
 | **UI** | `:ui` | `MainActivity`, `VpnPlugin`, `UiLaunchRequests`, `AutomationBridge`, the Sora editor (`editor/`), `WifiNetworkObserver` / `WifiHistoryBridge`, `LanTransferSender` |
-| **UI** — the seam | `:ui` | `BgClient` (calls and the reader of the event channel) |
+| **UI** — the seam | `:ui` | `BgClient` (calls and the reader of the event channel), `UiKeepAliveService` (the target of the `UiHold` binding) |
 | **Both** | | `BoxApplication` (steps split by `ProcessRole`), `ProcessRole`, `TunnelState` (the owner in `:bg`, a copy in `:ui`), `BgCodec` / `EventFrames`, `BgEvents`, `ConfigFile`, `PathMtuProbe` (the channel in `:ui`, the probe in `:bg`), `WifiInfoReader` / `WifiStateCache` |
 
 **`BoxApplication` by process.** `onCreate` runs in every process, so each step runs on its own
@@ -1952,6 +1954,20 @@ before starting its own command server.
   “VPN desired” with a stopped tunnel (the watchdog is about to restart it); a running probe.
   The tile, auto-start, the watchdog alarm, automation commands and the window's calls start a
   new `:bg` when needed.
+- **A minimized window stays alive while the tunnel is up** (`UiHold`). In one process the
+  VPN foreground service kept Dart alive too; as a separate process `:ui` would be frozen by
+  the system a couple of minutes after Home, and with it the Dart timers (subscription and
+  rule-set updates) and the automation commands and events. So while the tunnel is not
+  `Stopped` **and** the window is attached (`uiHoldWanted`), `:bg` is bound to
+  `UiKeepAliveService` — an empty, non-exported service of `:ui`: a process bound by the
+  process of a foreground service gets its importance and is neither cached nor frozen. The
+  binding carries no calls and no data. It is recomputed on every tunnel status change and when
+  the window attaches, detaches or dies. It never starts or resurrects `:ui`: it is made only
+  with an attached window and removed inside the `uiDetached` call, before the window ends its
+  process; `onServiceDisconnected` / `onBindingDied` drop it at once. With the tunnel stopped
+  there is no binding, so everything below applies unchanged — and a minimized window may then
+  be frozen like any background app (an automation command that needs Dart runs when the
+  window wakes up or the tunnel starts; `AutomationRelay` logs that).
 - **`:bg` under an open window drops the core.** An attached window is a reason to live but
   not a reason to keep `libbox.so` loaded. When the tunnel is stopped and the core is loaded,
   `:bg` ends the same way (`bgMayRecycle`: every condition of `bgMayExit` except the window

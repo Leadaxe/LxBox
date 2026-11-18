@@ -384,6 +384,15 @@
                 <action android:name="android.app.appfunctions.AppFunctionService" />
             </intent-filter>
         </service>
+        <!-- §747 — пустой сервис процесса окна: цель привязки из `:bg` (UiHold).
+             Пока туннель работает и окно подключено, привязка от процесса с
+             foreground-сервисом VPN держит свёрнутое окно живым — Dart
+             (таймеры обновления, автоматизация) работает, как в одном
+             процессе. Логики и данных через привязку нет. -->
+        <service
+            android:name=".vpn.UiKeepAliveService"
+            android:process=":ui"
+            android:exported="false" />
         <!-- §747 — канал окна к сервисной стороне: вызов с ответом
              (ContentProvider.call). Не экспортируется; табличного доступа нет. -->
         <provider

@@ -53,6 +53,21 @@ class MainActivity : FlutterActivity() {
 
         private val exitHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
+        /// В этом процессе окно создавалось хотя бы раз.
+        private var hadWindow = false
+
+        /// §747 — процесс `:ui` оказался без окна и окна в нём не было
+        /// (система пересоздала его ради привязки `UiHold` уже после закрытия
+        /// окна; привязку сняли): жить ему незачем. Процесс, в котором окно
+        /// было, этим путём не завершается — его судьбу решает `onDestroy`.
+        fun exitIfWindowless() {
+            exitHandler.post {
+                if (!hadWindow && liveWindows == 0) {
+                    exitHandler.postDelayed(exitProcess, UI_EXIT_DELAY_MS)
+                }
+            }
+        }
+
         private val exitProcess = Runnable {
             if (liveWindows > 0) return@Runnable
             Log.i(TAG, "window closed — ui process exits")
@@ -324,6 +339,7 @@ class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // §747 G — новое окно: отложенное завершение процесса отменяется.
         liveWindows++
+        hadWindow = true
         exitHandler.removeCallbacks(exitProcess)
         super.onCreate(savedInstanceState)
         // §430 — юзер открыл приложение, а в шторке уведомление от умершего
