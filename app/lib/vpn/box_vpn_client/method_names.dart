@@ -127,12 +127,24 @@ class _Methods {
   static const sendAutomationBroadcast = 'sendAutomationBroadcast';
   // §721 — тумблер Android AppFunctions (зеркало + состояние функций).
   static const setAppFunctionsEnabled = 'setAppFunctionsEnabled';
+  // §750 — операции ассистента над работающим ядром (native → ответ
+  // Map/List; ошибка — `{"error":{...}}`); индекс — аргументом `index`.
+  static const assistantOverview = 'assistantOverview';
+  static const assistantListExits = 'assistantListExits';
+  static const assistantCheckUrl = 'assistantCheckUrl';
+  static const assistantCheckExit = 'assistantCheckExit';
+  static const assistantFindApps = 'assistantFindApps';
+  static const assistantAppRoute = 'assistantAppRoute';
+  static const assistantSelectExit = 'assistantSelectExit';
   // §047 Шаг 2 — mirror активной ноды/группы для Locale condition-плагина.
   static const setAutomationActiveState = 'setAutomationActiveState';
 
   // §047 — native → Dart incoming intent dispatch (handled on this same
   // MethodChannel via setMethodCallHandler).
   static const automationAction = 'automationAction';
+  // §750 — native → Dart: шлюз ассистента к Debug API
+  // (`{method, path, body?}` → `{status, body}`).
+  static const assistantCall = 'assistantCall';
 
   // §207 — обобщённый pprof-снимок через libbox PProfServer. Один метод на
   // все профили (goroutine/profile/heap/allocs/block/mutex/threadcreate).

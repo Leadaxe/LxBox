@@ -794,8 +794,14 @@
   "Edit the Source tab": {
     "value": "Правьте вкладку Source"
   },
-  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
-    "value": "Ассистенты Android смогут включать и выключать VPN и узнавать его статус (Android 16+)"
+  "Let Android assistants control the VPN, run network checks and read your routing setup (Android 16+)": {
+    "value": "Ассистенты Android смогут управлять VPN, проверять сеть и читать настройки маршрутизации (Android 16+)"
+  },
+  "Let assistants change settings": {
+    "value": "Разрешить ассистентам менять настройки"
+  },
+  "Assistants can add and edit routing rules and Directions and turn sources on or off without asking": {
+    "value": "Ассистенты смогут без подтверждения добавлять и править правила маршрутизации и Направления, включать и выключать источники"
   },
   "Accept automation commands": {
     "value": "Принимать команды автоматизации"
@@ -7141,5 +7147,11 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "Detour учтён в тесте у %d из %d; остальные проверяются напрямую."
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "Не действует: detour недоступен, трафик идёт к этому серверу напрямую."
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "Не действует: detour недоступен, узлы подключаются напрямую."
   }
 }

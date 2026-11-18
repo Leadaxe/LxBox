@@ -83,4 +83,13 @@ class _Timeouts {
   /// (`N*1000 + 5000` в PProfClient), иначе Dart оборвёт сбор первым → пустой
   /// .pb на длинных профилях. 10s запаса > 5s native → native всегда успевает.
   static const cpuHeadroomSeconds = 10;
+
+  /// §750 — операции ассистента над ядром (обзор, выходы, приложения, выбор
+  /// выхода, проверка выхода — GET через узел). Потолок проверки выхода в
+  /// нативе ~10 с, плюс доставка.
+  static const assistant = Duration(seconds: 15);
+
+  /// §750 — `assistantCheckUrl`: натив ждёт итог до 20 с; Dart — с запасом,
+  /// но в пределах 30 с таймаута запроса Debug API.
+  static const assistantCheckUrl = Duration(seconds: 25);
 }

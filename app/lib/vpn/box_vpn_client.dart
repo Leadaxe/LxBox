@@ -1007,7 +1007,43 @@ class BoxVpnClient {
     _methods.setMethodCallHandler(_handleNativeCall);
   }
 
+  /// §750 — шлюз ассистента к Debug API: натив (`AssistantBridge`) зовёт
+  /// `assistantCall` с `{method, path, body?}` и ждёт `{status, body}`.
+  /// Ставится в `main()` вместе с мостом автоматизации.
+  Future<Map<String, Object?>> Function(
+      String method, String path, String? body)? _onAssistantCall;
+
+  /// §750 — регистрирует обработчик входящего `assistantCall`. Идемпотентно.
+  void registerAssistantCallHandler(
+      Future<Map<String, Object?>> Function(
+              String method, String path, String? body)
+          handler) {
+    _onAssistantCall = handler;
+    _methods.setMethodCallHandler(_handleNativeCall);
+  }
+
   Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (call.method == _Methods.assistantCall) {
+      final handler = _onAssistantCall;
+      if (handler == null) {
+        return const {'status': 503, 'body': '{"error":"not_ready"}'};
+      }
+      try {
+        final raw = (call.arguments as Map?) ?? const {};
+        return await handler(
+          '${raw['method'] ?? ''}',
+          '${raw['path'] ?? ''}',
+          raw['body'] as String?,
+        );
+      } catch (e) {
+        // Наружу исключения не выпускаем: натив ждёт ответ по контракту.
+        AppLog.I.error('[assistant] gateway call failed: $e');
+        return {
+          'status': 500,
+          'body': jsonEncode({'error': 'internal error: $e'}),
+        };
+      }
+    }
     if (call.method == _Methods.automationAction) {
       final handler = _onAutomationAction;
       if (handler == null) return null;
@@ -1035,6 +1071,83 @@ class BoxVpnClient {
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     );
+  }
+
+  /// §750 — `{vpn_status, default_route, directions, connections}`.
+  /// [indexJson] — индекс ассистента, собранный в момент запроса
+  /// (`collectAssistantIndex`): натив ничего не хранит.
+  Future<Object?> assistantOverview(String indexJson) =>
+      _assistantCall(_Methods.assistantOverview, args: {'index': indexJson});
+
+  /// §750 — `{direction, exits, total, truncated}`.
+  Future<Object?> assistantListExits(String direction, {String? query}) =>
+      _assistantCall(_Methods.assistantListExits,
+          args: {'direction': direction, 'query': query});
+
+  /// §750 — проверка адреса (URL Check §687 на глубину http), до 20 с.
+  Future<Object?> assistantCheckUrl(String url, {String? app}) =>
+      _assistantCall(_Methods.assistantCheckUrl,
+          args: {'url': url, 'app': app},
+          timeout: _Timeouts.assistantCheckUrl);
+
+  /// §750 — фактический выход Направления (`cdn-cgi/trace`).
+  Future<Object?> assistantCheckExit(String direction) =>
+      _assistantCall(_Methods.assistantCheckExit,
+          args: {'direction': direction});
+
+  /// §750 — `[{package, label}]`.
+  Future<Object?> assistantFindApps(String query) =>
+      _assistantCall(_Methods.assistantFindApps, args: {'query': query});
+
+  /// §750 — `{app, target, target_name, rule_name, conditional}`.
+  /// [indexJson] — индекс, собранный в момент запроса.
+  Future<Object?> assistantAppRoute(String indexJson, String app) =>
+      _assistantCall(_Methods.assistantAppRoute,
+          args: {'index': indexJson, 'app': app});
+
+  /// §750 — `{direction, exit, changed}`.
+  Future<Object?> assistantSelectExit(String direction, String exit) =>
+      _assistantCall(_Methods.assistantSelectExit,
+          args: {'direction': direction, 'exit': exit});
+
+  /// §750 — общий вызов операций ассистента. Ответ натива приводится к
+  /// JSON-виду (`Map<String, dynamic>` / `List`). Ошибка операции приходит
+  /// от натива данными `{"error":{code,message}}`; сбои канала (таймаут,
+  /// старый натив без метода, исключение) сворачиваются в ту же форму, чтобы
+  /// вызывающий разбирал один путь.
+  Future<Object?> _assistantCall(
+    String method, {
+    Map<String, dynamic>? args,
+    Duration timeout = _Timeouts.assistant,
+  }) async {
+    Map<String, dynamic> err(String code, String message) => {
+          'error': {'code': code, 'message': message},
+        };
+    try {
+      final raw = await _methods
+          .invokeMethod<Object?>(method, args)
+          .timeout(timeout);
+      return _jsonify(raw);
+    } on TimeoutException {
+      AppLog.I.warning('BoxVpnClient: $method timed out');
+      return err('busy', 'The app did not answer in time. Try again.');
+    } on MissingPluginException {
+      return err('core_error', 'This build does not support $method.');
+    } on PlatformException catch (e) {
+      return err('core_error', e.message ?? e.code);
+    }
+  }
+
+  /// MethodChannel отдаёт `Map<Object?, Object?>` — приводим к ключам-строкам
+  /// рекурсивно.
+  static Object? _jsonify(Object? v) {
+    if (v is Map) {
+      return <String, dynamic>{
+        for (final e in v.entries) '${e.key}': _jsonify(e.value),
+      };
+    }
+    if (v is List) return [for (final x in v) _jsonify(x)];
+    return v;
   }
 
   /// §721 — тумблер «AI assistant control»: native пишет зеркало

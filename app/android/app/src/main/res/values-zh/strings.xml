@@ -112,5 +112,8 @@
     <string name="clip_too_large">内容过大，无法发送</string>
     <string name="clip_copied">已复制</string>
 
-    <string name="appfunctions_display_description">开启或关闭 VPN，并查看连接状态。</string>
+    <string name="appfunctions_display_description">开启或关闭 VPN、运行网络检查、读取路由设置，并在您允许时更改路由。</string>
+    <!-- §750 мост шлюза ассистента: окно L×Box не открылось -->
+    <string name="assistant_channel_name">助手请求</string>
+    <string name="assistant_open_app_title">打开 L×Box 以便助手继续</string>
 </resources>

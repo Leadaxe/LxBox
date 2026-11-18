@@ -84,6 +84,7 @@ object UiPresence {
         // клиент экрана закрываются (ядро перестаёт слать то, что никто не
         // читает), проба без туннеля останавливается.
         StreamSinks.cancelAll()
+        BgMethods.cancelWindowJobs()
         BgEventPipe.close()
         ScreenCoreSession.closeOffThread()
         if (ProbeSession.active) {

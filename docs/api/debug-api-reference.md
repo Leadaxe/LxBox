@@ -95,6 +95,7 @@ auth), а не факт, что за границей всё открыто.
 - [Support feed — `/support/*`](#support-feed--support)
 - [Taildrop — `/taildrop/*`](#taildrop--taildrop)
 - [Profiler — `/profiler/*`](#profiler--profiler)
+- [Assistant — `/assistant/*` (§750)](#assistant--assistant-750)
 - [Common errors](#common-errors)
 - [Синхронизация с `/help`](#синхронизация-с-help)
 
@@ -1876,6 +1877,83 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 ## Clash API proxy — `/clash/*` (removed in §122)
 
 Удалено в §122: `/clash/*` и `GET /state/clash` → `404 not_found`. Замена — libbox CommandClient: `/action/urltest` / `/action/switch-node` / `/action/set-group` и [Profiler](#profiler--profiler) (`/profiler/live*`).
+
+---
+
+## Assistant — `/assistant/*` (§750)
+
+Тот же набор, что у функций ИИ-ассистента Android (AppFunctions), — для агента на компьютере. Спека: [`750`](../spec/tasks/750-ai-assistant-network-control.md). Чтения и проверки выполняет натив по работающему ядру; ответ пробрасывается как есть. Подписи Направлений, подключения и правила приложений Dart собирает в момент запроса и передаёт нативу аргументом — заранее ничего не считается и не хранится. `direction` везде — тег Направления. Имена выходов, подписи Направлений и подключений — текст поставщика подписки или пользователя.
+
+| Endpoint | Метод | Вход | Ответ |
+|---|---|---|---|
+| `/assistant/overview` | GET | — | `{vpn_status, default_route, directions:[{tag,name,exit_count,current_exit}], connections:[{id,name,type,enabled,state}]}` |
+| `/assistant/exits` | GET | `direction=<tag>`, `q=<подстрока>` (необяз.) | `{direction, exits[≤200], total, truncated}` |
+| `/assistant/check-url` | POST | `{url, app?}` | `{outcome, failed_stage, error, http_status, elapsed_ms, route:{direction,exit,direct,blocked}, findings, advice}`; ждёт ≤20 с |
+| `/assistant/check-exit` | POST | `{direction}` (тег) | `{outcome, country, ip, exit, error}` (GET `1.1.1.1/cdn-cgi/trace` через Направление) |
+| `/assistant/apps` | GET | `q=<подстрока>` | `[{package, label}]` (≤10) |
+| `/assistant/app-route` | GET | `app=<пакет>` | `{app, target, target_name, rule_name, conditional}` |
+| `/assistant/exit` | POST | `{direction, exit}` (`direction` — тег) | `{direction, exit, changed}` — выбор в работающем ядре до перезапуска |
+| `/assistant/connection` | POST | `{id, enabled}` | `{status:"applied", summary, changed, reload_pending?, vpn_started?, needs_consent?}` |
+
+- `type` подключения: `wireguard` / `amneziawg` / `openvpn` / `openconnect` / `tailscale`; `id` — тег узла в конфиге ядра (с префиксом подписки).
+- `POST /assistant/connection` меняет флаг узла тем же путём, что UI, пересобирает конфиг и перезагружает ядро на месте, если туннель поднят (галка «Auto-restart VPN on settings change» не учитывается). Включение при опущенном туннеле — headless-старт (нужно уже выданное согласие на VPN; иначе `needs_consent:true`). Уже в нужном состоянии — `changed:false` без пересборки.
+- Маршрут приложения меняется общим [`/rules`](#rules-crud--rules) (отдельной ручки нет).
+- Ошибки (код — первое слово `error.message`): `not_found` → 404; `invalid_argument` → 400; `vpn_off`, `busy`, `locked` (`config_locked_for_debug`), `source_off` (папка/подписка подключения выключена) → 409; прочее → 500.
+
+```bash
+curl -s -H "$HDR" "$BASE/assistant/overview" | jq
+curl -s -H "$HDR" "$BASE/assistant/exits?direction=vpn-1&q=germany" | jq
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","app":"org.example.browser"}' \
+  "$BASE/assistant/check-url" | jq
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"direction":"vpn-1"}' "$BASE/assistant/check-exit" | jq
+curl -s -H "$HDR" "$BASE/assistant/apps?q=chat" | jq
+curl -s -H "$HDR" "$BASE/assistant/app-route?app=org.example.chat" | jq
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"direction":"vpn-1","exit":"🇩🇪 Frankfurt 1"}' "$BASE/assistant/exit" | jq
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"id":"Office","enabled":true}' "$BASE/assistant/connection" | jq
+```
+
+**Сценарий 1 — «почему не открывается сайт»:**
+```bash
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}' "$BASE/assistant/check-url" \
+  | jq '{outcome, failed_stage, error, route, findings, advice}'
+# outcome=failed, failed_stage=tls, route.direction=vpn-1 → advice: сменить выход;
+# outcome=vpn_off → сначала POST /action/start-vpn-headless
+```
+
+**Сценарий 2 — «пусти приложение через Германию»** (правило — общим `/rules`):
+```bash
+# 1. пакет приложения
+curl -s -H "$HDR" "$BASE/assistant/apps?q=chat" | jq
+# 2. выходы Направления — страну по именам определяет агент
+curl -s -H "$HDR" "$BASE/assistant/exits?direction=vpn-1&q=🇩🇪" | jq '.exits'
+# 3. Направление, ограниченное этими выходами (фильтр узлов — регулярка по имени)
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"label":"Germany","node_filter":"🇩🇪","auto":{}}' "$BASE/directions" | jq '.tag'
+# 4. правило «пакет → Направление» + пересборка, затем перезагрузка ядра
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"kind":"inline","name":"Chat","enabled":true,"packages":["org.example.chat"],"outbound":"vpn-2"}' \
+  "$BASE/rules?rebuild=true" | jq '{id, rebuilt}'
+curl -s -X POST -H "$HDR" "$BASE/action/reload-vpn"
+# 5. маршрут и фактическая страна выхода
+curl -s -H "$HDR" "$BASE/assistant/app-route?app=org.example.chat" | jq
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"direction":"vpn-2"}' "$BASE/assistant/check-exit" | jq '{country, ip, exit}'
+```
+Правило встаёт в конец пользовательской зоны; если выше стоит другое правило с этим пакетом — переставить через `POST /rules/move`.
+
+**Сценарий 3 — «подключи к рабочей сети»:**
+```bash
+curl -s -H "$HDR" "$BASE/assistant/overview" | jq '.connections'
+# → [{"id":"Office","name":"Office","type":"wireguard","enabled":false,"state":"disabled"}]
+curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
+  -d '{"id":"Office","enabled":true}' "$BASE/assistant/connection" | jq
+# → {"status":"applied","summary":"Turn on Office","changed":true}
+```
 
 ---
 

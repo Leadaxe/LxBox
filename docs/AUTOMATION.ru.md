@@ -264,34 +264,77 @@ Task "Switch to Russia with confirmation":
 
 ## ИИ-ассистенты (AppFunctions)
 
-На Android 16+ L×Box объявляет три
+На Android 16+ L×Box объявляет десять
 [AppFunctions](https://developer.android.com/ai/appfunctions), которые
-системный ассистент (например, Gemini) вызывает от имени пользователя:
+системный ассистент (например, Gemini) может вызывать от имени пользователя.
+Зачем они, примеры фраз и ограничения — в пользовательском гайде
+[ИИ-ассистент и ваша сеть](AI_ASSISTANT.ru.md); этот раздел — техническая
+справка.
 
 | Функция | Параметры | Результат |
 |---------|-----------|-----------|
-| `startVpn` | — | `VpnState`; ждёт установки туннеля до 15 с |
+| `startVpn` | — | `VpnState`; ждёт до 15 с, пока туннель установится |
 | `stopVpn` | — | `VpnState`; ждёт до 15 с |
 | `getVpnStatus` | — | `VpnState` |
+| `listExits` | `direction`, `query?` | `ExitList`: имена выходов Направления (до 200), `total`, `truncated` |
+| `checkUrl` | `url`, `appPackage?` | `UrlCheckReport`: `outcome`, `failedStage`, `error`, `httpStatus`, `elapsedMs`, `route`, `findings`, `advice`; ждёт до 20 с |
+| `checkExit` | `direction` | `ExitCheck`: `outcome`, `country`, `ip`, `exit`, `error` |
+| `findApps` | `query` | до 10 `AppMatch`: `packageName`, `label` |
+| `selectExit` | `direction`, `exit` | `ExitSelection`: `direction`, `exit`, `changed` |
+| `getApiHelp` | — | `ApiResponse`: маршруты, доступные через `callApi` |
+| `callApi` | `method`, `path`, `body?` | `ApiResponse`: `status`, `body` (JSON строкой) |
 
-У `VpnState` одно поле `status`: `stopped`, `starting`, `started` или
-`stopping`. Имена узлов не возвращаются.
+У `VpnState` одно поле, `status`: `stopped`, `starting`, `started` или
+`stopping`. `direction` — тег Направления (`vpn-1`). Имена выходов отдаются
+так, как их написал поставщик подписки.
 
-**Как включить.** App Settings → Automation → **AI assistant control**.
-По умолчанию выключено, строка видна только на Android 16+. Пока тумблер
-выключен, функции помечены для системы выключенными, а любой вызов
-завершается `AppFunctionDisabledException`. Настройка хранится рядом с
-остальными настройками автоматизации и входит в LX Backup.
+Первые восемь функций исполняет нативный код, окно приложения им не нужно.
+`getApiHelp` и `callApi` — шлюз к обработчикам
+[Debug API](api/debug-api-reference.md), без HTTP-сервера и его токена; им
+нужна Dart-часть приложения. Если её нет в памяти, L×Box пробует открыть своё
+окно и ждёт до 10 с; при неудаче вызов возвращает «L×Box is not open. Open
+the app and repeat.», и показывается уведомление.
+
+**Белый список шлюза.** `callApi` пропускает только эти маршруты; остальные
+отвечают `403`:
+
+| Группа | Маршруты |
+|--------|----------|
+| Чтения | `GET` для `/state`, `/rules`, `/directions`, `/subs`, `/folders`, `/pool`, `/assistant/*`, части `/settings` |
+| Проверки | `/assistant/check-url`, `/assistant/check-exit`, `/action/check-config`, `/action/urltest*`, пробы цепочек и папок |
+| VPN и выбор | `/action/start-vpn-headless`, `stop-vpn`, `reconnect`, `reload-vpn`, `reset-network`, `switch-node`, `set-group`, `/assistant/exit` |
+| Изменения | запись в `/rules`, `/directions`; `PATCH /subs/{id}`, обновление подписок, пересборка конфига, часть `PUT /settings`, `/assistant/connection` |
+
+Закрыто: `/config`, `/backup`, `/files`, `/logs`, `/diag`, `/nodes`,
+`/mixins`, `/settings/vars`, `/settings/vpn_mode`, настройки DNS, чтение
+цепочек, создание и удаление источников, смена URL подписки, любой запрос с
+`reveal` или `warnings`. Адреса серверов в текстах ошибок маскируются. Точный список возвращает `getApiHelp`.
+
+**Как включить.** App Settings → Automation → AI assistants, раздел виден
+только на Android 16+:
+
+- **AI assistant control** — все функции. По умолчанию выключен. Пока он
+  выключен, функции помечены для системы как отключённые, а каждый вызов
+  завершается `AppFunctionDisabledException`.
+- **Let assistants change settings** — группа «Изменения» шлюза. По
+  умолчанию выключен; действует, только пока включён первый тумблер. Пока он
+  выключен, изменение отвечает `403` с текстом, где назван тумблер.
+
+Обе настройки хранятся вместе с остальными настройками автоматизации и едут
+в LX Backup.
 
 **Ошибки.** `startVpn` приложение не открывает:
 
-- согласие на VPN ещё не выдано (режим TUN) —
+- разрешение на VPN ещё не выдано (режим TUN) —
   `AppFunctionPermissionRequiredException` «VPN permission is not granted.
   Open L×Box and connect once.»;
-- конфиг не сохранён — `AppFunctionElementNotFoundException`
+- конфигурация не сохранена — `AppFunctionElementNotFoundException`
   «No configuration. Open L×Box and add a server.»
 
-**Проверка через adb** (на устройстве должна быть служба `app_function`:
+При выключенном VPN `checkUrl` и `checkExit` возвращают `outcome = vpn_off`,
+а `selectExit` завершается `AppFunctionNotSupportedException`.
+
+**Проверка через adb** (на устройстве должен быть сервис `app_function`:
 `adb shell cmd app_function help`):
 
 ```sh
@@ -301,13 +344,8 @@ adb shell cmd app_function execute-app-function --package com.leadaxe.lxbox \
   --parameters '{}'
 ```
 
-`startVpn` и `stopVpn` вызываются так же. Если идентификатор отличается —
-скопируйте его из вывода `list-app-functions`.
-
-**Статус.** API AppFunctions экспериментальный (`androidx.appfunctions`
-1.0.0-rc01). Сейчас из Gemini вызываются только приложения из программы
-раннего доступа Google, поэтому на большинстве устройств тумблер пока ничего
-заметного не меняет.
+Остальные функции вызываются так же. Идентификатор функции берите из вывода
+`list-app-functions`, если он отличается.
 
 ---
 

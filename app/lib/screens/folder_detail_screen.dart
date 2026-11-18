@@ -28,6 +28,7 @@ import 'subscription_detail_screen/detour_mode.dart';
 import 'subscription_detail_screen/tag_prefix_cascade.dart';
 import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscriptions_screen/folder_picker.dart';
+import '../widgets/detour_path_line.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/lx_code_editor.dart';
 import '../widgets/probe_badge.dart';
@@ -1603,6 +1604,18 @@ class _FolderDetailScreenState extends State<FolderDetailScreen>
           folder: widget.entry.list is FolderServers
               ? widget.entry.list as FolderServers
               : null),
+      // §752 — detour папки снят сборкой у членов без личного detour (цель
+      // недоступна); член с личным detour папочный получает только при
+      // Replace (§237), иначе его код — про личную цель.
+      buildResults: widget.controller,
+      overrideDetourRemoved: () {
+        for (final m in _folder.members) {
+          if (m.detour.isNotEmpty && !widget.entry.replaceDetourChain) continue;
+          final w = detourRemovedWarning(_buildWarningsOfMember(m));
+          if (w != null) return w;
+        }
+        return null;
+      },
       hasDetour: hasDetour,
       // §670 — галки register только при звеньях: тот же предикат, что у
       // сборщика.

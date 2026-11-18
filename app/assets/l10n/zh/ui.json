@@ -608,8 +608,14 @@
   "Edit the Source tab": {
     "value": "请编辑 Source 标签页"
   },
-  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
-    "value": "允许 Android 助手开启或关闭 VPN 并读取其状态（Android 16+）"
+  "Let Android assistants control the VPN, run network checks and read your routing setup (Android 16+)": {
+    "value": "允许 Android 助手控制 VPN、运行网络检查并读取路由设置（Android 16+）"
+  },
+  "Let assistants change settings": {
+    "value": "允许助手更改设置"
+  },
+  "Assistants can add and edit routing rules and Directions and turn sources on or off without asking": {
+    "value": "助手可以无需确认地添加和编辑路由规则与方向，并开启或关闭来源"
   },
   "Accept automation commands": {
     "value": "接受自动化指令"
@@ -6850,5 +6856,11 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "测试中 %d / %d 个节点使用 detour；其余直接检测。"
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "未生效：detour 不可用，流量直接连接到此服务器。"
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "未生效：detour 不可用，节点直接连接。"
   }
 }

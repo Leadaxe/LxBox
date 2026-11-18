@@ -23,6 +23,7 @@ import '../services/settings_storage.dart';
 import '../widgets/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
+import '../widgets/detour_path_line.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/probe_detour_note.dart';
 import '../widgets/user_agent_dialog.dart';
@@ -931,6 +932,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       // §252 — разворот цели в цепочку «как пакет пойдёт» для превью.
       detourPathHopsOf: (stored) => detourPathHops(stored,
           controller: widget.controller, directions: _directions),
+      // §752 — detour подписки снят сборкой у её узлов (цель недоступна).
+      buildResults: widget.controller,
+      overrideDetourRemoved: () {
+        for (final n in widget.entry.list.nodes) {
+          final w = detourRemovedWarning(_buildWarningsOfNode(n));
+          if (w != null) return w;
+        }
+        return null;
+      },
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {

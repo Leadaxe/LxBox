@@ -409,6 +409,63 @@ class BgBoundaryTest {
         assertFalse(uiHoldWanted(VpnStatus.Stopped, uiAttached = false))
     }
 
+    @Test
+    fun `a call to the window holds it even with the tunnel stopped`() {
+        assertTrue(uiHoldWanted(VpnStatus.Stopped, uiAttached = true, pendingCalls = 1))
+        assertFalse(uiHoldWanted(VpnStatus.Stopped, uiAttached = true, pendingCalls = 0))
+        // Окна нет — держать нечего, вызов его не поднимает.
+        assertFalse(uiHoldWanted(VpnStatus.Stopped, uiAttached = false, pendingCalls = 1))
+    }
+
+    // ───────────── обратный вызов `:bg` → Dart ─────────────
+
+    @Test
+    fun `a reply reaches the call with its number only`() {
+        val calls = PendingCalls<String>()
+        val (id1, e1) = calls.open()
+        val (id2, e2) = calls.open()
+        assertTrue(id1 != id2)
+        assertTrue(calls.complete(id2, "two"))
+        assertTrue(e2.result.isCompleted)
+        assertFalse(e1.result.isCompleted)
+        assertEquals(1, calls.size)
+        // Чужой и повторный номер никому не достаётся.
+        assertFalse(calls.complete(999L, "x"))
+        assertFalse(calls.complete(id2, "again"))
+        assertTrue(calls.complete(id1, "one"))
+        assertEquals(0, calls.size)
+    }
+
+    @Test
+    fun `ack tells a live window from a silent one`() {
+        val calls = PendingCalls<String>()
+        val (id, e) = calls.open()
+        assertFalse(e.acked.isCompleted)
+        assertTrue(calls.ack(id))
+        assertTrue(e.acked.isCompleted)
+        assertFalse(e.result.isCompleted)
+        // Ответ без отдельного подтверждения тоже значит «окно живо».
+        val (id2, e2) = calls.open()
+        assertTrue(calls.complete(id2, "r"))
+        assertTrue(e2.acked.isCompleted)
+        assertFalse(calls.ack(424242L))
+    }
+
+    @Test
+    fun `a reply after the timeout is dropped`() {
+        val calls = PendingCalls<String>()
+        val (id, e) = calls.open()
+        val waited = kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(20L) { e.result.await() }
+        }
+        assertNull(waited)
+        // Вызывающий сдался и снял запись: запоздавший ответ никому не нужен.
+        calls.close(id)
+        assertFalse(calls.complete(id, "late"))
+        assertFalse(calls.ack(id))
+        assertEquals(0, calls.size)
+    }
+
     // ───────────── роль процесса ─────────────
 
     @Test

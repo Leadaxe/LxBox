@@ -7,10 +7,11 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
 
-/// §747 — нужно ли держать процесс окна живым: туннель не `Stopped` **и** окно
-/// подключено (движок жив, окно не закрыто). Чистая функция — для теста.
-fun uiHoldWanted(status: VpnStatus, uiAttached: Boolean): Boolean =
-    uiAttached && status != VpnStatus.Stopped
+/// §747 — нужно ли держать процесс окна живым: окно подключено (движок жив,
+/// окно не закрыто) **и** туннель не `Stopped` либо идёт вызов `:bg` → Dart,
+/// ждущий ответа окна ([pendingCalls], §750). Чистая функция — для теста.
+fun uiHoldWanted(status: VpnStatus, uiAttached: Boolean, pendingCalls: Int = 0): Boolean =
+    uiAttached && (status != VpnStatus.Stopped || pendingCalls > 0)
 
 /// §747 — удержание процесса окна (`:ui`) на время работы туннеля.
 ///
@@ -43,9 +44,24 @@ object UiHold {
 
     private var connection: ServiceConnection? = null
 
+    /// Идущие вызовы `:bg` → Dart с ответом (`UiCalls`): на их время окно
+    /// удерживается и при остановленном туннеле — свёрнутое окно иначе могло
+    /// бы быть заморожено и не ответить.
+    private val calls = java.util.concurrent.atomic.AtomicInteger(0)
+
+    fun callStarted(ctx: Context) {
+        calls.incrementAndGet()
+        sync(ctx)
+    }
+
+    fun callFinished(ctx: Context) {
+        calls.decrementAndGet()
+        sync(ctx)
+    }
+
     /// Привести привязку к текущему состоянию. Зовётся из любого потока.
     fun sync(ctx: Context) {
-        apply(ctx, uiHoldWanted(TunnelState.status, UiPresence.isAttached))
+        apply(ctx, uiHoldWanted(TunnelState.status, UiPresence.isAttached, calls.get()))
     }
 
     @Synchronized

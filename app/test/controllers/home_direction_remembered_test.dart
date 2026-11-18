@@ -105,6 +105,8 @@ void main() {
       for (final ch in [methods, ccStatus, ccGroups]) {
         messenger.setMockMethodCallHandler(ch, null);
       }
+      // §751 — запоминание Направления пишет настройки fire-and-forget.
+      await SettingsStorage.settleSavesForTesting();
       SettingsStorage.resetCacheForTesting();
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
     });

@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- **An AI assistant can diagnose and manage the network ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** On Android 16+ the set of functions for system assistants grows from three to ten: an address check by stages (`checkUrl`), the external IP and country of a Direction's exit (`checkExit`), the list of a Direction's exits and switching between them, an app search, and a gateway to a part of the Debug API (`getApiHelp`, `callApi`) — rules, Directions, sources and connections. Reading and checks sit behind «AI assistant control»; changing settings needs the new «Let assistants change settings» switch (App Settings → Automation → AI assistants), off by default. Config, keys, subscription links, backups and logs stay closed. Guide: [AI assistants and your network](docs/AI_ASSISTANT.md).
+  (RU: ИИ-ассистент на Android 16+ получает десять функций вместо трёх: проверку адреса по стадиям, внешний IP и страну выхода Направления, список выходов и их смену, поиск приложения и шлюз к части Debug API — правила, Направления, источники, подключения. Чтения и проверки — под «AI assistant control»; изменения настроек — под новым тумблером «Let assistants change settings», выключенным по умолчанию. Конфиг, ключи, ссылки подписок, бэкапы и логи закрыты. Гайд: [ИИ-ассистент и ваша сеть](docs/AI_ASSISTANT.ru.md).)
+- **Debug API: `/assistant/*` ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New routes for an agent on a computer: network overview with work connections and their state, a Direction's exits, the address check (URL Check), the exit check, an app search, which rule catches an app, switching the exit, turning a connection on or off.
+  (RU: Debug API — новые маршруты `/assistant/*` для агента на компьютере: обзор сети с рабочими подключениями и их состоянием, выходы Направления, проверка адреса (URL Check), проверка выхода, поиск приложения, правило для приложения, смена выхода, включение и выключение подключения.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Changed
@@ -29,6 +36,8 @@
   (RU: в списках-переключателях — тема и язык в App Settings → Appearance, фоновый режим, режим detour, тип правила и другие — стрелки сразу выбирали соседний пункт и крутились по кругу: на TV тема менялась при простом перемещении, а выйти из списка пультом было нельзя. Теперь стрелки только двигают фокус и выводят из списка на краях, выбор — OK/Enter/Space или тап. При переключении вкладки мышью или касанием фокус уходит со скрытой вкладки.)
 - **Dependent settings no longer look enabled when they are not in effect ([task 743](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).** In VPN Settings → Core → WireGuard, with «Suspend idle tunnels» off, «Lazy tunnel build» and «Built tunnels limit» are not passed to the core, but the greyed rows kept showing «on» and «12». A greyed row now shows a switch as off and a list as «Not in effect»; the saved value returns when the row becomes active again.
   (RU: серая строка зависимой настройки больше не показывает сохранённое значение как действующее: переключатель рисуется выключенным, список — «Не действует».)
+- **The path preview no longer shows a detour that was removed ([task 752](docs/spec/tasks/752-detour-path-scheme-removed-hop.md)).** On the Settings tab of a server or folder member, the «Phone → … → Internet» line under **Detour server** kept drawing the path through the chosen detour even when the last build had removed it because the target was unavailable, right next to the ⚠ «Hop … unavailable: hop removed» warning. Now the path is struck through and a ⚠ line under it says the server goes directly. The detour on the Settings tab of a subscription or folder works the same way («nodes connect directly»). The chosen detour is kept, and the line returns to normal after the next build once the target is back.
+  (RU: превью пути «Phone → … → Internet» под Detour server больше не рисует путь через detour, снятый последней сборкой (цель недоступна): путь перечёркнут, под ним строка с ⚠ «идёт напрямую»; так же — detour подписки и папки на их вкладке Settings. Выбор detour сохраняется, после пересборки с доступной целью строка возвращается к обычному виду.)
 
 ## [2.25.22] — 2026-11-16
 

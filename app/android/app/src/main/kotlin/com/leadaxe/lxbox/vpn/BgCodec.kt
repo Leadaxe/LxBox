@@ -71,6 +71,9 @@ internal object EventFrames {
     /// Ответ асинхронного вызова: `{id, r}` или `{id, ec, em}` ([BgCodec.encode]).
     const val REPLY = "!reply"
 
+    /// Обратный вызов метода Dart с ответом: `{id, method, args}` (`UiCalls`).
+    const val CALL = "!call"
+
     /// Команда автоматизации для Dart: `{name, args}` ([BgCodec.encode]).
     const val AUTOMATION = "!automation"
 

@@ -18,8 +18,14 @@ object AppFunctionsLogic {
     /// Идентификатор функции = `<FQN класса с объявлением>#<имя>` (так его
     /// строит appfunctions-compiler rc01, `AnnotatedAppFunction.getAppFunctionIdentifier`).
     private const val DECLARING_CLASS = "com.leadaxe.lxbox.appfunctions.LxBoxAppFunctions"
-    val FUNCTION_IDS: List<String> = listOf("startVpn", "stopVpn", "getVpnStatus")
-        .map { "$DECLARING_CLASS#$it" }
+    val FUNCTION_IDS: List<String> = listOf(
+        "startVpn", "stopVpn", "getVpnStatus",
+        // §750 — функции ассистента над работающим ядром.
+        "listExits", "checkUrl", "checkExit",
+        "findApps", "selectExit",
+        // §750 — шлюз к Debug API (исполняет Dart).
+        "getApiHelp", "callApi",
+    ).map { "$DECLARING_CLASS#$it" }
 
     fun statusValue(s: VpnStatus): String = when (s) {
         VpnStatus.Stopped -> "stopped"

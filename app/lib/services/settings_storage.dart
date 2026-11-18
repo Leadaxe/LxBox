@@ -78,6 +78,10 @@ class SettingsStorage {
   static int _tmpSeq = 0;
   static Map<String, dynamic>? _cache;
   static Future<void>? _pendingSave;
+  // §751 — все незавершённые `_atomicSave` (их бывает несколько: `_save()`
+  // зовут fire-and-forget, `_pendingSave` хранит только последнюю). Нужно
+  // тестам — дождаться записей перед удалением временного каталога.
+  static final Set<Future<void>> _savesInFlight = {};
 
   // ---------------------------------------------------------------------------
   // §113 — config-dirty флаг живёт здесь (в объекте, где меняются настройки),
@@ -293,6 +297,7 @@ class SettingsStorage {
     'automation_emit_health',
     'automation_explainer_shown_v1',
     'appfunctions_enabled', // §721 — AI assistant control (Android AppFunctions)
+    'appfunctions_allow_changes', // §750 — шлюз ассистента: группа «Изменения»
     // Subscription identity headers
     'subscription_user_agent',
     'subscription_send_hwid',
@@ -329,6 +334,36 @@ class SettingsStorage {
   /// (что и означает «хочу заново»).
   static bool _mainIsCorrupted = false;
   static bool _corruptionLogged = false;
+
+  /// §751 — дождаться всех начатых записей на диск (в том числе запущенных
+  /// через `unawaited`, например `HomeController._persistSort`). Тест зовёт
+  /// перед удалением своего временного каталога: иначе `rename` фоновой записи
+  /// падает `PathNotFoundException` уже после завершения теста.
+  ///
+  /// Сеттер до `_save()` ждёт `_load()`: при пустом кэше это чтение с диска,
+  /// и запись ещё не учтена в `_savesInFlight`. Поэтому сначала ждём чтение,
+  /// потом даём сеттеру шаг цикла событий дойти до `_save()`, потом — записи;
+  /// цикл — пока не станет тихо. Ошибки самих записей сюда не приходят и не
+  /// глотаются — их получает тот, кто запись начал. Только для `test()` на
+  /// живом времени: в fake-async зоне `testWidgets` чтение может не
+  /// завершиться никогда.
+  @visibleForTesting
+  static Future<void> settleSavesForTesting() async {
+    while (true) {
+      final load = _loadInFlight;
+      if (load != null) {
+        try {
+          await load;
+        } catch (_) {
+          // Ошибку чтения получает и сеттер, который его ждёт; здесь важно
+          // только, что чтение закончилось.
+        }
+      }
+      await Future<void>.delayed(Duration.zero);
+      if (_savesInFlight.isEmpty && _loadInFlight == null) return;
+      await Future.wait(_savesInFlight.toList());
+    }
+  }
 
   /// Test-only: drop in-memory cache so the next read goes back to disk.
   /// Used by unit tests that rotate `getApplicationDocumentsPath()` between
@@ -1141,6 +1176,15 @@ class SettingsStorage {
 
   static Future<void> setAppFunctionsEnabled(bool enabled) =>
       setVar('appfunctions_enabled', enabled ? 'true' : 'false');
+
+  /// §750 — тумблер «Let assistants change settings»: шлюз ассистента к
+  /// Debug API исполняет группу «Изменения» (правила, Направления,
+  /// источники). Default OFF. Читает только Dart-шлюз, зеркала в натив нет.
+  static Future<bool> getAppFunctionsAllowChanges() async =>
+      (await getVar('appfunctions_allow_changes', 'false')) == 'true';
+
+  static Future<void> setAppFunctionsAllowChanges(bool enabled) =>
+      setVar('appfunctions_allow_changes', enabled ? 'true' : 'false');
 
   // ---------------------------------------------------------------------------
   // Backup snapshot (§031) — dump/export/replace всего `lxbox_settings.json`.

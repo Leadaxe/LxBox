@@ -56,6 +56,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val TAILDROP_SAVE_CODE = 26 // §707
         private const val VPN_REQUEST_CODE = 24
 
+        /// §747 — методы Dart, которые `:bg` вправе вызвать с ответом
+        /// (`UiCalls`): шлюз ассистента §750.
+        private val REVERSE_METHODS = setOf("assistantCall")
+
         /// §747 — повторы подключения к `:bg`, если он не ответил.
         private const val ATTACH_RETRIES = 6
         private const val ATTACH_RETRY_MS = 500L
@@ -315,6 +319,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     /// автоматизации (команда нативного входа или «нативный Stop» из `:bg`) —
     /// в `AutomationBridge`.
     private fun onFrame(stream: String, payload: ByteArray) {
+        if (stream == EventFrames.CALL) {
+            reverseCall(payload)
+            return
+        }
         if (stream == EventFrames.AUTOMATION) {
             val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
             val name = m["name"] as? String ?: return
@@ -329,6 +337,42 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         // §155 — движок может быть уже мёртв: глотаем.
         runCatching {
             out.send(stream, java.nio.ByteBuffer.allocateDirect(payload.size).apply { put(payload) })
+        }
+    }
+
+    /// Главный поток. §747/§750 — обратный вызов `:bg` → Dart с ответом
+    /// (`UiCalls`): подтвердить получение (окно живо и не заморожено),
+    /// исполнить метод на канале плагина и вернуть итог по номеру. Методы —
+    /// только из [REVERSE_METHODS]. Аргументы и ответ в лог не пишутся.
+    private fun reverseCall(payload: ByteArray) {
+        val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
+        val id = (m["id"] as? Number)?.toLong() ?: return
+        val method = m["method"] as? String ?: return
+        val ctx = context
+        fun reply(kind: String, value: Any? = null, code: String? = null, message: String? = null) {
+            BgClient.onLane {
+                BgClient.callOr(
+                    ctx, "uiCallReply",
+                    mapOf("id" to id, "kind" to kind, "value" to value, "code" to code, "message" to message),
+                    false,
+                )
+            }
+        }
+        BgClient.onLane { BgClient.callOr(ctx, "uiCallAck", mapOf("id" to id), false) }
+        if (method !in REVERSE_METHODS) {
+            reply("missing")
+            return
+        }
+        runCatching {
+            methodChannel.invokeMethod(method, m["args"], object : MethodChannel.Result {
+                override fun success(result: Any?) = reply("ok", value = result)
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) =
+                    reply("error", code = errorCode, message = errorMessage)
+                override fun notImplemented() = reply("missing")
+            })
+        }.onFailure {
+            Log.w(TAG, "[bg] reverse call $method failed: ${it.javaClass.simpleName}")
+            reply("missing")
         }
     }
 
@@ -434,7 +478,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "ccTaildropInboxSnapshot", "ccTaildropMarkRead", "ccTaildropSendBytes",
             "ccTailscaleLogin", "ccTailscaleLogout", "ccUrlTestGroup", "ccUrlTestOutbound",
             "checkConfig", "formatConfig", "getCoreVersion", "pprofProfile", "probeCancel",
-            "probeGetUrl", "probeStart", "probeStop", "probeUrlTest" -> toBg(call, result, long = true)
+            "probeGetUrl", "probeStart", "probeStop", "probeUrlTest",
+            // §750 — операции ассистента (Debug API): исполняет `:bg`.
+            "assistantOverview", "assistantListExits", "assistantCheckUrl", "assistantCheckExit",
+            "assistantFindApps", "assistantAppRoute", "assistantSelectExit" -> toBg(call, result, long = true)
             // §747 — конфиг бывает больше предела Binder: файл пишет и читает само
             // окно (запись атомарная), а сервису уходит «конфиг сохранён» — он
             // сбрасывает кэш. Запись и вызов — на полосе: следующий за ними

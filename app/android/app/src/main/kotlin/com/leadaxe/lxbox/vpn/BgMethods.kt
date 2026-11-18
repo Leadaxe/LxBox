@@ -6,6 +6,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -289,12 +290,74 @@ object BgMethods {
             }
             "ccStopOpenConnectCallback" -> { openConnect()?.stopOpenConnectCallback(); true }
 
+            // ───────────── §750 — операции ассистента для Debug API окна ─────────────
+            // Тумблер «AI assistant control» здесь НЕ проверяется: у Debug API
+            // свой доступ. Ошибка операции — успех с `{error: {code, message}}`.
+            // Индекс (`index`, JSON) Dart собирает по требованию и шлёт
+            // аргументом — здесь он не хранится и в лог не пишется.
+            "assistantOverview" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.overview(ctx, a.str("index"))
+            }
+            "assistantListExits" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.listExits(ctx, a.str("direction"), a.get<String>("query"))
+            }
+            "assistantCheckUrl" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.checkUrl(ctx, a.str("url"), a.get<String>("app"))
+            }
+            "assistantCheckExit" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.checkExit(ctx, a.str("direction"))
+            }
+            "assistantFindApps" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.findApps(ctx, a.str("query"))
+            }
+            "assistantAppRoute" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.appRoute(ctx, a.str("index"), a.str("app"))
+            }
+            "assistantSelectExit" -> assistant {
+                com.leadaxe.lxbox.appfunctions.AssistantCore.selectExit(ctx, a.str("direction"), a.str("exit"))
+            }
+
+            // ───────────── обратный вызов `:bg` → Dart (`UiCalls`) ─────────────
+            "uiCallAck" -> { UiCalls.onAck(a.long("id", 0L)); true }
+            "uiCallReply" -> {
+                UiCalls.onReply(
+                    a.long("id", 0L), a.str("kind"), a.get<Any>("value"),
+                    a.get<String>("code"), a.get<String>("message"),
+                )
+                true
+            }
+
             // ───────────── окно ─────────────
             // Движок отключён («окно закрыто»).
             "uiDetached" -> { UiPresence.detached(ctx); true }
 
             else -> throw BgError("BG_UNKNOWN_METHOD", method)
         }
+    }
+
+    /// Операции окна, исполняемые корутинами (§750): отменяются, когда окна
+    /// больше нет (раньше их отменяло отключение движка) — проверка адреса не
+    /// доигрывает впустую и снимает свой признак «занято» сразу.
+    private val windowJobs = kotlinx.coroutines.SupervisorJob()
+    private val windowScope =
+        kotlinx.coroutines.CoroutineScope(windowJobs + kotlinx.coroutines.Dispatchers.Default)
+
+    /// Окно отключилось или умерло: отменить его идущие операции.
+    fun cancelWindowJobs() {
+        for (job in windowJobs.children.toList()) job.cancel()
+    }
+
+    /// Исполнить операцию ассистента и дождаться её. Ошибка операции — не
+    /// отказ вызова, а ответ `{error: {code, message}}`, как было в `VpnPlugin`.
+    private fun assistant(op: suspend () -> Any?): Any? = try {
+        runBlocking { windowScope.async { op() }.await() }
+    } catch (e: com.leadaxe.lxbox.appfunctions.AssistantError) {
+        mapOf("error" to mapOf("code" to e.code, "message" to (e.message ?: "")))
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw BgError(BgControlProvider.ERROR_CALL_FAILED, "cancelled: the window is gone")
+    } catch (t: Throwable) {
+        Log.w(TAG, "assistant call failed: ${t.javaClass.simpleName}")
+        mapOf("error" to mapOf("code" to "core_error", "message" to "Internal error."))
     }
 
     /// §745 — openconnect целиком живёт на сервисном клиенте ядра (слушатель SSO

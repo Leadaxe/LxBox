@@ -11,6 +11,7 @@ import 'screens/home_screen.dart';
 import 'services/app_log.dart';
 import 'widgets/app_theme_seed.dart';
 import 'services/l10n/locale_controller.dart';
+import 'services/assistant/assistant_gateway.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/automation_sync.dart';
 import 'services/clash_log_pump.dart';
@@ -173,6 +174,9 @@ void main() async {
     // LxBoxIntentReceiver → этот handler → shared action-handlers). Пассивен
     // пока receiver disabled. Подгружаем emit-gates из storage (default OFF).
     registerAutomationBridge();
+    // §750 — шлюз ассистента к Debug API (native `assistantCall`). Только
+    // приём вызова: на старте ничего не считается.
+    registerAssistantGatewayBridge();
     // §605 — вместе с гейтами выставляем receiver'ы по сохранённому тумблеру:
     // бэкап/набор прошлых версий могли развести их с системой.
     unawaited(syncAutomationFromStorage());
