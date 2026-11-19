@@ -233,10 +233,10 @@ One-tap VPN start/stop with an animated status chip. Pick a direction, sort node
 Block ads, route Russian domains directly, send BitTorrent through a chosen direction, route per-app, match private subnets. Every user rule is a single model with all match fields in parallel (OR within a category, AND across them — the sing-box default rule formula).
 
 - **4 tabs**: Directions · Presets (read-only catalog → Copy to Rules) · Rules (your registry) · Tunnel apps (OS-level split tunneling)
-- **Match fields**: domain / domain_suffix / domain_keyword, ip_cidr, ports and port ranges, packages (per-app), application protocols (tls/quic/bittorrent/…), **traffic type tcp/udp/icmp** (§240 — e.g. UDP direct, TCP through the tunnel), ip_is_private and source_ip_is_private, **inbound** (packet arrived via TUN or via the local proxy, §119), **wifi_ssid / wifi_bssid**, remote .srs rule-set
+- **Match fields**: domain / domain_suffix / domain_keyword, ip_cidr, ports and port ranges, packages (per-app), application protocols (tls/quic/bittorrent/…), **traffic type tcp/udp/icmp** (§240 — e.g. UDP direct, TCP through the tunnel), ip_is_private and source_ip_is_private, **inbound** (packet arrived via TUN or via the local proxy, §119), **network type** Wi-Fi / Cellular / Ethernet with **Metered networks only** and **wifi_ssid / wifi_bssid** (§694), **Domain regex** and **Package name regex** (§712), remote .srs rule-set
 - **Traffic Processing** (§264) — a pinned preset at the top of the rule list holding the traffic pre-processing the rest of routing depends on: sniff, Hijack DNS and destination resolution. It cannot be disabled, deleted or moved — you change its settings inside the preset
-- **Action & Resolve** — the gear next to Action, with three modes: plain route to a direction; **Resolve first** — resolve the domain before routing with a forced address family and the full sing-box resolve option set (strategy, DNS server, cache, TTL, client subnet, timeout); **Resolve only** — the rule resolves and lets later rules pick the route. **Force IPv4 (drop AAAA)** (§256) answers AAAA queries locally — a lifesaver on networks with half-broken IPv6
-- **Rule-level DNS** (§257) — the **Send DNS to dedicated server** switch attaches a paired DNS rule to the routing rule: the rule's domains get resolved by a dedicated server (auto = follow the route's direction), so one rule decides both route and resolution
+- **Action** — a direction, direct or Reject; **Resolve only** (for rules with domains) only resolves and lets later rules pick the route
+- **DNS & Resolve** section (§683) — Answer: Default (DNS Final) / **Dedicated server** (a paired DNS rule resolves the rule's domains) / **Fixed IP** (answers the rule's domains with given addresses, like a hosts entry); **Force IPv4 (drop AAAA)**; **Resolve before routing** with Strategy and the full sing-box resolve option set (DNS server, cache, TTL, client subnet, timeout)
 - **Raw-JSON rule** (§225) — a rule can be written as a raw `route.rules` fragment for fields the form doesn't expose; syntax is validated as you type
 - **SRS is local-only** — no auto-update, manual download via the ☁ icon, the rule stays disabled until it is cached
 - Drag-reorder, long-press → Delete with confirmation, dirty-aware save ("Discard changes?"), a View tab with the exact sing-box fragment
@@ -377,14 +377,11 @@ Side menu → **Debug**, four tabs.
 <details>
 <summary><strong>VPN Settings</strong> — tune the engine</summary>
 
-Two tabs:
+Three tabs:
 
-- **Mode** (§119) — **VPN** (system-wide tunnel, default) / **Local proxy** (no tunnel: a local HTTP+SOCKS proxy that apps are pointed at manually; the Android VPN slot stays free, so it coexists with another VPN) / **VPN + Proxy** (both at once). The proxy port is configurable; reachable from this device only or from the LAN — the LAN variant strictly requires password auth. Tunnel and proxy traffic can be told apart by the rules' inbound matcher
-- **System** — Android-side toggles: `Allow VPN bypass` (apps that explicitly ask the system for the physical network may step around the tun), `Keep VPN on exit`, `Tunnel sleep mode` (`never` / `lazy` Doze-only / `always` screen-off — a battery vs reliability trade-off)
-- **WireGuard connections** (§272) — suspending idle tunnels: Suspend idle tunnels (30 s) / Suspend active-route tunnels (5 min); sleeping WG/AWG endpoints release memory and wake on the next dial (device A/B showed a large RAM drop)
-- **Passive health check** (§272) — urltest probes stay silent while live traffic already proves the server is up
-- **Memory limit** (§271) — core memory limit: Auto (by device RAM: 200/384/512 MB) / Off / manual 200–768 MB; applied to the running core instantly. Fixes the GC storm and CPU overheating on configs with large WireGuard pools
-- **Core** — sing-box engine vars (`mtu`, `log_level`, …); routing- and DNS-specific vars live on their own screens
+- **Mode** (§119) — **VPN** (system-wide tunnel, default) / **Local proxy** (no tunnel: a local HTTP+SOCKS proxy that apps are pointed at manually; the Android VPN slot stays free, so it coexists with another VPN) / **VPN + Proxy** (both at once). The proxy port is configurable; reachable from this device only or from the LAN — the LAN variant strictly requires password auth. Tunnel and proxy traffic can be told apart by the rules' inbound matcher. `Allow VPN bypass`, `Keep VPN on exit` and `System HTTP proxy` live here too
+- **System** — **Memory limit** (§271, §705): a threshold for the core's own memory (Go runtime), Auto = no threshold, or 200–768 MB, applied to the running core at once; **Tunnel sleep mode** (`never` / `lazy` Doze-only / `always` screen-off)
+- **Core** — sing-box engine settings as cards: General, Network (incl. Align MTU to the path), TUN (incl. **Bypass the tunnel** CIDR list and Split default route), TLS Fragmentation (servers without a detour), **Sniff guard** (§729: hides the first handshake packet from relays that redirect by SNI), **WireGuard** (§272: Suspend idle tunnels 30 s / Suspend active-route tunnels 5 min, lazy build, built tunnels limit), QUIC (MASQUE idle timeout)
 
 All changes autosave. URLTest parameters for auto node selection. The permissions block (Battery / Notifications / Location / Wi-Fi) lives in App Settings → Diagnostics.
 </details>

@@ -200,10 +200,10 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 Блокировка рекламы, прямая маршрутизация .ru-доменов, BitTorrent через выбранное Направление, per-app, приватные подсети. Каждое пользовательское правило — единая модель со всеми match-полями параллельно (ИЛИ внутри категории, И между — формула sing-box).
 
 - **4 вкладки**: Directions (Направления) · Presets (read-only каталог → Copy to Rules) · Rules (ваш реестр) · Tunnel apps (split-tunneling уровня ОС)
-- **Match-поля**: domain / domain_suffix / domain_keyword, ip_cidr, порты и диапазоны, packages (per-app), протоколы приложений (tls/quic/bittorrent/…), **тип трафика tcp/udp/icmp** (§240 — например, UDP напрямую, TCP через туннель), ip_is_private и source_ip_is_private, **inbound** (пакет пришёл через TUN или через локальный прокси, §119), **wifi_ssid / wifi_bssid**, remote .srs rule-set
+- **Match-поля**: domain / domain_suffix / domain_keyword, ip_cidr, порты и диапазоны, packages (per-app), протоколы приложений (tls/quic/bittorrent/…), **тип трафика tcp/udp/icmp** (§240 — например, UDP напрямую, TCP через туннель), ip_is_private и source_ip_is_private, **inbound** (пакет пришёл через TUN или через локальный прокси, §119), **тип сети** Wi-Fi / Cellular / Ethernet с **Metered networks only** и **wifi_ssid / wifi_bssid** (§694), **Domain regex** и **Package name regex** (§712), remote .srs rule-set
 - **Traffic Processing** (§264) — закреплённый пресет предобработки первым в списке: sniff, Hijack DNS, резолв адресатов и их настройки в одном месте; выключить/удалить/подвинуть нельзя — на нём держится остальная маршрутизация
-- **Action & Resolve** — шестерёнка у Action, три режима: обычный маршрут в Направление; **Resolve first** — резолв домена перед роутингом с принудительным семейством адресов и полным набором resolve-опций sing-box (strategy, свой DNS-сервер, кэш, TTL, client subnet, таймаут); **Resolve only** — правило только резолвит, маршрут выбирают следующие правила. **Force IPv4 (drop AAAA)** (§256) отвечает на AAAA-запросы локально — спасение для сетей с полумёртвым IPv6
-- **DNS-блок правила** (§257) — тумблер **Send DNS to dedicated server** заводит к правилу парное DNS-правило: домены правила резолвятся выделенным сервером (авто — по Направлению маршрута); одно правило решает и маршрут, и резолв
+- **Action** — Направление, direct или Reject; **Resolve only** (у правил с доменами) только резолвит, маршрут выбирают следующие правила
+- **Секция DNS & Resolve** (§683) — Answer: Default (DNS Final) / **Dedicated server** (парное DNS-правило резолвит домены правила) / **Fixed IP** (отвечает на домены правила заданными адресами, как запись hosts); **Force IPv4 (drop AAAA)**; **Resolve before routing** со Strategy и полным набором resolve-опций sing-box (DNS-сервер, кэш, TTL, client subnet, таймаут)
 - **Raw-JSON правило** (§225) — правило можно написать сырым фрагментом `route.rules` для полей, которых нет в форме; синтаксис проверяется при вводе
 - **SRS только локально** — без авто-обновлений, ручное скачивание через ☁, правило заблокировано, пока нет кэша
 - Drag-reorder, long-press → Delete с подтверждением, dirty-aware save («Discard changes?»), вкладка View с готовым sing-box-фрагментом
@@ -344,14 +344,11 @@ Auto-группа Направления умеет не только выбир
 <details>
 <summary><strong>Настройки VPN</strong> — тюнинг движка</summary>
 
-Две вкладки:
+Три вкладки:
 
-- **Режим работы** (§119) — **VPN** (системный туннель, по умолчанию) / **Local proxy** (без туннеля: локальный HTTP+SOCKS-прокси, приложения направляются на него вручную; VPN-слот Android свободен — уживается с другим VPN) / **VPN + Proxy** (одновременно). Прокси-порт настраивается; доступ только с устройства или из локальной сети — LAN-вариант строго с авторизацией по паролю. Трафик туннеля и прокси разводится inbound-матчером правил
-- **System** — тумблеры Android-стороны: `Allow VPN bypass` (приложения, явно просящие систему о физической сети, могут обойти tun), `Keep VPN on exit`, `Tunnel sleep mode` (`never` / `lazy` только в Doze / `always` при выключенном экране — компромисс батарея↔надёжность)
-- **WireGuard connections** (§272) — усыпление простаивающих туннелей: Suspend idle tunnels (30 с) / Suspend active-route tunnels (5 мин); спящие WG/AWG-эндпоинты освобождают память и просыпаются на первом дозвоне (A/B на устройстве — крупное снижение RAM)
-- **Passive health check** (§272) — пробы urltest молчат, пока живой трафик подтверждает сервер
-- **Memory limit** (§271) — лимит памяти ядра: Auto (по RAM устройства: 200/384/512 MB) / Off / вручную 200–768 MB; применяется к работающему ядру мгновенно. Лечит GC-шторм и перегрев CPU на конфигах с большими пулами WireGuard
-- **Core** — переменные движка sing-box (`mtu`, `log_level` и т.д.); routing- и DNS-переменные живут на своих экранах
+- **Режим работы** (§119) — **VPN** (системный туннель, по умолчанию) / **Local proxy** (без туннеля: локальный HTTP+SOCKS-прокси, приложения направляются на него вручную; VPN-слот Android свободен — уживается с другим VPN) / **VPN + Proxy** (одновременно). Прокси-порт настраивается; доступ только с устройства или из локальной сети — LAN-вариант строго с авторизацией по паролю. Трафик туннеля и прокси разводится inbound-матчером правил. Здесь же `Allow VPN bypass`, `Keep VPN on exit` и `System HTTP proxy`
+- **System** — **Memory limit** (§271, §705): порог по памяти самого ядра (рантайм Go), Auto — без порога, или 200–768 MB, применяется к работающему ядру сразу; **Tunnel sleep mode** (`never` / `lazy` только в Doze / `always` при выключенном экране)
+- **Core** — настройки ядра sing-box карточками: General, Network (в том числе Align MTU to the path), TUN (в том числе список CIDR **Bypass the tunnel** и Split default route), TLS Fragmentation (серверы без detour), **Sniff guard** (§729: прячет первый пакет рукопожатия от релеев, перенаправляющих по SNI), **WireGuard** (§272: Suspend idle tunnels 30 с / Suspend active-route tunnels 5 мин, ленивая сборка, лимит собранных туннелей), QUIC (MASQUE idle timeout)
 
 Все изменения автосохраняются. Параметры URLTest для авто-выбора узла. Блок разрешений (Battery / Notifications / Location / Wi-Fi) — в App Settings → Diagnostics.
 </details>
