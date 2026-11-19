@@ -2066,6 +2066,31 @@ own service code is about 1.5 MB. Memory limit is compared with Core memory,
 not with the process figure (see
 [Memory limit](#memory-limit-is-a-threshold-for-the-cores-own-memory)).
 
+**What the Memory sheet shows.** A tap on the memory card in Statistics opens
+the Memory sheet. Every figure belongs to `:bg`, the process that runs the
+core, not to the window. A tap on a row copies its value.
+
+| Group, row | What it means |
+|---|---|
+| Process → RSS | All physical memory of the process; the same figure as on the card. Libraries shared with other apps are counted in full, so it is the largest number. |
+| Process → Core memory | The core's own memory, reported by its Go runtime. With a Memory limit set, the threshold stands next to it: `42 MB / 200 MB`. |
+| Process → Total PSS | The process memory with shared libraries divided among the apps that use them. Android's Running services shows this figure. |
+| Process → Swap | Memory the system moved to compressed swap. Shown only when above zero. |
+| Breakdown → Native heap | Memory of native code. The core's working memory is here: WireGuard buffers, connections, caches. |
+| Breakdown → Java/Dalvik heap | Memory of the app's own service code. |
+| Breakdown → Graphics | Graphics buffers; close to zero, since `:bg` has no interface. |
+| Breakdown → Code | Loaded code: the core library `libbox` and system libraries. |
+| Breakdown → Stack, System, Other | Thread stacks, memory the system attributes to the process, and what fits no other category. |
+| Native heap → Allocated | Native memory in use right now. |
+| Native heap → Reserved | Native memory taken from the system; larger than Allocated, the spare is kept for the next requests. |
+| Core runtime → Goroutines | Parallel tasks inside the core; grows with connections and tunnels. |
+| Core runtime → Connections in / out | Open connections: incoming from apps, outgoing to servers. |
+
+"How much the app takes" is Total PSS; "how much the core takes" is Core
+memory. If Core memory is small while Native heap and RSS keep growing,
+send a dump (Debug → Share dump): it looks like a leak or too many WireGuard
+tunnels.
+
 **How to check.** Android Settings → Developer options → Running services →
 L×Box lists the live processes by name. With the VPN on and the window
 closed it shows "1 process and 1 service" and the process
