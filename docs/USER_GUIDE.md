@@ -74,6 +74,7 @@ code — about the logic and the order in which to set things up.
   - [Double hop: the last server does not see your IP](#double-hop-the-last-server-does-not-see-your-ip)
 - [Get WARP adds a server without a subscription](#get-warp-adds-a-server-without-a-subscription)
 - [The server list filters, labels and copies servers as links](#the-server-list-filters-labels-and-copies-servers-as-links)
+  - [Ping is a request through the node, not a TCP check](#ping-is-a-request-through-the-node-not-a-tcp-check)
 - [Regular expressions (regex)](#regular-expressions-regex)
   - [The ! toggle negates the whole pattern](#the--toggle-negates-the-whole-pattern)
   - [Patterns use JavaScript syntax](#patterns-use-javascript-syntax)
@@ -425,6 +426,15 @@ node appears dimmed and does not reach the config. The choice survives
 subscription updates and provider-side renames. The master switch at the
 left of the bar above the list turns all nodes on or off at once.
 
+A provider sometimes lists the same server several times under different
+names. The app keeps the first entry and drops the repeats: two entries are
+one server when everything except the name matches — address, port, keys,
+transport, TLS settings and the detour. The same server with another SNI or
+transport stays a separate node. Merging works inside one subscription only,
+and there is no switch to turn it off. The line `N duplicates merged into K
+nodes` above the list opens a sheet with a card for every kept server: how
+many repeats it absorbed and under which names.
+
 A short tap on a node opens its breakdown. The JSON tab shows how the node
 goes into the config; the Source tab shows the original subscription
 fragment the node was built from. If import rules changed the node, a
@@ -494,6 +504,22 @@ are checked directly.` In a folder, members' own detours count
 the same way as in the tunnel; when only some of them can be followed, the
 line gives the count. The Diagnostics tab of a node, run with the VPN off,
 follows the same rule and shows the same line under the response.
+
+The **Test actions** button (⋮ next to the speedometer) acts on the results
+of the last test; its items stay grey until a test has produced results.
+**Disable slower than…** turns off the nodes slower than the number you enter
+(Slower than, ms; the orange threshold by default). **Disable unreachable**
+turns off the nodes that failed the test. A folder's menu also has **Delete
+unreachable**, which removes failed members from the folder, and **Sort by
+ping**. Disabled nodes stay in the list dimmed; turn a node back on with its
+switch. Enable rules on the Filters tab turn such nodes back on at the next
+update, and the dialog warns about it.
+
+The test uses the Test URL and timeout of the home-screen ping (see
+[Ping](#ping-is-a-request-through-the-node-not-a-tcp-check)); a folder can set
+its own through a long press on its speedometer → Ping URL & timeout….
+How many nodes are tested at once is set by **Parallel checks** in App
+Settings → General: 10 by default.
 
 The **Settings** tab holds Tag prefix, detour, Update interval, Replace
 with a group (section
@@ -593,7 +619,7 @@ There are three kinds of exit:
 
 A fresh install lists two directions: `vpn-1` is on, `vpn-2` is off. You can
 neither turn off nor delete `vpn-1`; when you delete another direction,
-references to it move to `vpn-1`. The **Add direction** button adds
+references to it move to `vpn-1`, so a working exit always exists. The **Add direction** button adds
 directions: for example, different servers for different jobs.
 
 A direction does not store servers; it selects them from the common pool: all
@@ -630,7 +656,7 @@ options:
 | Mode | How the node is chosen |
 |---|---|
 | **Fastest** | All traffic goes to the single node with the lowest measured latency. |
-| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; latencies of all nodes in the list come from Auto-ping after connect. |
+| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; the other nodes in the list show latencies from Auto-ping after connect or the core's own measurements, marked `~`. **View pool** in the auto node's long-press menu lists the pool's slots with their nodes and latencies. |
 | **Hold until failure** | The current node stays while it works; after a failure the choice moves to the next live one. Auto-ping after connect does not move it. |
 
 How Load balance fills its pool depends on Pool tolerance (ms):
@@ -1072,6 +1098,15 @@ The window has four sections:
   directions exist;
 - **Standalone servers** — standalone servers.
 
+The window does not offer servers of a subscription, members of another
+folder, auto nodes or groups. A subscription's servers change with every
+update, and a member of another folder lives under that folder's settings;
+a detour through a rotating pool gives an unpredictable path. The Directions
+section lists only enabled directions with Use as detour. To go out through
+such a server anyway, add it as a standalone server (Copy URI in its
+long-press menu, then add the link), or select it in a direction with Use as
+detour and pick that direction.
+
 A subscription or folder whose servers go through intermediate links shows
 two more boxes in its Settings tab. A link is a server another server of the
 same source goes out through, marked ⚙. By default links work only as
@@ -1119,6 +1154,12 @@ pinned to one server.
 
 The checkbox takes no other role away from the direction: it stays a target
 for rules and for Default traffic. Pickers mark it with the ⚙ icon.
+
+`vpn-1` has no Use as detour checkbox. It is the main direction: the
+default exit, and the place where references go when another direction is
+deleted, so it stays a plain exit and never becomes an intermediate server.
+Use `vpn-2` or a direction of your own as the switchable intermediate
+server.
 
 ### The whole detour chain runs inside one tunnel
 
@@ -1730,6 +1771,7 @@ App Settings → General.
 | Home-screen shortcut | A hint without a switch: shortcuts on the app icon. | — |
 | Check for updates on launch | Asks github.com for a new version once every 24 hours. | set by your answer to the question on first launch |
 | Auto-ping after connect | Pings the nodes of the current direction 5 seconds after connecting. | on |
+| Parallel checks | How many servers the ping and Test servers measure at once, 1 to 100. Fewer requests look quieter to the network; more finish faster. | 10 |
 | Node budget | How many nodes the app holds in all: manual servers and folder members first, the rest is shared between enabled subscriptions. A subscription above its share keeps its first nodes and shows «N of M nodes» with ⚠. Above 1000 the app may freeze or be killed by the system. | 1000 |
 | Haptic feedback | Vibrates when you tap the connect button, pick a node, refresh a subscription by hand, and when the core stops responding. | on |
 | Backup & restore | Opens the screen that moves settings through a file. | — |
@@ -2027,8 +2069,9 @@ update the subscription.
 
 **After a direction switch, pings disappeared or turned grey with `~`.**
 Each direction has its own measurements: directions have different test
-addresses and timeouts. A grey number with `~` is the latest measurement from
-another direction, shown for reference. Run a mass ping in the current
+addresses and timeouts. A dimmed number with `~` is the latest measurement from
+another direction or from the core's check of an auto group, shown for
+reference. Run a mass ping in the current
 direction, and the numbers become its own.
 
 **The subscription's "Auto | Best server" entry shows as a single row.**
@@ -2357,12 +2400,40 @@ Cancel and a tap outside the dialog leave the clipboard untouched. The key
 stays in the link: the node is stored in this same form, and without the key it
 would not survive a restart.
 
+### Ping is a request through the node, not a TCP check
+
+The ping in the server list is the time of an HTTP request to the **Test
+URL** made through the node: the core connects to the server, the server
+opens the address, and the answer comes back. The default Test URL is
+`https://www.gstatic.com/generate_204` with a 5000 ms timeout. A long press
+on the speedometer button on the home screen opens **Ping Settings**: preset
+addresses (Google 204, Cloudflare, Apple, Firefox, Yandex, YouTube), the Test
+URL and Timeout (ms) fields, for all directions or only the current one.
+The home-screen ping works while the VPN is on; with the VPN off, test nodes
+with the speedometer of a subscription or folder.
+
+`ERR` means the request did not finish within the timeout: the server did not
+answer, refused the connection, or could not open the Test URL. Other clients
+often show a TCP ping — the time to open a connection to the server's port.
+That number is lower, and it is there even when the protocol behind the port
+does not work. A node with `ERR` here can still carry traffic, and the other
+way round:
+
+- the server's side blocks the Test URL (some servers block Google) — every
+  node shows `ERR`, yet sites open. Pick another preset in Ping Settings;
+- the timeout is too short for a slow chain or mobile network — raise
+  Timeout (ms);
+- the server names of the nodes cannot be resolved — see
+  [All servers show ERR](#common-problems-symptom-cause-action) in Common
+  problems.
+
 Latency measurements are stored per direction. Each direction has its own test
 URL and timeout, so "180 ms" from different tests are different quantities.
 Switching directions does not wipe the other results. If a node has no
-measurement in the current direction yet, the row shows the latest measurement
-from another direction — dimmed and marked `~`: the number exists, but a
-different test produced it.
+measurement in the current direction yet, the row shows the latest
+measurement from another direction or from the core's own checks of an auto
+group — dimmed and marked `~`: the number exists, but a different test
+produced it.
 
 ---
 
