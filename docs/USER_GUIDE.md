@@ -28,8 +28,9 @@ code — about the logic and the order in which to set things up.
 - [2. Directions sets the exits](#2-directions-sets-the-exits)
   - [Interrupt connections on switch — two checkboxes for two events](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 - [3. Rules sets exceptions and the default exit](#3-rules-sets-exceptions-and-the-default-exit)
+  - [Conditions in different sections must all match](#conditions-in-different-sections-must-all-match)
   - [Presets — a catalog of ready-made rules to copy into Rules](#presets--a-catalog-of-ready-made-rules-to-copy-into-rules)
-  - [A rule can assign a DNS server to its own domains](#a-rule-can-assign-a-dns-server-to-its-own-domains)
+  - [DNS & Resolve decides how a rule's domains resolve](#dns--resolve-decides-how-a-rules-domains-resolve)
   - [Raw JSON and the View tab cover fields the form lacks](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
 - [4. DNS decides which server resolves each name](#4-dns-decides-which-server-resolves-each-name)
   - [Group and Shield DNS combine several servers under one tag](#group-and-shield-dns-combine-several-servers-under-one-tag)
@@ -707,38 +708,28 @@ in every direction where it was off.
 The **Rules** tab sets which traffic goes to which direction and where the
 rest goes. Where: Routing → Rules → Add rule.
 
-A rule consists of conditions and an action. The **Source** switch sets where
-the conditions come from: Inline — form fields, Remote (.srs) — an external
-list, Raw JSON — a config fragment. The form groups its conditions into
-sections:
+A rule consists of an action and conditions. The **Action** list at the top
+of the editor sets where matched traffic goes: direct, any enabled direction
+or Reject. For a rule with domains the list also has **Resolve only**: the
+rule only resolves the domain, and later rules or Default traffic pick the
+route. Resolve only is for advanced setups.
+
+The **Source** switch sets where the conditions come from: Inline — form
+fields, Remote (.srs) — an external list, Raw JSON — a config fragment. The
+form groups its conditions into sections:
 
 | Section | What it checks |
 |---|---|
-| MATCH | Domains (exact name, suffix, substring), IP subnets (CIDR), Private IP — destination on the local network, Private source IP — source with a local address. Shown when Source = Inline. |
+| APPS | Specific apps, and Package name regex — a pattern on the package name, one per line: `^com\.oplus\.` catches every app of that vendor. |
+| MATCH | Domains (exact name, suffix, substring, Domain regex), IP subnets (CIDR), Private IP — destination on the local network, Private source IP — source with a local address. Shown when Source = Inline. |
 | RULE-SET URL | An external list of domains and IPs in `.srs` format. The app downloads it and checks for updates at the interval in Check for updates; matching runs locally. Shown when Source = Remote (.srs). |
 | PORT | Ports and port ranges. |
-| APPS | Specific apps. |
 | NETWORK & PROTOCOL | Traffic type TCP, UDP or ICMP and the application protocol recognised from the first packets: tls, quic, bittorrent, dns and others. |
+| NETWORK | The type of the current network: Any, Wi-Fi, Cellular or Ethernet. With Wi-Fi you can list networks by name (SSID) or BSSID: "at home → direct". **Metered networks only** limits the rule to mobile data and Wi-Fi marked as metered in Android settings. |
 | INBOUND | The entrance through which the packet reached L×Box: the VPN tunnel or the local proxy. The proxy option appears in the Proxy and VPN + Proxy modes. |
-| WI-FI NETWORK | Name (SSID) or BSSID of the current Wi-Fi network: "at home → direct". |
 
-Fields inside MATCH combine with OR; sections combine with each other with
-AND. The rule "app Chrome, domain `*.youtube.com`, network UDP" fires only when
-all three conditions match.
-
-The **Action & Resolve** gear next to the direction picker sets the rule's
-action. There are two modes:
-
-- **Route to outbound** — matched traffic goes to the chosen direction, direct
-  or block. The Resolve first box resolves the domain first and then picks the
-  route.
-- **Resolve only** — the rule only resolves; later rules or Default traffic
-  pick the route. The mode is for advanced setups.
-
-When Resolve first or Resolve only is on, the Resolve options panel opens.
-Strategy sets the address family (`ipv4_only`); DNS server is auto by default,
-following the route; Advanced DNS options cover cache, TTL, timeout and client
-subnet.
+Below the conditions sits the **DNS & Resolve** section: it sets how the
+rule's domains resolve, see [DNS & Resolve](#dns--resolve-decides-how-a-rules-domains-resolve).
 
 Typical rules:
 
@@ -758,6 +749,23 @@ install `vpn-1` is selected.
 > directly, and the VPN looks broken. The Allow-list decides whether traffic
 > enters L×Box; Default traffic decides where it goes next. To send traffic
 > through the tunnel, choose a direction in Default traffic.
+
+### Conditions in different sections must all match
+
+A rule fires only when every filled-in section matches; inside MATCH one
+matching field is enough. A rule with an app and a domain list catches only
+that app's connections to those domains. To send an app through a direction
+**or** send domains through it, make two rules with the same action.
+
+Three more facts decide whether a rule catches the traffic you expect:
+
+- Domain suffix `youtube.com` covers `youtube.com` and all its subdomains;
+  the field does not accept `*.` and a leading dot is dropped.
+- The first matching rule wins, so a narrow rule goes above a broad one: a
+  rule that sends one Russian site through the tunnel sits above Ru internet
+  segment.
+- Domain conditions need the domain. Traffic Processing detects it from the
+  first packets; an app that connects by bare IP matches only IP rules.
 
 ### Presets — a catalog of ready-made rules to copy into Rules
 
@@ -853,27 +861,49 @@ A preset missing from the installed app version opens with the message
 Preset not found: the config build skips the rule. Delete it with the Delete
 rule button or update the app to a version that has this preset.
 
-### A rule can assign a DNS server to its own domains
+### DNS & Resolve decides how a rule's domains resolve
 
-To have one rule decide both where traffic goes and which server resolves its
-domains, turn on **Send DNS to dedicated server** in the DNS section of the
-rule editor. The box adds a paired DNS rule: DNS queries for this rule's
-domains go to the chosen server, `google_udp` by default. You do not build the
-DNS rule by hand. Choosing a dedicated server also turns on **Resolve before
-routing** with the same server: with FakeIP above the rule, the DNS rule alone
-never sees the query, and the resolver that matters is the one used before
-routing. Clear the box if you do not want that.
+The **DNS & Resolve** section at the bottom of the rule editor sets which
+answer apps get for the rule's domains. The section appears when the rule has
+a condition DNS can check: a domain, an app, a source address, a network or
+an inbound. A rule of bare IP subnets has no DNS section: a DNS query carries
+no destination IP to match.
 
-In the same section, the **Force IPv4 (drop AAAA)** box answers AAAA queries
-for the rule's domains locally, and traffic goes over IPv4. It needs no
-dedicated DNS server. The box helps on networks with broken IPv6.
+**Answer** has three modes:
+
+- **Default — queries go to DNS Final**: the rule does not touch DNS.
+- **Dedicated server**: DNS queries for the rule's domains go to the chosen
+  server, `google_udp` by default. The app builds the paired DNS rule itself.
+  The choice also turns on Resolve before routing with the same server: with
+  FakeIP above the rule, the DNS rule alone never sees the query. Clear the
+  box if you do not want that.
+- **Fixed IP**: the rule answers its domains with the given addresses, like
+  a line in a hosts file. The field takes one IPv4 or IPv6 address; the + button
+  turns it into a list, one address per line. With only IPv4 given, AAAA
+  queries get an empty answer, and the other way round.
+
+Fixed IP is the way to point a name at an address: `nas.home` → `192.168.1.10`,
+or a site → the address of a server you trust. The DNS tab lists such a rule in
+the From routing rules group; its ✕ returns Answer to Default.
+
+**Force IPv4 (drop AAAA)** answers AAAA queries for the rule's domains
+locally, and traffic goes over IPv4. It needs no dedicated server and helps on
+networks with broken IPv6. With Fixed IP the box is inactive: the addresses
+already set the family.
+
+**Resolve before routing** looks up the domain's address before the rule
+picks a route, so IP rules and the address family apply. **Strategy** sets
+the family (`ipv4_only` and others); by default it follows the DNS settings.
+The collapsed **Advanced** block holds the DNS server for this lookup (auto —
+by the route), Disable cache, Disable optimistic cache, Rewrite TTL, Query
+timeout and Client subnet.
 
 Limitations the editor itself warns about:
 
-- the pairing is unavailable with port and protocol filters: they are unknown
-  at the time of the DNS query;
-- with a rule-set the pairing works only if the list contains domains: IP-only
-  lists do not match DNS queries.
+- Dedicated server and Fixed IP are unavailable with port and protocol
+  filters: they are unknown at the time of the DNS query;
+- with a rule-set they work only if the list contains domains: IP-only lists
+  do not match DNS queries.
 
 A rule can also be written as a raw sing-box JSON fragment (Raw JSON in
 Source): [Advanced user guide → Raw JSON](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks).
@@ -978,8 +1008,8 @@ them, and each has a switch. Rules in the list come from four sources:
   `dns.rules` JSON fragment, an advanced-level tool;
 - from presets — an enabled routing preset brings its own DNS rules;
 - from the template — the baseline configuration rules;
-- mirrors of routing rules — rules with Send DNS to dedicated server (see the
-  Rules section); they appear as the From routing rules group, and you edit
+- mirrors of routing rules — rules whose DNS & Resolve section sets
+  Dedicated server, Fixed IP or Force IPv4; they appear as the From routing rules group, and you edit
   them in the parent rule.
 
 The Ru internet segment preset resolves ru domains with its own `dns_ru` group
@@ -1352,8 +1382,8 @@ Resolve strategy: you change it by hand in the Traffic Processing preset (which
 cannot be turned off), and Strategy in Routing → DNS. `prefer_ipv6` suits a
 network with full IPv6.
 
-A user rule has its own resolve strategy: Action & Resolve (the gear next to
-Action) → Resolve first → Strategy. By default the rule inherits Strategy
+A user rule has its own resolve strategy: rule editor → DNS & Resolve →
+Resolve before routing → Strategy. By default the rule inherits Strategy
 from Routing → DNS.
 
 Order of enabling:
@@ -1818,7 +1848,7 @@ to the screen, the app re-reads the state.
 |---|---|---|
 | Battery optimization | Whether L×Box is excluded from battery optimization | Android may suspend the VPN while idle. A tap brings up the system prompt to exclude L×Box; on some firmware, the general optimization list opens instead. |
 | Notifications | Whether notifications are allowed | Android may restrict the VPN service. A tap requests the permission; after a refusal, it opens the app settings. |
-| Location (background) | Background location access | Rules with the WI-FI NETWORK condition cannot see the network name. The caption names the cause: Precise location permission missing — precise location is not selected; Location is turned off — location is off. |
+| Location (background) | Background location access | Rules that list Wi-Fi networks in the NETWORK section cannot see the network name. The caption names the cause: Precise location permission missing — precise location is not selected; Location is turned off — location is off. |
 | Nearby Wi-Fi devices | Access to nearby Wi-Fi devices, required on Android 13 and later | The network name and BSSID are unavailable. |
 | App info (OEM power settings) | Nothing: the row leads to the system App info screen | — |
 
@@ -1829,10 +1859,11 @@ battery restrictions. Where these switches are depends on the manufacturer:
 Xiaomi, Samsung, Oppo, Huawei and Google Pixel hide them in different
 places.
 
-Location (background) and Nearby Wi-Fi devices are required by rules with
-the WI-FI NETWORK condition and by recording of visited networks: without
-them, Android returns `<unknown ssid>` instead of the network name. The
-condition is described in [Rules](#3-rules-sets-exceptions-and-the-default-exit).
+Location (background) and Nearby Wi-Fi devices are required by rules that
+list Wi-Fi networks by name and by recording of visited networks: without
+them, Android returns `<unknown ssid>` instead of the network name. A rule
+that checks only the network type (Wi-Fi, Cellular, Ethernet) or Metered
+networks only needs neither permission. The NETWORK section is described in [Rules](#3-rules-sets-exceptions-and-the-default-exit).
 
 The **Developer** section is for troubleshooting — your own or at the
 developer's request in an issue:
@@ -1843,7 +1874,7 @@ developer's request in an issue:
 | Lock config (debug) | Actions in the interface do not rebuild the config. Visible while Debug API is on. | off |
 | Forward sing-box logs | Writes the core log to Debug → Log, Core filter. Applies after an app restart. | off |
 | Verbose (TRACE/DEBUG) | Adds the detailed TRACE and DEBUG levels to the core log. The switch is active while Forward sing-box logs is on; no lines appear until the app restarts after Forward sing-box logs is turned on. | off |
-| Auto-record visited Wi-Fi networks | Remembers Wi-Fi networks for WI-FI NETWORK rules. | off |
+| Auto-record visited Wi-Fi networks | Remembers Wi-Fi networks for the NETWORK section of rules. | off |
 
 **Debug API** and **Lock config (debug)** serve debugging from a computer:
 the server, token, port and config pin — [Advanced user guide → Debug API](ADVANCED_USER_GUIDE.md#debug-api).
@@ -1869,10 +1900,10 @@ while you reproduce the problem and turn it off right after.
 6. Copy the log with Copy log in the Debug screen menu and turn off
    Verbose (TRACE/DEBUG).
 
-**Auto-record visited Wi-Fi networks** builds the network list for rules
-with the WI-FI NETWORK condition. A network where the phone stayed for 5
+**Auto-record visited Wi-Fi networks** builds the network list for the
+NETWORK section of rules. A network where the phone stayed for 5
 minutes or longer enters the Pick saved list of the rule editor: Routing →
-Rules → rule → WI-FI NETWORK → Pick saved. Short connections in passing are
+Rules → rule → NETWORK → Wi-Fi → Pick saved. Short connections in passing are
 not recorded. The list is stored only on the phone. Without the option, only
 the Add current and Manual buttons add to it.
 
