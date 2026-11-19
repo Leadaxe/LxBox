@@ -5,6 +5,10 @@ code — about the logic and the order in which to set things up.
 
 > Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
+> First time with L×Box: the setup takes seven steps —
+> [Setting up from scratch](#setting-up-from-scratch). When something does
+> not work: [Common problems](#common-problems-symptom-cause-action).
+
 > Advanced tools — Lock config, Raw JSON rules, import rules, Debug API,
 > Automation API, mixins — are described in the
 > [Advanced user guide](ADVANCED_USER_GUIDE.md).
@@ -72,6 +76,7 @@ code — about the logic and the order in which to set things up.
   - [Share the VPN with other devices over Wi-Fi](#share-the-vpn-with-other-devices-over-wi-fi)
   - [ByeDPI and other local proxies connect as an ordinary server](#byedpi-and-other-local-proxies-connect-as-an-ordinary-server)
   - [Double hop: the last server does not see your IP](#double-hop-the-last-server-does-not-see-your-ip)
+  - [A service closed in your country goes through its own direction](#a-service-closed-in-your-country-goes-through-its-own-direction)
 - [Get WARP adds a server without a subscription](#get-warp-adds-a-server-without-a-subscription)
 - [The server list filters, labels and copies servers as links](#the-server-list-filters-labels-and-copies-servers-as-links)
   - [Ping is a request through the node, not a TCP check](#ping-is-a-request-through-the-node-not-a-tcp-check)
@@ -191,6 +196,10 @@ Where: Routing → Tunnel apps. Three modes:
 An app left out of L×Box (not in the Allow-list, or in the Deny-list) goes out
 directly, as without a VPN; L×Box does not see it, and Rules do not apply to it.
 
+The app picker hides system apps; ⋮ → **Show system apps** shows them. In
+Proxy mode there is no tunnel, and the list has no effect. Android reads the
+list when it creates the tunnel, so a change applies after a VPN restart.
+
 L×Box itself does not need to be in the Allow-list: its service connections and
 DNS go past the tunnel over the physical network, and the entry changes
 nothing. If the VPN started working after you added L×Box to the Allow-list,
@@ -269,6 +278,16 @@ directions carry the traffic (section below).
 
 You add a standalone server by link (`vless://…`, `vmess://…`, `wg://…`),
 QR code or file. It has nothing to update: the entry is static.
+
+Links the app reads: `vless`, `vmess`, `trojan`, `ss`, `hysteria`/`hy`,
+`hysteria2`/`hy2`, `tuic`, `anytls`, `ssh`, `masque`, `socks`/`socks5`,
+`proxy-http`/`proxy-https`, `naive+https`/`naive+quic`, `wireguard`/`wg`,
+`awg`/`amneziawg`, TrustTunnel `tt://` and Amnezia `vpn://`. WireGuard
+`.conf` files and sing-box or Xray JSON go in as text or a file. Service
+lines such as `happ://routing/…` in a subscription are skipped. Other
+schemes are rejected with a note on the entry. A uTLS fingerprint like
+`hellochrome_120` is shortened to `chrome`; an unknown one becomes `chrome`
+with a warning.
 
 The **Masquerade** section of your own WireGuard or AmneziaWG server adds
 decoy packets before the handshake: the client sends packets that look like
@@ -2195,6 +2214,7 @@ Diagnostic tools, from simple to detailed:
 | Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other servers go out through the node and fail with it; tap to see which ones. `no route`: a tunnel without a route to the internet (WireGuard whose allowed IPs cover less than half of the address space, for example a couple of private networks; OpenVPN or OpenConnect with Only its own networks); the ping goes to an internet address, so such a node is not pinged. |
 | Stats | Statistics, while the VPN is on | Traffic per direction: where the bytes go. |
 | Conns | Statistics | Live connections: app, host, rule, chain of exits. Connections with traffic in one direction only are highlighted: replies get lost on the way, for example when the carrier cuts the protocol. |
+| URL Check | ≡ → Diagnostics, with the VPN on | A real request to an address through the current routing, from any app or a chosen one: DNS, route, connection and HTTP answer step by step; the step that failed is marked. From scratch skips the DNS cache and opened connections. |
 | Profiler | Statistics | A real-time recording of connections and DNS resolves, with filters by app, domain and IP: which domain fails to resolve, which direction a request took, where an app connects. For DNS groups you see which members answered and which stayed silent. |
 | Log | Debug (side menu) | The app and core log. **Verbose (TRACE/DEBUG)** in App Settings → Diagnostics turns on the detailed log; the switch is inactive until Forward sing-box logs is on, and the lines appear after the app restarts. The Log tab links there. |
 | Crashes, OOM, Profiling | Debug | Core crash reports, core memory snapshots on low memory, pprof profiles for the developer. |
@@ -2215,7 +2235,7 @@ WireGuard tunnels to sleep.
 ## Speed Test measures speed to a test server over the current route
 
 The **Speed Test** screen measures latency, download speed and upload speed
-between the phone and a test server. Where: ≡ → Speed Test. With the VPN on,
+between the phone and a test server. Where: ≡ → Diagnostics → Speed Test. With the VPN on,
 requests go through the tunnel and the routing rules decide where each one
 exits; with it off, they go directly. The line above the results shows the
 route:
@@ -2459,6 +2479,28 @@ the config keeps no direct path to it.
 
 If a chain `[A, B]` already exists, delete it: it adds nothing to the detour,
 and B stays in sight as a standalone server.
+
+### A service closed in your country goes through its own direction
+
+Services such as Gemini, AI Studio, ChatGPT and Claude check the country of
+the address they see and refuse some countries. Send only them through a
+server in a country where they work; the rest keeps its usual route.
+
+1. Routing → Directions → Add direction, for example `ai`. On the home screen
+   pick a server in a suitable country for it.
+2. Routing → Rules → Add rule: Action = `ai`, MATCH → Domain suffix — the
+   service's domains, one per line: `gemini.google.com`,
+   `aistudio.google.com`, `generativelanguage.googleapis.com` for Google;
+   `chatgpt.com`, `openai.com` for ChatGPT; `claude.ai`, `anthropic.com` for
+   Claude.
+3. Drag the rule above Ru internet segment and other broad rules.
+4. For the service's app add a second rule: the app in APPS, Action = `ai`.
+   One rule with both the app and the domains would catch only that app's
+   connections to those domains.
+
+If a page loads only in part, Statistics → Conns shows which hosts it opens:
+add the missing ones to the rule. A service can refuse a server's address
+even in the right country; then try a server of another provider.
 
 ---
 
@@ -2717,7 +2759,8 @@ While connected, the notification carries **Stop** and **🔄 Restart** buttons.
 With a running Tailscale node that allows Taildrop it also carries **📋 Send**: a
 small window over the current app sends the clipboard text (or a link, to open
 it there) to one of your devices. App Settings → General → Quick connect chooses
-which buttons are shown; all by default.
+which buttons are shown; all by default. The notification text names the
+active node or group; it has no speed counters.
 
 Automation apps — Tasker, MacroDroid and others — turn the VPN on and off
 and switch servers by events: [Advanced user guide → Automation](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events).
