@@ -66,6 +66,7 @@ code — about the logic and the order in which to set things up.
   - [Subscriptions sets when subscriptions download and which client fetches them](#subscriptions-sets-when-subscriptions-download-and-which-client-fetches-them)
   - [Diagnostics shows Android permissions and turns on debugging](#diagnostics-shows-android-permissions-and-turns-on-debugging)
   - [Automation opens the VPN to commands from other apps](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps)
+- [The app runs as two processes: the window and the VPN](#the-app-runs-as-two-processes-the-window-and-the-vpn)
 - [Common problems: symptom, cause, action](#common-problems-symptom-cause-action)
 - [If something goes wrong — where to look](#if-something-goes-wrong--where-to-look)
 - [Speed Test measures speed to a test server over the current route](#speed-test-measures-speed-to-a-test-server-over-the-current-route)
@@ -2026,6 +2027,55 @@ address does not open, route an app and switch connections:
 
 ---
 
+## The app runs as two processes: the window and the VPN
+
+Since 2.25.23 L×Box is two Android processes, and each one ends when it is no
+longer needed. A loaded library cannot be unloaded from a live process; only
+ending the process returns its memory. Before the split, the interface stayed
+in memory next to the tunnel after the window was closed.
+
+| Process | What lives in it |
+|---|---|
+| `com.leadaxe.lxbox:bg` | The VPN service and the sing-box core, the notification, the Quick Settings tile, automation, the Taildrop windows. |
+| `com.leadaxe.lxbox:ui` | The window: every screen of the app. It does not load the core and gets its data from `:bg`. |
+
+Which process is alive depends on two things: whether the VPN is on and
+whether the window is open.
+
+| State | Processes | Memory, MB |
+|---|---|---|
+| VPN on, window never opened (started from the tile or by automation) | `:bg` | about 105 |
+| VPN on, window open | `:ui` + `:bg` | about 220 |
+| VPN on, window closed | `:bg` | about 110 |
+| VPN off, window open | `:ui` + `:bg` without the core | about 115 |
+| VPN off, window closed | none | 0 |
+
+The figures were measured on an Android 16 emulator; on a phone they differ
+with the config and the load. While the window is open, two processes take
+more than one did. The gain comes when the window is closed: memory returns
+to the `:bg` figure, where it used to stay at about 240 MB.
+
+Swiping the app away from the recent apps closes the window and leaves the
+VPN running. Stop and then swipe frees everything.
+
+**What the memory of `:bg` consists of.** The core takes most of it: its code
+(the `libbox` library, about 29 MB) and its working memory — connections, DNS
+cache, rules — shown as **Core memory** in Statistics → Memory. The rest is
+the Android runtime and the system libraries every process loads; the app's
+own service code is about 1.5 MB. Memory limit is compared with Core memory,
+not with the process figure (see
+[Memory limit](#memory-limit-is-a-threshold-for-the-cores-own-memory)).
+
+**How to check.** Android Settings → Developer options → Running services →
+L×Box lists the live processes by name. With the VPN on and the window
+closed it shows "1 process and 1 service" and the process
+`com.leadaxe.lxbox:bg`. The line "Main process in use" under it is Android's
+standard caption for the process that holds the service; it does not mean
+the window is still alive. A live window is a second row,
+`com.leadaxe.lxbox:ui`.
+
+---
+
 ## Common problems: symptom, cause, action
 
 **The app is in the Allow-list, but the VPN does not affect it.**
@@ -2188,7 +2238,8 @@ Reject.
 The Statistics card shows the memory of the whole app process. Memory limit
 is compared with the core's own memory: Statistics → Memory → Core memory.
 The VPN runs in the process `com.leadaxe.lxbox:bg`, and the window in
-`com.leadaxe.lxbox:ui`; closing the window ends the second one.
+`com.leadaxe.lxbox:ui`; closing the window ends the second one. Details:
+[The app runs as two processes](#the-app-runs-as-two-processes-the-window-and-the-vpn).
 
 **A new version does not install: "App not installed" or signatures do not match.**
 The Google Play build is signed with Google's key; builds from GitHub and
