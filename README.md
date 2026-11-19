@@ -64,8 +64,7 @@ sends traffic to a Direction — a named group of servers — and any number of 
 are live at once, so different apps and sites leave through different servers at the
 same time. A proxy, Cloudflare WARP, AmneziaWG and a Tailscale node work together in
 one Android VPN slot, with chains between them and a per-connection view of which
-rule and which exit were used. Each of those clients has its own strengths: iOS and
-desktop in one app, more interface languages, Clash subscriptions.
+rule and which exit were used.
 
 L×Box ships its own core fork, [sing-box-lx](https://github.com/Leadaxe/sing-box-lx).
 Other projects build on it too: Hiddify lists `Leadaxe/sing-box-lx` and
