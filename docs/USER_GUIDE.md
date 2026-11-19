@@ -53,7 +53,7 @@ code — about the logic and the order in which to set things up.
   - [A chain needs a recent core and compatible hops](#a-chain-needs-a-recent-core-and-compatible-hops)
 - [IPv6 in the tunnel is off; turn it on only if your network supports it](#ipv6-in-the-tunnel-is-off-turn-it-on-only-if-your-network-supports-it)
 - [VPN Settings configures the core and the tunnel, not servers and routes](#vpn-settings-configures-the-core-and-the-tunnel-not-servers-and-routes)
-  - [System controls tunnel sleep and core memory](#system-controls-tunnel-sleep-and-core-memory)
+  - [System controls core memory and tunnel sleep](#system-controls-core-memory-and-tunnel-sleep)
   - [Core passes settings to the sing-box core](#core-passes-settings-to-the-sing-box-core)
   - [Mode selects the operating mode and tunnel options](#mode-selects-the-operating-mode-and-tunnel-options)
 - [App Settings controls the app's behavior, not the traffic path](#app-settings-controls-the-apps-behavior-not-the-traffic-path)
@@ -1412,8 +1412,8 @@ The screen has three tabs:
 
 | Tab | What it configures |
 |---|---|
-| System | Dropping connections on a node switch, WireGuard tunnel sleep, core memory, tunnel pause while the screen is off |
-| Core | sing-box core parameters: log, certificates, network, virtual interface, TLS fragmentation |
+| System | Core memory, tunnel pause while the screen is off |
+| Core | sing-box core parameters: log, certificates, network, virtual interface, TLS fragmentation, sniff guard, WireGuard tunnel sleep, MASQUE idle timeout |
 | Mode | Operating mode, local proxy, tunnel options |
 
 The defaults work without changes; the sign that a group needs changing is
@@ -1422,71 +1422,28 @@ named under each group below. Changes take effect at different times:
 | What you changed | When it applies |
 |---|---|
 | Memory limit, Keep VPN on exit | Immediately |
-| WireGuard connections, the Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
+| The Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
 | Tunnel sleep mode, Allow VPN bypass | After a VPN restart that you make yourself: the home screen shows the same banner, but Auto-restart VPN on settings change does not apply these settings. |
 
 You can leave the restart after config changes to the app: App Settings →
 General → **Auto-restart VPN on settings change**. The app then restarts the
 running VPN itself whenever the new config differs from the running one.
 
-### System controls tunnel sleep and core memory
+### System controls core memory and tunnel sleep
 
 The **System** tab decides how much of the phone's resources the VPN spends
 while traffic is low or absent. Where: VPN Settings → System. The tab holds
-two groups: WireGuard connections and Optimization.
-
-#### WireGuard connections puts idle WireGuard tunnels to sleep
-
-The **WireGuard connections** group puts WireGuard and AmneziaWG tunnels to
-sleep when no traffic has passed through them for a while, and wakes them on
-the first request. Sleep frees memory and saves battery; the cost is that the
-first connection through a woken tunnel waits longer than usual. Where: VPN
-Settings → System → WireGuard connections.
-
-The group splits tunnels into two kinds. A tunnel on the active route is the
-node selected in a direction, or a node in the pool of an auto twin: the group
-that picks the direction's node by itself when the Include auto (urltest)
-checkbox is on in the direction editor (see
-[Directions](#2-directions-sets-the-exits)). The other
-WireGuard nodes from subscriptions and folders are off the route: no traffic
-goes to them until someone selects them.
-
-| Option | What it does | Default |
-|---|---|---|
-| **Suspend idle tunnels** | Puts off-route tunnels to sleep after idle time. Options: Off, 30 seconds, 2 minutes, 5 minutes. | 30 seconds |
-| **Suspend active-route tunnels** | Also puts tunnels on the active route to sleep after a long silence, for example at night. Options: Off, 5, 15, 30 minutes, 1 hour. The first connection after sleep takes one extra round trip to the server. | 5 minutes |
-| **Lazy tunnel build** | Builds a tunnel on the first request to the node, not at VPN start. With dozens of WireGuard nodes it saves memory; the first connection to a node waits for the build. | On |
-| **Built tunnels limit** | How many tunnels stay built at the same time: 0 (no limit), 3, 5, 8, 12. The core tears down the extra ones and builds them again on request. | 5 |
-
-The three lower options work only while Suspend idle tunnels is on. At Off
-their rows grey out, tunnels do not sleep, and the app does not pass lazy
-build to the core: the core builds tunnels by its own rules. Built tunnels
-limit also requires Lazy tunnel build to be on. After a change the app shows
-`Applies on next connect.`
-
-A direction's auto twin has its own node check. Where: direction editor →
-Include auto (urltest). The group tests the pool's nodes once per Interval
-(`15m` by default). Idle timeout (`30m` by default) is the time without
-traffic through the group after which the tests stop. If Suspend active-route
-tunnels is shorter than Idle timeout, a test wakes a sleeping tunnel for one
-handshake. With the defaults this is what happens: pool tunnels fall asleep
-after 5 minutes of silence and wake for every test while traffic goes through
-the group.
-
-| Situation | What to do |
-|---|---|
-| The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
-| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3 |
-| Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
-| Tunnels must not sleep at all | Suspend idle tunnels → Off |
+one group, Optimization, with two settings: Memory limit and Tunnel sleep
+mode. WireGuard tunnel sleep is on the Core tab:
+[WireGuard](#wireguard-puts-idle-wireguard-tunnels-to-sleep).
 
 #### Memory limit is a threshold for the core's own memory
 
 The **Memory limit** setting is a memory threshold the VPN core watches.
 The number is compared with the memory of the core itself (its Go runtime),
-not with the whole app process: the core, the interface and the loaded
-libraries share one process, and the libraries alone take about 140 MB, so
-the figure on the Statistics card is never the core's alone. The core's own
+not with the whole app process: the process that runs the core also holds
+the loaded libraries, about 140 MB, so the figure on the Statistics card is
+never the core's alone. The core's own
 figure is in Statistics → Memory → **Core memory**, with the threshold next
 to it when a number is chosen. Where: VPN Settings → System → Optimization →
 Memory limit. The default is Auto (recommended); a change applies to the
@@ -1508,7 +1465,7 @@ Debug → OOM, set Auto first; what else to check is described in
 #### Tunnel sleep mode pauses the whole tunnel on a screen event
 
 The **Tunnel sleep mode** setting decides when the core pauses the tunnel to
-save battery. Unlike WireGuard connections, it acts on the whole tunnel and
+save battery. Unlike the WireGuard settings, it acts on the whole tunnel and
 fires not on idle time but when the screen turns off or Doze starts. Where:
 VPN Settings → System → Optimization → Tunnel sleep mode. Applies from the
 next VPN connection.
@@ -1525,8 +1482,8 @@ notifications go missing, switch back to Never sleep (recommended).
 
 ### Core passes settings to the sing-box core
 
-The **Core** tab shows the sing-box core parameters, grouped into four
-sections: General, Network, TUN and TLS Fragmentation. Where: VPN Settings →
+The **Core** tab shows the sing-box core parameters as seven cards: General,
+Network, TUN, TLS Fragmentation, Sniff guard, WireGuard and QUIC. Where: VPN Settings →
 Core. The app saves the values when you leave the screen and rebuilds the
 config on the home screen. What it reports depends on two conditions:
 
@@ -1573,6 +1530,12 @@ and on a mobile network that loses connection setup packets it is not enough.
 If sites through direct on a mobile network do not open on the first try,
 raise the value to `20s` or `30s`.
 
+The **Align MTU to the path** setting picks the packet size for a node that
+runs over a tunnel: behind a detour or in a chain. **Clamp** (default) sets
+the size where the node has none and lowers values that do not fit; **Fill**
+only sets it where it is missing; **Off** leaves node values as they are.
+The core never raises a value.
+
 #### TUN sets the addresses and parameters of the virtual interface
 
 The **TUN** section describes the virtual network interface through which the
@@ -1585,14 +1548,25 @@ turned on here too, but the decision and the order of steps are described in
 | **IPv4 address** | The tunnel's IPv4 address in CIDR form | `172.16.0.1/30` |
 | **Enable IPv6** | Gives the tunnel an IPv6 address; see the IPv6 section | Off |
 | **IPv6 address** | The tunnel's IPv6 address; applies only when Enable IPv6 is on | `fdfe:dcba:9876::1/126` |
-| **Custom tunnel routes** | Sends all IPv4 and IPv6 into the tunnel with explicit range halves (`0.0.0.0/1`, `128.0.0.0/1`, `::/1`, `8000::/1`) instead of the core's default routes | Off |
+| **Split default route** | Sends all traffic into the tunnel as two half-ranges per address family instead of one default route. The traffic is the same; the setting adds no routes of its own. | Off |
+| **Bypass the tunnel** | Address ranges (CIDR) that skip the tunnel and the core entirely. Suggestions: `192.168.0.0/16` home LAN, `10.0.0.0/8`, `169.254.0.0/16`, `fe80::/10`. | Empty |
 | **TUN interface** | The system name of the interface | `lxbox` |
 | **MTU** | The largest packet size on the tunnel interface; 9000 is the sing-box default and fits any network, since the core re-sends TCP at the real network MTU | `9000` |
 | **Auto route** | The core manages the routing table by itself | On |
 | **Strict route** | The on-screen hint warns: `May break connectivity on some devices` | Off |
 | **Stack** | The tunnel's network stack: `system`, `gvisor` (in user space), `mixed` | `system` |
 
-Turn on Custom tunnel routes only if the default routing works incorrectly.
+Turn on Split default route only if the device ignores the VPN's default
+route.
+
+**Bypass the tunnel** suits a home NAS or a media server on the local
+network: large transfers go straight to the network and do not load the
+core. Traffic to these addresses goes without the VPN, and routing rules,
+DNS hijack and Statistics do not see it. Do not add networks you reach
+through a VPN server, the FakeIP pool (`198.18.0.0/15`) or the tunnel's own
+address: the app drops an entry that is not a CIDR or covers the tunnel
+address and warns about it in the build report. The list applies after a
+full VPN restart.
 
 #### TLS Fragmentation splits the first hop's TLS handshake
 
@@ -1609,13 +1583,15 @@ off by default. Where: VPN Settings → Core → TLS Fragmentation.
 | **Fallback delay** | The wait time when automatic detection fails. Applies only if TLS Fragment or TLS Record Fragment is on. The app replaces a value the core cannot parse with `500ms`. | `500ms` |
 | **Mixed-case SNI** | Changes the letter case in the server name: `WwW.gOoGle.CoM`. Servers accept any case (RFC 6066); it helps only against letter-by-letter name matching. | Off |
 
-The options act on the first hop only: the server the phone connects to
-directly. Hops behind a detour and in a chain run inside the tunnel, and the
-classifier does not see their TLS. Exceptions:
+The options act only on servers the phone connects to directly. A server
+with a detour runs its TLS inside the hop, where the classifier does not see
+it; there [Sniff guard](#sniff-guard-hides-the-server-name-from-relays-that-redirect-by-it)
+decides. Exceptions:
 
-- REALITY nodes get neither fragmentation nor Mixed-case SNI: a REALITY server
-  does not accept a split ClientHello, and the server name must match byte for
-  byte;
+- REALITY nodes do not get Mixed-case SNI: the server matches the name byte
+  for byte. Fragmentation applies to them like to other nodes; if a REALITY
+  server stops accepting the split handshake, set the option to **Off** on
+  that server or its subscription;
 - NaiveProxy and MASQUE nodes over HTTP/3 do not get fragmentation;
 - Mixed-case SNI leaves Punycode parts of the name (`xn--…`) untouched.
 
@@ -1628,10 +1604,80 @@ and for one server (the server's Settings tab, **TLS** section, under
 Detour). Each option is resolved on its own: server, then
 subscription or folder, then the global section; **Default** takes the value
 from the level above, and the row shows which one. **Off** on a server turns
-the option off for it even when it is on globally. A checkbox set on a REALITY
-server itself does fragment it; the global and subscription/folder levels
-still skip REALITY. A server behind a detour gets nothing — its section says
-so.
+the option off for it even when it is on globally. A server behind a detour
+gets nothing — its section says so.
+
+#### Sniff guard hides the server name from relays that redirect by it
+
+The **Sniff guard** section protects a node behind a relay or router that
+reads the server name (SNI) from the first handshake packet and redirects
+the connection by that name. Such a relay sends a node with a masked SNI
+(REALITY, WARP, a fake SNI) to the wrong address, and the node looks dead.
+The core hides the first packet and learns from connection outcomes which
+paths need it. Where: VPN Settings → Core → Sniff guard.
+
+| Option | What it does | Default |
+|---|---|---|
+| **TLS method** | Record fragment — several TLS records, no delay; Fragment — TCP segments with a pause; Delay — two pieces with a 300 ms pause; Off — no protection. | Record fragment |
+| **QUIC method** | For MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3 and AWG with QUIC masquerade. Decoy byte — one junk byte before the first packet, servers drop it; Delay — the second handshake packet waits 300 ms; Off. | Decoy byte |
+| **Only nodes with a masked SNI** | Protects only nodes whose SNI differs from the server address. Off: every node that supports the protection gets it. | On |
+| **Remember relays across restarts** | Keeps what the core has learned about each relay across restarts and config changes. Off: every start learns again. | Off |
+
+Paths through direct, SSH and SOCKS start unprotected; paths through other
+relays start protected. The core switches a path when a node fails one way
+and connects the other. The decoy byte is never sent through a SOCKS relay.
+Node checks use the same protection as the tunnel.
+
+#### WireGuard puts idle WireGuard tunnels to sleep
+
+The **WireGuard** card puts WireGuard and AmneziaWG tunnels to
+sleep when no traffic has passed through them for a while, and wakes them on
+the first request. Sleep frees memory and saves battery; the cost is that the
+first connection through a woken tunnel waits longer than usual. Where: VPN
+Settings → Core → WireGuard.
+
+The card splits tunnels into two kinds. A tunnel on the active route is the
+node selected in a direction, or a node in the pool of an auto twin: the group
+that picks the direction's node by itself when the Include auto (urltest)
+checkbox is on in the direction editor (see
+[Directions](#2-directions-sets-the-exits)). The other
+WireGuard nodes from subscriptions and folders are off the route: no traffic
+goes to them until someone selects them.
+
+| Option | What it does | Default |
+|---|---|---|
+| **Suspend idle tunnels** | Puts off-route tunnels to sleep after idle time. Options: Off, 30 seconds, 2 minutes, 5 minutes. | 30 seconds |
+| **Suspend active-route tunnels** | Also puts tunnels on the active route to sleep after a long silence, for example at night. Options: Off, 5, 15, 30 minutes, 1 hour. The first connection after sleep takes one extra round trip to the server. | 5 minutes |
+| **Lazy tunnel build** | Builds a tunnel on the first request to the node, not at VPN start. With dozens of WireGuard nodes it saves memory; the first connection to a node waits for the build. | On |
+| **Built tunnels limit** | How many tunnels stay built at the same time: 0 (no limit), 3, 5, 8, 12. The core tears down the extra ones and builds them again on request. | 5 |
+
+The three lower options work only while Suspend idle tunnels is on. At Off
+their rows grey out, tunnels do not sleep, and the app does not pass lazy
+build to the core: the core builds tunnels by its own rules. Built tunnels
+limit also requires Lazy tunnel build to be on.
+
+A direction's auto twin has its own node check. Where: direction editor →
+Include auto (urltest). The group tests the pool's nodes once per Interval
+(`15m` by default). Idle timeout (`30m` by default) is the time without
+traffic through the group after which the tests stop. If Suspend active-route
+tunnels is shorter than Idle timeout, a test wakes a sleeping tunnel for one
+handshake. With the defaults this is what happens: pool tunnels fall asleep
+after 5 minutes of silence and wake for every test while traffic goes through
+the group.
+
+| Situation | What to do |
+|---|---|
+| The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
+| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3 |
+| Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
+| Tunnels must not sleep at all | Suspend idle tunnels → Off |
+
+#### QUIC closes idle MASQUE tunnels
+
+The **QUIC** card holds **MASQUE idle timeout**: a MASQUE tunnel that
+carried no traffic for this long closes and reconnects on next use. Options:
+Off (default), 2, 5, 15 and 30 minutes. A node's own idle timeout wins.
+Where: VPN Settings → Core → QUIC.
 
 ### Mode selects the operating mode and tunnel options
 
@@ -2015,8 +2061,7 @@ Diagnostic tools, from simple to detailed:
 If the phone gets hot or uses too much memory, open VPN Settings → System →
 Optimization → **Memory limit**: Auto sets no threshold and is the right
 choice in most cases; a number there is compared with the core's own
-memory, shown as Core memory in Statistics → Memory. The System →
-WireGuard connections section puts idle
+memory, shown as Core memory in Statistics → Memory. The Core → WireGuard card puts idle
 WireGuard tunnels to sleep.
 
 ---
@@ -2566,7 +2611,7 @@ check box. Where: Backup & restore → Export.
 | Category | What it includes | Default |
 |---|---|---|
 | Server lists | Subscriptions, folders, standalone servers, hop chains. The file holds no subscription nodes: subscriptions download again. | On |
-| Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard connections parameters. | On |
+| Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard tunnel sleep parameters. | On |
 | App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, node order. | On |
 | VPN system toggles | Autostart, Keep on exit, background mode, Allow VPN bypass, Auto redirect, Memory limit, the core log and its verbose levels. | On |
 | Debug API config | Debug API settings together with the access token. | Off |
