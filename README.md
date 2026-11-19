@@ -69,7 +69,7 @@ rule and which exit were used.
 L×Box ships its own core fork, [sing-box-lx](https://github.com/Leadaxe/sing-box-lx).
 Other projects build on it too: Hiddify lists `Leadaxe/sing-box-lx` and
 `Leadaxe/utls-lx` in its
-[acknowledgements](https://github.com/hiddify/hiddify-app#acknowledgements) among the
+[acknowledgements](https://github.com/hiddify/hiddify-app#️-acknowledgements) among the
 projects whose work its own sing-box fork includes (as of November 2026).
 
 **Does it need root?** No.

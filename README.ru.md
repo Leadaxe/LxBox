@@ -34,7 +34,7 @@ Android-клиент на ядре [sing-box-lx](https://github.com/Leadaxe/sing
 
 **Чем отличается от Hiddify, NekoBox или Karing?** Тем, куда может вести правило. В этих клиентах правило отправляет трафик в Proxy, Direct или Block. В L×Box правило отправляет трафик в Направление — именованную группу серверов, и одновременно работает любое число Направлений: разные приложения и сайты в одно и то же время выходят через разные серверы. Прокси, Cloudflare WARP, AmneziaWG и узел Tailscale работают вместе в одном VPN-слоте Android, между ними строятся цепочки, а по каждому соединению видно, какое правило и какой выход сработали.
 
-L×Box поставляет свой форк ядра — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx). На него опираются и другие проекты: Hiddify в [благодарностях](https://github.com/hiddify/hiddify-app#acknowledgements) называет `Leadaxe/sing-box-lx` и `Leadaxe/utls-lx` среди проектов, чьи наработки вошли в его собственный форк sing-box (на ноябрь 2026).
+L×Box поставляет свой форк ядра — [sing-box-lx](https://github.com/Leadaxe/sing-box-lx). На него опираются и другие проекты: Hiddify в [благодарностях](https://github.com/hiddify/hiddify-app#️-acknowledgements) называет `Leadaxe/sing-box-lx` и `Leadaxe/utls-lx` среди проектов, чьи наработки вошли в его собственный форк sing-box (на ноябрь 2026).
 
 **Нужен root?** Нет.
 
