@@ -58,10 +58,20 @@ routing, DNS and diagnostics, and ships a fork of the core (`sing-box-lx`) that 
 AmneziaWG 2.0, native XHTTP, a MASQUE outbound, a round-robin load balancer and
 idle-suspend. Raw JSON still works — there is a config editor and config pinning.
 
-**How is it different from Hiddify, NekoBox or Karing?** Those are GUIs over the stock
-sing-box or mihomo core. L×Box ships its own core fork, so it supports transports the
-stock core does not have on the client side — notably Xray's XHTTP, AmneziaWG 2.0 and
-post-quantum VLESS (`mlkem768x25519plus`).
+**How is it different from Hiddify, NekoBox or Karing?** In what the rules can point
+to. In those clients a rule sends traffic to Proxy, Direct or Block. In L×Box a rule
+sends traffic to a Direction — a named group of servers — and any number of Directions
+are live at once, so different apps and sites leave through different servers at the
+same time. A proxy, Cloudflare WARP, AmneziaWG and a Tailscale node work together in
+one Android VPN slot, with chains between them and a per-connection view of which
+rule and which exit were used. Each of those clients has its own strengths: iOS and
+desktop in one app, more interface languages, Clash subscriptions.
+
+L×Box ships its own core fork, [sing-box-lx](https://github.com/Leadaxe/sing-box-lx).
+Other projects build on it too: Hiddify lists `Leadaxe/sing-box-lx` and
+`Leadaxe/utls-lx` in its
+[acknowledgements](https://github.com/hiddify/hiddify-app#acknowledgements) among the
+projects whose work its own sing-box fork includes (as of November 2026).
 
 **Does it need root?** No.
 
