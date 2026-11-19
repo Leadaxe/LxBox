@@ -721,8 +721,9 @@ refuses such an order the same way, with code 409.
 
 ### Interrupt connections on switch — two checkboxes for two events
 
-To move open connections to the new server as soon as the node changes, turn
-on **Interrupt connections on switch**. Without this option, open connections
+**Interrupt connections on switch** moves open connections to the new server
+as soon as the node changes; in a direction it is on by default. With the
+option off, open connections
 keep running through the old server until they close on their own: a download
 finishes through the same exit, a messenger's long-lived socket stays where it
 is. Usually that is what you want.
@@ -2136,10 +2137,12 @@ Tunnel apps → Off; Default traffic = VPN; two rules in Rules: ads → Block,
 `.ru` → Direct.
 
 **After a node switch, a download or call keeps going through the old server.**
-Open connections stay on the server where they started until they close. To
-make a node switch break them, turn on **Interrupt connections on switch**.
-There are two checkboxes: in a direction for any switch, in an auto group for
-automatic switches. Which one to turn on is in the
+Open connections stay on the server where they started until they close,
+unless **Interrupt connections on switch** breaks them. There are two
+checkboxes: in a direction for any switch (on by default), in an auto group
+for automatic switches (off by default). If connections stay on the old
+server after a manual switch, check that the box in the direction was not
+turned off. Details are in the
 [Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 section.
 
