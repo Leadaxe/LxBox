@@ -1042,8 +1042,8 @@ The Ru internet segment preset resolves ru domains with its own `dns_ru` group
 of three paths: UDP through the preset's direction, DoT through `vpn-1`, DoH
 direct. A failed node on one path does not stop ru sites.
 
-For the task "these domains → that DNS", enabling the DNS section in a routing
-rule is simpler than writing a DNS rule by hand.
+For the task "these domains → that DNS", Dedicated server in the DNS & Resolve
+section of a routing rule is simpler than writing a DNS rule by hand.
 
 ---
 
@@ -2019,6 +2019,20 @@ That was not the cause: Default traffic = VPN was, if it changed at the same
 time. L×Box's own service traffic and DNS bypass the tunnel; L×Box does not
 need the tunnel.
 
+**You picked a direction or a server on the home screen, but traffic goes elsewhere.**
+The direction list on the home screen chooses which direction you see and
+which server that direction uses; it does not send traffic there. Traffic
+goes where Rules send it, and the rest goes to Default traffic. A tap on a
+server changes the server of the direction shown, and traffic reaches it
+only if a rule or Default traffic points to that direction. To move all
+traffic, change **Default traffic** (Routing → Rules, the last row).
+
+**Different apps need to go through different servers.**
+Make one direction per exit: Routing → Directions → Add direction, then pick
+its server on the home screen or limit it with Node filter (regex). Then add
+one rule per app in Routing → Rules: the app in APPS, Action = its
+direction. Apps without a rule follow Default traffic.
+
 **Only the browser needs the VPN; everything else goes direct.**
 Tunnel apps → Allow-list with only the browser in the list; Default traffic =
 VPN. L×Box does not see the other apps.
@@ -2080,6 +2094,90 @@ selection. The row shows the mode and contents, for example `🔀 [15/7]`. You
 do not need to expand it into separate servers: the core keeps to the live
 ones by itself.
 
+**All servers show ERR, yet the same servers work in another client.**
+L×Box resolves server names with **Default Domain Resolver** (Routing →
+DNS). A resolver that goes through the tunnel cannot answer before the tunnel
+is up, and the tunnel needs the server's address first: no node connects.
+Set Default Domain Resolver to a server that goes direct and works on this
+network: `dns_shield` (default), `google_doh` or `cloudflare_dot`. Plain UDP
+servers go through the tunnel and do not fit there. If names resolve, check
+the ping itself:
+[Ping is a request through the node](#ping-is-a-request-through-the-node-not-a-tcp-check).
+
+**The VPN stops in the background on Xiaomi, Samsung, Oppo, Huawei and similar phones.**
+The manufacturer's firmware closes background apps on top of Android's battery
+optimization. Check four things:
+
+1. App Settings → Diagnostics → **Battery optimization** is green.
+2. App Settings → Diagnostics → **App info (OEM power settings)** → battery:
+   no restrictions. On Xiaomi and HyperOS also turn on Autostart.
+3. Lock L×Box in the recent apps list, so the firmware cleaner does not close
+   it.
+4. VPN Settings → Mode → **Keep VPN on exit** is on: without it a swipe from
+   the recent apps stops the VPN.
+
+An empty Debug → Crashes after such a stop points at the firmware: the list
+records only crashes of the core, and a kill by the system leaves no report.
+The stop reason `Another VPN app took the system VPN slot` means something
+else: another VPN app, often one with Always-on, took the only system VPN
+slot.
+
+**The VPN does not start: `validate dns rule[N]: Legacy Address Filter Fields in DNS rules is deprecated`.**
+A DNS rule points at a rule-set of IP ranges only, and with FakeIP or Force
+IPv4 in the config the core refuses such a rule. Form rules of bare IPs get
+no DNS section, so the error comes from a Remote (.srs) rule whose list holds
+only IPs (GeoIP) with Dedicated server, Fixed IP or Force IPv4, or from a user
+rule on the DNS tab that points at such a list. In that rule set Answer =
+Default and clear Force IPv4, or delete the DNS rule.
+
+**The VPN does not start: `initialize cache-file: timeout`.**
+The previous core instance has not released its cache file yet. The app
+deletes the cache file and tries once more by itself; FakeIP addresses,
+nodes chosen in groups and the cache of downloaded rule lists start over.
+If the start still fails, stop L×Box from Android settings (App info → Force
+stop) and start the VPN again. Routing → DNS → **Clear DNS cache** clears
+FakeIP addresses and cached answers from inside the app and reloads the VPN.
+
+**Rules for apps do not work in Proxy mode.**
+In Proxy mode apps connect to the local proxy, and the core does not learn
+which app opened the connection. Conditions in APPS and the Tunnel apps list
+have no effect there. Use VPN or VPN + Proxy mode for rules by app. To tell
+proxy traffic apart, use the INBOUND section of a rule. A second proxy port
+is added with a mixin: [Mixins](#mixins-keep-your-edits-through-rebuilds).
+
+**Apps on the Deny-list have no internet while Android's "Block connections without VPN" is on.**
+A Deny-list app goes past the tunnel, and with this Android setting nothing
+goes past the VPN. Remove the app from the Deny-list and add a rule for it
+in Routing → Rules with Action = direct: its traffic enters L×Box and goes
+out directly.
+
+**A foreign site goes direct through Ru internet segment.**
+The preset also checks the address against Russian IP ranges (GeoIP
+IP-range fallback): a site hosted in Russia matches even with a foreign
+domain. Add a rule with the site's domains and the direction you need, and
+drag it above Ru internet segment. Turning off GeoIP IP-range fallback in
+the preset's Params removes the check for every site.
+
+**A leak test shows the address 172.16.0.1.**
+It is the address of the tunnel interface on the phone itself (VPN Settings
+→ Core → TUN → IPv4 address), not your public IP. Browsers reveal local
+addresses over WebRTC. To stop WebRTC from reaching STUN servers past the
+proxy, add a rule with protocol `stun` in NETWORK & PROTOCOL and Action =
+Reject.
+
+**Statistics shows 400 MB and more, while Memory limit is lower.**
+The Statistics card shows the memory of the whole app process. Memory limit
+is compared with the core's own memory: Statistics → Memory → Core memory.
+The VPN runs in the process `com.leadaxe.lxbox:bg`, and the window in
+`com.leadaxe.lxbox:ui`; closing the window ends the second one.
+
+**A new version does not install: "App not installed" or signatures do not match.**
+The Google Play build is signed with Google's key; builds from GitHub and
+F-Droid are signed with the developer's key and replace each other freely.
+One cannot be installed over the other. To change the channel: Backup &
+restore → Export, remove the app, install it from the other source and
+import the file.
+
 **After an app crash, the VPN does not start.**
 After a core crash, the app resets the core's service caches on the next start:
 a corrupted cache often causes a crash right at start-up. Configs,
@@ -2100,6 +2198,11 @@ Diagnostic tools, from simple to detailed:
 | Profiler | Statistics | A real-time recording of connections and DNS resolves, with filters by app, domain and IP: which domain fails to resolve, which direction a request took, where an app connects. For DNS groups you see which members answered and which stayed silent. |
 | Log | Debug (side menu) | The app and core log. **Verbose (TRACE/DEBUG)** in App Settings → Diagnostics turns on the detailed log; the switch is inactive until Forward sing-box logs is on, and the lines appear after the app restarts. The Log tab links there. |
 | Crashes, OOM, Profiling | Debug | Core crash reports, core memory snapshots on low memory, pprof profiles for the developer. |
+
+For an issue, the **Share dump** button in the top bar of the Debug screen
+sends one file with the config, settings, subscriptions and the log. The file
+holds server keys and subscription links as they are: send it only to the
+developer, not to a public chat.
 
 If the phone gets hot or uses too much memory, open VPN Settings → System →
 Optimization → **Memory limit**: Auto sets no threshold and is the right
