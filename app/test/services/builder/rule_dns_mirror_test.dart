@@ -20,7 +20,7 @@ CustomRule _storageRoundTrip(CustomRule r) =>
 /// §117 задача 3 — «Опция DNS у правила (DNS follows the rule)».
 ///
 /// - модель: `RuleDns` сериализация + backward-compat (нет `dns` → null);
-/// - гейт `dnsMirrorActive` (ports/protocols → mirror не эмитится);
+/// - гейт `dnsMirrorActive` (§755: ports/protocols больше не гейтят);
 /// - applyAllCustomRules: сбор mirror-группы (inline+dns / srs+dns,
 ///   порядок = routing-правила);
 /// - applyCustomDns: эмиссия группы у якоря, подстановка server, пропавший
@@ -88,7 +88,7 @@ void main() {
       expect(restored.dnsMirrorActive, false);
     });
 
-    test('гейт dnsMirrorActive: ports / protocols / disabled / пустой tag', () {
+    test('гейт dnsMirrorActive: §755 ports/protocols не гейтят; disabled / пустой tag', () {
       const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
       expect(
         CustomRuleInline(name: 'ok', domains: ['a.com'], dns: dnsOn)
@@ -99,14 +99,14 @@ void main() {
         CustomRuleInline(
                 name: 'p', domains: ['a.com'], ports: ['443'], dns: dnsOn)
             .dnsMirrorActive,
-        false,
-        reason: 'ports — headless-гейт',
+        true,
+        reason: 'ports — §755 гейт снят',
       );
       expect(
         CustomRuleInline(
                 name: 'pr', domains: ['a.com'], portRanges: ['1:99'], dns: dnsOn)
             .dnsMirrorActive,
-        false,
+        true,
       );
       expect(
         CustomRuleInline(
@@ -115,8 +115,8 @@ void main() {
                 protocols: ['quic'],
                 dns: dnsOn)
             .dnsMirrorActive,
-        false,
-        reason: 'protocols — headless-гейт',
+        true,
+        reason: 'protocols — §755 гейт снят',
       );
       expect(
         CustomRuleInline(
@@ -125,8 +125,8 @@ void main() {
                 network: ['udp'],
                 dns: dnsOn)
             .dnsMirrorActive,
-        false,
-        reason: '§240 network — headless-гейт',
+        true,
+        reason: '§240 network — §755 гейт снят',
       );
       expect(
         CustomRuleInline(
@@ -165,7 +165,7 @@ void main() {
           (ruleToRecord(off)['dns'] as Map).containsKey('forceIpv4'), false);
     });
 
-    test('гейт forceIpv4Active: НЕ требует serverTag; режется port/protocol',
+    test('гейт forceIpv4Active: НЕ требует serverTag; §755 port/protocol не режут',
         () {
       const force = RuleDns(forceIpv4: true);
       // Домены + галка, без сервера → активна (глушилка серверу не нужна).
@@ -183,12 +183,12 @@ void main() {
             .forceIpv4Active,
         true,
       );
-      // ports / protocols → DNS-слеп → неактивна.
+      // §755: ports / protocols больше не гейтят.
       expect(
         CustomRuleInline(
                 name: 'p', domains: ['a.com'], ports: ['443'], dns: force)
             .forceIpv4Active,
-        false,
+        true,
       );
       expect(
         CustomRuleInline(
@@ -197,7 +197,7 @@ void main() {
                 protocols: ['quic'],
                 dns: force)
             .forceIpv4Active,
-        false,
+        true,
       );
       // disabled правило → неактивна.
       expect(
@@ -471,7 +471,8 @@ void main() {
       });
     });
 
-    test('гейт в build: ports → mirror не собирается (defensive к UI)', () {
+    test('§755: ports — порт на маршрутном правиле, набор без порта, mirror собирается',
+        () {
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(
         reg,
@@ -480,14 +481,126 @@ void main() {
             name: 'gated',
             domains: ['a.com'],
             ports: ['443'],
+            portRanges: ['8000:8100'],
             outbound: 'vpn-1',
             dns: const RuleDns(enabled: true, serverTag: 'google_udp'),
           ),
         ],
         const [],
       );
+      expect(result.dnsMirrors.single.body, {'rule_set': 'gated'});
+      final route = reg.getRules().single;
+      expect(route['rule_set'], 'gated');
+      expect(route['port'], [443]);
+      expect(route['port_range'], ['8000:8100']);
+      final set = reg.getRuleSets().single;
+      expect(set['rules'], [
+        {'domain': ['a.com']},
+      ], reason: 'порты не в наборе');
+    });
+
+    test('§755: правило только с портами — маршрут без rule_set, DNS не трогает',
+        () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'ports-only',
+            ports: ['22'],
+            outbound: 'direct-out',
+            dns: const RuleDns(blockHttps: true, forceIpv4: true),
+          ),
+        ],
+        const [],
+      );
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules().single, {'port': [22], 'outbound': 'direct-out'});
       expect(result.dnsMirrors, isEmpty);
-      expect(reg.getRules(), hasLength(1), reason: 'routing-сторона живёт');
+    });
+
+    // §755 — Block HTTPS/SVCB records.
+    test('blockHttps inline: Block HTTPS → Force IPv4 → сервер, network не гейтит',
+        () {
+      final reg = RuleSetRegistry();
+      final result = applyAllCustomRules(
+        reg,
+        [
+          CustomRuleInline(
+            name: 'rt',
+            domainSuffixes: ['rutracker.org'],
+            network: ['tcp', 'udp'],
+            outbound: 'vpn-1',
+            dns: const RuleDns(
+                enabled: true,
+                serverTag: 'google_udp',
+                forceIpv4: true,
+                blockHttps: true),
+          ),
+        ],
+        const [],
+      );
+      final ms = result.dnsMirrors;
+      expect(ms, hasLength(3));
+      expect(ms[0].blockHttps, true);
+      expect(ms[0].serverless, true);
+      expect(ms[0].body, {
+        'rule_set': 'rt',
+        'query_type': ['HTTPS', 'SVCB'],
+        'action': 'predefined',
+        'rcode': 'NOERROR',
+      });
+      expect(ms[1].body['ip_version'], 6);
+      expect(ms[1].blockHttps, false);
+      expect(ms[2].serverTag, 'google_udp');
+    });
+
+    test('blockHttps без доменов не эмитится (значение в хранилище остаётся)',
+        () {
+      final rule = CustomRuleInline(
+        name: 'apps',
+        packages: ['com.android.chrome'],
+        outbound: 'vpn-1',
+        dns: const RuleDns(blockHttps: true),
+      );
+      expect(rule.blockHttpsActive, false);
+      final result =
+          applyAllCustomRules(RuleSetRegistry(), [rule], const []);
+      expect(result.dnsMirrors, isEmpty);
+      expect(_storageRoundTrip(rule).dns!.blockHttps, true);
+    });
+
+    test('blockHttps srs и Fixed IP: глушилка первой, Fixed IP следом', () {
+      final srs = CustomRuleSrs(
+        name: 'cf',
+        srsUrl: 'https://e/cf.srs',
+        outbound: 'vpn-1',
+        dns: const RuleDns(blockHttps: true, fixedIps: ['10.0.0.1']),
+      );
+      final result = applyAllCustomRules(
+        RuleSetRegistry(),
+        [srs],
+        const [],
+        srsPaths: {srs.id: '/tmp/cf.srs'},
+      );
+      final ms = result.dnsMirrors;
+      expect(ms.first.blockHttps, true);
+      expect(ms.first.body['rule_set'], 'cf');
+      expect(ms.first.body['query_type'], ['HTTPS', 'SVCB']);
+      expect(ms.skip(1).every((m) => m.fixedAnswer), true);
+    });
+
+    test('blockHttps round-trip записи rules[]; нет ключа → false', () {
+      final rule = CustomRuleInline(
+        name: 'b',
+        domains: ['a.com'],
+        outbound: 'vpn-1',
+        dns: const RuleDns(blockHttps: true),
+      );
+      expect(_storageRoundTrip(rule).dns!.blockHttps, true);
+      expect(RuleDns.fromJson({'enabled': false})!.blockHttps, false);
+      expect(const RuleDns(blockHttps: true).toJson()['blockHttps'], true);
+      expect(const RuleDns().toJson().containsKey('blockHttps'), false);
     });
 
     // §256 — Force IPv4: serverless AAAA-глушилка.
@@ -566,7 +679,7 @@ void main() {
       expect(m.body['rule_set'], 'glitchy');
     });
 
-    test('forceIpv4 + ports → serverless-mirror не собирается (DNS-слеп)', () {
+    test('§755: forceIpv4 + ports → serverless-mirror собирается, набор без порта', () {
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(
         reg,
@@ -581,7 +694,7 @@ void main() {
         ],
         const [],
       );
-      expect(result.dnsMirrors, isEmpty);
+      expect(result.dnsMirrors.single.body['ip_version'], 6);
     });
 
     test('порядок группы = порядок routing-правил (preset + rule)', () {

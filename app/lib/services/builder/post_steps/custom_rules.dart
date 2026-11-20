@@ -83,6 +83,7 @@ class DnsMirrorEntry {
     this.serverTag = '',
     this.serverless = false,
     this.fixedAnswer = false,
+    this.blockHttps = false,
     required this.body,
   });
 
@@ -101,8 +102,26 @@ class DnsMirrorEntry {
   /// а не AAAA-глушилка Force IPv4. Нужен UI вкладки DNS, чтобы различать
   /// два вида serverless-mirror'ов правила.
   final bool fixedAnswer;
+
+  /// §755 — serverless-тело Block HTTPS/SVCB records (`query_type: [HTTPS,
+  /// SVCB]`), а не Force IPv4: вкладке DNS нужно различать serverless-
+  /// mirror'ы правила.
+  final bool blockHttps;
   final Map<String, dynamic> body;
 }
+
+/// §755 — тело Block HTTPS/SVCB records поверх матча правила.
+DnsMirrorEntry blockHttpsMirror(CustomRule cr, Map<String, dynamic> match) =>
+    DnsMirrorEntry(
+      ruleId: cr.id,
+      ruleName: cr.name,
+      serverless: true,
+      blockHttps: true,
+      body: match
+        ..['query_type'] = const ['HTTPS', 'SVCB']
+        ..['action'] = 'predefined'
+        ..['rcode'] = 'NOERROR',
+    );
 
 /// §683 — TTL записей ответа Fixed IP.
 const int kFixedIpAnswerTtl = 300;
@@ -463,7 +482,10 @@ List<String> _applySrsSingle(
     ));
   }
   if (dnsMirrors != null &&
-      (cr.dnsMirrorActive || cr.forceIpv4Active || cr.dnsFixedActive)) {
+      (cr.dnsMirrorActive ||
+          cr.forceIpv4Active ||
+          cr.dnsFixedActive ||
+          cr.blockHttpsActive)) {
     // DNS-безопасные AND-поля правила (srs: rule_set + package/wifi/source/
     // inbound — ports/protocols отрезаны гейтом). Общие для обоих mirror'ов.
     Map<String, dynamic> srsMatch() {
@@ -484,6 +506,8 @@ List<String> _applySrsSingle(
       return m;
     }
 
+    // §755 — порядок внутри правила: Block HTTPS → Force IPv4 → сервер/Fixed IP.
+    if (cr.blockHttpsActive) dnsMirrors.add(blockHttpsMirror(cr, srsMatch()));
     // §256 — Force IPv4 (AAAA-глушилка) ПЕРЕД server-mirror'ом (симметрия §253).
     if (cr.forceIpv4Active) {
       final mirror = srsMatch()
@@ -516,8 +540,9 @@ List<String> _applySrsSingle(
 /// ip_is_private / wifi_*). Если оба пусты — skip.
 ///
 /// §117 задача 3: при активной DNS-опции ([CustomRule.dnsMirrorActive])
-/// mirror шарит **тот же** headless rule_set (no split — гейт гарантирует
-/// отсутствие ports/protocols в матче) + wifi_* на DNS-rule уровне.
+/// mirror шарит **тот же** headless rule_set (§755: порты в набор не
+/// кладутся, протоколы и `network` туда и не попадали) + wifi_* на
+/// DNS-rule уровне.
 List<String> _applyInlineSingle(
   CustomRuleInline cr,
   RuleSetRegistry registry, {
@@ -527,7 +552,7 @@ List<String> _applyInlineSingle(
   if (cr.outbound.isEmpty) return warnings;
 
   // DNS-безопасные AND-поля для mirror-body (общие для server- и
-  // forceIpv4-mirror'ов). rule_set несёт domain/port/wifi/source; здесь —
+  // forceIpv4-mirror'ов). rule_set несёт domain/wifi/source; здесь —
   // только `inbound` (route-only, в headless его нет; DNS-rule 1.14 принимает).
   Map<String, dynamic> mirrorBody(String ruleSetTag) {
     final m = <String, dynamic>{};
@@ -557,6 +582,15 @@ List<String> _applyInlineSingle(
       serverless: true,
       body: mirror,
     ));
+  }
+
+  // §755 — Block HTTPS/SVCB records: первым из зеркал правила. Пустой матч
+  // не эмитим — иначе HTTPS-записи глушились бы глобально.
+  void addBlockHttpsMirror(String ruleSetTag) {
+    if (dnsMirrors == null || !cr.blockHttpsActive) return;
+    final matchFields = mirrorBody(ruleSetTag);
+    if (matchFields.isEmpty) return;
+    dnsMirrors.add(blockHttpsMirror(cr, matchFields));
   }
 
   void addDnsMirror(String ruleSetTag) {
@@ -592,9 +626,12 @@ List<String> _applyInlineSingle(
   // §712 — Go RE2, не anchored; headless 1.14 принимает.
   if (cr.domainRegexes.isNotEmpty) match['domain_regex'] = cr.domainRegexes;
   if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
+  // §755 — `port`/`port_range` НЕ в наборе, а на маршрутном правиле (как у
+  // srs): (набор) AND (порт) — тот же смысл (ядро сливает группы внешнего
+  // правила с группами набора, rule_abstract.go matchWithOuterGroups), а
+  // набор остаётся пригодным для ссылки из DNS-правила (у DNS-запроса порта
+  // сайта нет).
   final intPorts = cr.intPorts;
-  if (intPorts.isNotEmpty) match['port'] = intPorts;
-  if (cr.portRanges.isNotEmpty) match['port_range'] = cr.portRanges;
   if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
   if (cr.packageRegexes.isNotEmpty) {
     match['package_name_regex'] = cr.packageRegexes;
@@ -618,7 +655,9 @@ List<String> _applyInlineSingle(
     // Нет полей для inline headless rule. Если есть routing-level
     // поля (protocol / ip_is_private / source_ip_is_private / inbound) —
     // эмитим routing rule без rule_set, иначе правило пустое, скипаем.
-    if (cr.protocols.isEmpty &&
+    if (intPorts.isEmpty &&
+        cr.portRanges.isEmpty &&
+        cr.protocols.isEmpty &&
         cr.network.isEmpty &&
         !cr.ipIsPrivate &&
         !cr.sourceIpIsPrivate &&
@@ -628,12 +667,15 @@ List<String> _applyInlineSingle(
     registry.addRule(_outboundToRoute(
       '',
       cr.outbound,
+      ports: intPorts,
+      portRanges: cr.portRanges,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
       sourceIpIsPrivate: cr.sourceIpIsPrivate,
       inbounds: cr.inbounds,
     ));
+    addBlockHttpsMirror(''); // §755 — пустой матч не эмитится
     addForceIpv4Mirror(''); // §256 — AAAA-глушилка перед server-mirror'ом
     addDnsMirror(''); // routing-level-only правило: DNS-rule без rule_set
     return warnings;
@@ -651,6 +693,8 @@ List<String> _applyInlineSingle(
     registry.addRule(_resolveToRoute(
       tag,
       cr.resolve!,
+      ports: intPorts,
+      portRanges: cr.portRanges,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -670,6 +714,8 @@ List<String> _applyInlineSingle(
     registry.addRule(_outboundToRoute(
       tag,
       cr.outbound,
+      ports: intPorts,
+      portRanges: cr.portRanges,
       protocols: cr.protocols,
       network: cr.network,
       ipIsPrivate: cr.ipIsPrivate,
@@ -677,6 +723,7 @@ List<String> _applyInlineSingle(
       inbounds: cr.inbounds,
     ));
   }
+  addBlockHttpsMirror(tag); // §755 — первым из зеркал правила
   addForceIpv4Mirror(tag); // §256 — AAAA-глушилка перед server-mirror'ом
   addDnsMirror(tag);
   return warnings;

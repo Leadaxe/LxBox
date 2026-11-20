@@ -169,6 +169,29 @@
         "server": "google_udp"
       },
       {
+        "rule_set": "All groups",
+        "inbound": [
+          "tun-in"
+        ],
+        "ip_version": 6,
+        "action": "predefined",
+        "rcode": "NOERROR"
+      },
+      {
+        "rule_set": "All groups",
+        "inbound": [
+          "tun-in"
+        ],
+        "server": "my-doh"
+      },
+      {
+        "rule_set": [
+          "Geo sets",
+          "Geo sets-2"
+        ],
+        "server": "google_udp"
+      },
+      {
         "rule_set": [
           "ru-direct:ru-domains",
           "ru-direct:ru-services"
@@ -687,6 +710,13 @@
       },
       {
         "rule_set": "All groups",
+        "port": [
+          443,
+          8443
+        ],
+        "port_range": [
+          "10000:10100"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -710,6 +740,13 @@
       },
       {
         "rule_set": "All groups",
+        "port": [
+          443,
+          8443
+        ],
+        "port_range": [
+          "10000:10100"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -788,7 +825,9 @@
         "action": "reject"
       },
       {
-        "rule_set": "Ports with text",
+        "port": [
+          53
+        ],
         "network": [
           "udp"
         ],
@@ -825,13 +864,6 @@
             ],
             "ip_cidr": [
               "198.51.100.0/24"
-            ],
-            "port": [
-              443,
-              8443
-            ],
-            "port_range": [
-              "10000:10100"
             ],
             "package_name": [
               "com.example.browser"
@@ -927,17 +959,6 @@
         "type": "local",
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/preset__block-ads__ads-all.srs"
-      },
-      {
-        "type": "inline",
-        "tag": "Ports with text",
-        "rules": [
-          {
-            "port": [
-              53
-            ]
-          }
-        ]
       },
       {
         "type": "local",

@@ -83,7 +83,7 @@ void main() {
       });
     });
 
-    test('ports → int list, port_range → string list, в одном headless rule', () {
+    test('§755: ports → int list, port_range → string list, на маршрутном правиле', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
         CustomRuleInline(
@@ -95,8 +95,12 @@ void main() {
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match['port'], [443, 8443]);
-      expect(match['port_range'], ['8000:9000', ':3000']);
+      expect(match.containsKey('port'), isFalse, reason: 'набор без портов');
+      expect(match.containsKey('port_range'), isFalse);
+      final route = reg.getRules().single;
+      expect(route['rule_set'], 'HTTPS+range');
+      expect(route['port'], [443, 8443]);
+      expect(route['port_range'], ['8000:9000', ':3000']);
     });
 
     test('packages → package_name в inline headless rule', () {
@@ -246,8 +250,8 @@ void main() {
           outbound: 'vpn-1',
         ),
       ]);
-      final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match['port'], [443, 80]);
+      expect(reg.getRuleSets(), isEmpty, reason: '§755: только порты — без набора');
+      expect(reg.getRules().single['port'], [443, 80]);
     });
 
     test('collision с существующим tag'

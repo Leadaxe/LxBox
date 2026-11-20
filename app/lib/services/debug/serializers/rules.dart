@@ -173,6 +173,7 @@ Map<String, Object?> _serializeRuleDns(RuleDns dns) => {
       'server_tag': dns.serverTag,
       // §256 — Force IPv4 (AAAA-глушилка), скрываем когда выкл.
       if (dns.forceIpv4) 'force_ipv4': true,
+      if (dns.blockHttps) 'block_https': true,
       // §683 — Answer = Fixed IP; скрываем, когда не задано.
       if (dns.fixedIps.isNotEmpty) 'fixed_ips': dns.fixedIps,
     };

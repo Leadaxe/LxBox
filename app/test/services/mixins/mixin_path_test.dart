@@ -110,7 +110,9 @@ void main() {
     });
 
     test('число и bool', () {
-      expect(paths('route.rules[port=443]'), ['route.rules[7]']);
+      // §755 — порты inline-правила на маршрутном правиле (All groups ×2).
+      expect(paths('route.rules[port=443]'),
+          ['route.rules[4]', 'route.rules[5]', 'route.rules[7]']);
       expect(paths('route.rules[ip_is_private=true]'),
           ['route.rules[4]', 'route.rules[5]']);
       expect(paths('route.rules[ip_is_private=1]'), isEmpty);

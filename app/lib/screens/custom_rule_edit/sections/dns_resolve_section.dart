@@ -11,11 +11,13 @@ import '../../../widgets/dpad_radio_group.dart';
 ///
 /// - Answer (радио): Default / Dedicated server / Fixed IP;
 /// - Force IPv4 (§256), неактивна при Fixed IP;
+/// - Block HTTPS/SVCB records (§755), доступна при условии по домену;
 /// - Resolve before routing + Strategy (§247 «Resolve first»);
 /// - Advanced (свёрнут): поля бывшего окна.
 ///
-/// Гейт портов/протоколов (headless rule_set их не выразит) гасит Answer и
-/// Force IPv4; резолв от гейта не зависит.
+/// §755: гейта портов/протоколов больше нет — порты inline-правила живут на
+/// маршрутном правиле, DNS-опции действуют на домены на любом порту
+/// (подсказка при порте/протоколе/`network`).
 class DnsResolveSection extends StatefulWidget {
   const DnsResolveSection({super.key, required this.controller});
 
@@ -82,7 +84,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
     final cs = t.colorScheme;
     final dns = c.dns;
     final mode = c.dnsAnswerMode;
-    final gate = c.dnsGateBlocked;
+    final anyPort = c.dnsAppliesAnyPort; // §755 — подсказка, не гейт
     final isSrs = c.kind == CustomRuleKind.srs;
     final serverTag = dns?.serverTag ?? '';
     // Выбранный tag мог исчезнуть из списка (сервер удалён) — показываем
@@ -113,7 +115,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
         DpadRadioGroup<DnsAnswerMode>(
           groupValue: mode,
           onChanged: (v) {
-            if (v != null && !gate) c.setDnsAnswerMode(v);
+            if (v != null) c.setDnsAnswerMode(v);
           },
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,7 +124,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
-                enabled: !gate,
+                enabled: true,
                 value: DnsAnswerMode.defaultDns,
                 title: Text(getLocalText.s("Default — queries go to DNS Final"),
                     style: titleStyle),
@@ -135,7 +137,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
-                      enabled: !gate,
+                      enabled: true,
                       value: DnsAnswerMode.dedicated,
                       title: Text(getLocalText.s("Dedicated server"),
                           style: titleStyle),
@@ -162,7 +164,7 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
                                     fontSize: 13, fontFamily: 'monospace')),
                           ),
                       ],
-                      onChanged: gate || mode != DnsAnswerMode.dedicated
+                      onChanged: mode != DnsAnswerMode.dedicated
                           ? null
                           : (v) {
                               if (v != null) c.setDnsServerTag(v);
@@ -175,14 +177,14 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 visualDensity: VisualDensity.compact,
-                enabled: !gate,
+                enabled: true,
                 value: DnsAnswerMode.fixedIp,
                 title: Text(getLocalText.s("Fixed IP"), style: titleStyle),
               ),
             ],
           ),
         ),
-        if (mode == DnsAnswerMode.fixedIp && !gate)
+        if (mode == DnsAnswerMode.fixedIp)
           Padding(
             padding: const EdgeInsets.only(left: 12, top: 4),
             child: Row(
@@ -229,13 +231,12 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
               ],
             ),
           ),
-        if (gate)
+        if (anyPort)
           _hint(
               getLocalText.s(
-                  "Unavailable with port/protocol filters — they are unknown at DNS-query time."),
+                  "DNS options apply to these domains on any port and protocol"),
               cs),
         if (isSrs &&
-            !gate &&
             (mode == DnsAnswerMode.dedicated || mode == DnsAnswerMode.fixedIp))
           _hint(
               getLocalText.s(
@@ -256,9 +257,31 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
           value: dns?.forceIpv4 ?? false,
-          onChanged: gate || mode == DnsAnswerMode.fixedIp
+          onChanged: mode == DnsAnswerMode.fixedIp
               ? null
               : (v) => c.setForceIpv4(v ?? false),
+        ),
+
+        // ─── Block HTTPS/SVCB records (§755) ─────────────────────────
+        // Независима от Answer: Fixed IP отвечает только на A/AAAA.
+        CheckboxListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          visualDensity: VisualDensity.compact,
+          title: Text(getLocalText.s("Block HTTPS/SVCB records"),
+              style: titleStyle),
+          subtitle: Text(
+            c.blockHttpsAvailable
+                ? getLocalText.s(
+                    "Hides ECH from apps like Chrome so the site name stays visible and this rule can match it. Apps with their own DNS-over-HTTPS bypass it.")
+                : getLocalText.s("Needs a domain condition"),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
+          value: c.blockHttpsAvailable && (dns?.blockHttps ?? false),
+          onChanged: c.blockHttpsAvailable
+              ? (v) => c.setBlockHttps(v ?? false)
+              : null,
         ),
 
         // ─── Resolve before routing (§247) ───────────────────────────

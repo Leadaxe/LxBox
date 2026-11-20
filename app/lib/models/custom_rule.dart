@@ -212,19 +212,14 @@ sealed class CustomRule {
         _ => null,
       };
 
-  /// §117: правило DNS-mirror-**способно** — включено, сервер выбран, нет
-  /// ports/protocols (headless-гейт: порт/протокол неизвестны в момент
-  /// DNS-запроса). НЕ зависит от `dns.enabled` — строка mirror-группы видна
+  /// §117: правило DNS-mirror-**способно** — включено, сервер выбран, есть
+  /// условие, видимое DNS-слою. §755: порты/протоколы/`network` больше не
+  /// гейтят — порты inline-правила живут на маршрутном правиле, набор их не
+  /// несёт; DNS-опция действует на домены правила на любом порту. НЕ зависит от `dns.enabled` — строка mirror-группы видна
   /// и при выключенном DNS-аспекте (switch off, серая), чтобы его можно было
   /// включить обратно отсюда (симметрично preset-строке).
   bool get dnsMirrorEligible =>
-      enabled &&
-      (dns?.serverTag.isNotEmpty ?? false) &&
-      ports.isEmpty &&
-      portRanges.isEmpty &&
-      protocols.isEmpty &&
-      network.isEmpty &&
-      dnsLayerEligible;
+      enabled && (dns?.serverTag.isNotEmpty ?? false) && dnsLayerEligible;
 
   /// §692: у правила есть условие, которое DNS-слой может проверить —
   /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
@@ -259,17 +254,11 @@ sealed class CustomRule {
       !(dns?.fixedMode ?? false);
 
   /// §256: Force IPv4 (AAAA-глушилка) **применима** — правило DNS-mirror-
-  /// способно по headless-гейту (порт/протокол неизвестны в момент
-  /// DNS-запроса → DNS-слой слеп), но БЕЗ требования `serverTag`: глушилка
+  /// способно (§755: без гейта портов/протоколов/`network`), но БЕЗ
+  /// требования `serverTag`: глушилка
   /// `predefined` отвечает локально, серверу не нужна. Домен / приложение
   /// (`package_name`) / source_ip — работает.
-  bool get forceIpv4Eligible =>
-      enabled &&
-      ports.isEmpty &&
-      portRanges.isEmpty &&
-      protocols.isEmpty &&
-      network.isEmpty &&
-      dnsLayerEligible; // §692
+  bool get forceIpv4Eligible => enabled && dnsLayerEligible; // §692
 
   /// §256: Force IPv4 **активна** — [forceIpv4Eligible] И галка включена.
   /// Build (эмиссия serverless-mirror'а) и UI (маркер) используют этот предикат.
@@ -277,6 +266,27 @@ sealed class CustomRule {
       forceIpv4Eligible &&
       (dns?.forceIpv4 ?? false) &&
       !(dns?.fixedMode ?? false);
+
+  /// §755: у правила есть условие по домену — то, что ECH прячет от
+  /// сниффера. inline: непустое `domain` / `domain_suffix` /
+  /// `domain_keyword` / `domain_regex`; srs: всегда true (содержимое файла
+  /// не парсим — домены возможны).
+  bool get hasDomainMatch => switch (this) {
+        CustomRuleInline() => domains.isNotEmpty ||
+            domainSuffixes.isNotEmpty ||
+            domainKeywords.isNotEmpty ||
+            domainRegexes.isNotEmpty,
+        CustomRuleSrs() => true,
+        _ => false,
+      };
+
+  /// §755: Block HTTPS/SVCB records **активна** — правило включено, галка
+  /// стоит и есть условие по домену. Не зависит от `dns.enabled`,
+  /// `serverTag` и режима Fixed IP: `predefined` отвечает локально, а
+  /// Fixed IP-зеркала несут свой `query_type` (A/AAAA) и HTTPS-запрос не
+  /// трогают. Галка без доменов (значение осталось в хранилище) не действует.
+  bool get blockHttpsActive =>
+      enabled && (dns?.blockHttps ?? false) && hasDomainMatch;
 
   /// §683: Answer = Fixed IP **активен** — тот же headless-гейт, что у
   /// [forceIpv4Eligible] (сервер не нужен: `predefined` отвечает локально),
@@ -383,6 +393,7 @@ class RuleDns {
     this.enabled = false,
     this.serverTag = '',
     this.forceIpv4 = false,
+    this.blockHttps = false,
     this.fixedIps = const [],
   });
 
@@ -394,6 +405,13 @@ class RuleDns {
   /// NOERROR`), приложение чисто берёт A. Ортогонально [enabled]/[serverTag]
   /// — глушилка отвечает локально, DNS-серверу не нужна.
   final bool forceIpv4;
+
+  /// §755 — Block HTTPS/SVCB records: отвечать пусто на HTTPS/SVCB-запросы
+  /// (RFC 9460) для матча правила (`query_type: [HTTPS, SVCB], action:
+  /// predefined, rcode: NOERROR`). Приложение не получает ECH-конфиг и шлёт
+  /// открытый SNI — правило по домену видит имя сайта. Ортогонально
+  /// [enabled]/[serverTag], как [forceIpv4].
+  final bool blockHttps;
 
   /// §683 — Answer = Fixed IP: правило отвечает на DNS-запросы своего матча
   /// этими адресами (`predefined`, как hosts; IPv4/IPv6, по строке на адрес
@@ -429,6 +447,7 @@ class RuleDns {
         'enabled': enabled,
         'serverTag': serverTag,
         if (forceIpv4) 'forceIpv4': true,
+        if (blockHttps) 'blockHttps': true,
         if (fixedIps.isNotEmpty) 'fixedIps': List<String>.of(fixedIps),
       };
 
@@ -440,6 +459,7 @@ class RuleDns {
       enabled: j['enabled'] == true,
       serverTag: j['serverTag']?.toString() ?? '',
       forceIpv4: j['forceIpv4'] == true,
+      blockHttps: j['blockHttps'] == true,
       // Ключ `fixed` старых записей игнорируется (сборки с ним не выпускались).
       fixedIps: ips is List
           ? [
@@ -455,12 +475,14 @@ class RuleDns {
     bool? enabled,
     String? serverTag,
     bool? forceIpv4,
+    bool? blockHttps,
     List<String>? fixedIps,
   }) =>
       RuleDns(
         enabled: enabled ?? this.enabled,
         serverTag: serverTag ?? this.serverTag,
         forceIpv4: forceIpv4 ?? this.forceIpv4,
+        blockHttps: blockHttps ?? this.blockHttps,
         fixedIps: fixedIps ?? this.fixedIps,
       );
 
@@ -469,6 +491,7 @@ class RuleDns {
       !enabled &&
       serverTag.isEmpty &&
       !forceIpv4 &&
+      !blockHttps &&
       fixedIps.isEmpty;
 
   @override
@@ -478,11 +501,13 @@ class RuleDns {
           enabled == other.enabled &&
           serverTag == other.serverTag &&
           forceIpv4 == other.forceIpv4 &&
+          blockHttps == other.blockHttps &&
           _listEq(fixedIps, other.fixedIps));
 
   @override
   int get hashCode =>
-      Object.hash(enabled, serverTag, forceIpv4, Object.hashAll(fixedIps));
+      Object.hash(enabled, serverTag, forceIpv4, blockHttps,
+          Object.hashAll(fixedIps));
 }
 
 /// §247 — resolve-опция правила (route rule action `resolve`, sing-box 1.14).

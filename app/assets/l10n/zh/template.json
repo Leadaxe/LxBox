@@ -874,5 +874,11 @@
   },
   "Keep what the core has learned about each encrypted relay across restarts and config changes. Off: every start begins from the defaults and learns again.": {
     "value": "在重启和配置变更之间保留核心对每个加密中继的判断。关闭后，每次启动都从默认状态开始重新学习。"
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "拦截 HTTPS/SVCB 记录"
+  },
+  "Reply empty to HTTPS/SVCB DNS records (RFC 9460) for every domain, so apps such as Chrome do not use ECH and the site name stays visible to domain rules. Turn off to allow ECH; domain rules then miss ECH sites unless FakeIP is on.": {
+    "value": "对所有域名的 HTTPS/SVCB DNS 记录（RFC 9460）返回空应答，使 Chrome 等应用不使用 ECH，网站名称对域名规则保持可见。关闭则允许 ECH；此时除非开启 FakeIP，域名规则将无法匹配使用 ECH 的网站。"
   }
 }

@@ -938,6 +938,17 @@ locally, and traffic goes over IPv4. It needs no dedicated server and helps on
 networks with broken IPv6. With Fixed IP the box is inactive: the addresses
 already set the family.
 
+**Block HTTPS/SVCB records** answers HTTPS and SVCB queries for the rule's
+domains with an empty response. Chrome and other browsers take the ECH key
+from these records and hide the real site name behind a shared one such as
+`cloudflare-ech.com`; the rule then never sees its domain, and the traffic
+leaves by the default route. With the box on, the browser sends the name in
+the clear and the rule matches. The box ticks itself when you fill in
+domains; it is unavailable without a domain condition. To block these records
+for every site, add the **Block HTTPS/SVCB records** preset (Routing → Rules →
++). Apps that run their own DNS-over-HTTPS (a fixed Secure DNS provider in
+Chrome, DoH in Firefox) ask past the tunnel's DNS and are not affected.
+
 **Resolve before routing** looks up the domain's address before the rule
 picks a route, so IP rules and the address family apply. **Strategy** sets
 the family (`ipv4_only` and others); by default it follows the DNS settings.
@@ -947,8 +958,8 @@ timeout and Client subnet.
 
 Limitations the editor itself warns about:
 
-- Dedicated server and Fixed IP are unavailable with port and protocol
-  filters: they are unknown at the time of the DNS query;
+- with port, protocol or network filters the DNS options still work, but on
+  the rule's domains on any port and protocol: a DNS query carries neither;
 - with a rule-set they work only if the list contains domains: IP-only lists
   do not match DNS queries.
 

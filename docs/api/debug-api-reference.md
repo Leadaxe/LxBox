@@ -341,7 +341,7 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "num": 42,                        // только в ответе (§370, ось порядка; null — ещё не размечено); двигать — /rules/move
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
-  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
+  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "block_https": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + Block HTTPS/SVCB records (§755; действует при условии по домену) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],

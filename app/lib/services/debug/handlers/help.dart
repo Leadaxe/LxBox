@@ -734,7 +734,9 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 - emoji in URL path (✨auto etc.) — must be URL-encoded. curl does not do it for you.
 - Subscription URLs masked default (`scheme://host/***`); ?reveal=true for full.
 - /rules CRUD accepts snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
-  dns: {enabled, server_tag}) and returns snake_case.
+  dns: {enabled, server_tag, force_ipv4, block_https, fixed_ips}) and returns
+  snake_case. block_https (§755) answers HTTPS/SVCB queries for the rule's
+  domains empty (no ECH); ignored when the rule has no domain condition.
 - /rules resolve option (inline/srs): resolve: {only, strategy, server_tag,
   disable_cache, disable_optimistic_cache, rewrite_ttl, timeout, client_subnet}.
   only=false emits a non-terminal resolve rule BEFORE the route rule; only=true

@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Block HTTPS/SVCB records ([task 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227), contract 1.1.173).** Without FakeIP, Chrome took the ECH key from the HTTPS DNS record and hid the site name behind `cloudflare-ech.com`, so a domain rule silently missed and the traffic left by the default route. A rule's DNS & Resolve section gets a **Block HTTPS/SVCB records** box: HTTPS/SVCB queries for the rule's domains get an empty answer, the browser sends the name in the clear and the rule matches. The box ticks itself when domains are filled in; it is unavailable without a domain condition; saved rules are not changed. A new preset of the same name (off by default) does it for every domain.
+  (RU: без FakeIP Chrome брал ключ ECH из HTTPS-записи DNS и прятал имя сайта за `cloudflare-ech.com` — правило по домену молча не срабатывало. В секции DNS & Resolve правила — галочка Block HTTPS/SVCB records: пустой ответ на HTTPS/SVCB-запросы доменов правила, браузер шлёт имя открыто. Ставится сама при заполнении доменов, без условия по домену недоступна, сохранённые правила не меняются. Новый одноимённый пресет (выключен по умолчанию) — то же для всех доменов.)
+
+### Changed
+
+- **DNS options of a rule work with port and protocol filters ([task 755](docs/spec/tasks/755-block-https-svcb-records.md)).** Dedicated server, Fixed IP, Force IPv4 and Block HTTPS were unavailable once a rule had a port, protocol or network filter. Ports of a custom rule now sit on the routing rule instead of its rule-set (the match is the same), and the DNS options apply to the rule's domains on any port and protocol. A Force IPv4 box that was ticked on such a rule and silently did nothing now takes effect.
+  (RU: DNS-опции правила (Dedicated server, Fixed IP, Force IPv4, Block HTTPS) работают и с фильтрами по портам, протоколам и сети — на домены правила на любом порту. Порты правила стоят на маршрутном правиле, а не в его наборе; смысл тот же. Отмеченная раньше, но молча не действовавшая Force IPv4 у такого правила теперь действует.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Added

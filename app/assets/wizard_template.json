@@ -672,6 +672,13 @@
       ]
     },
     {
+      "preset_id": "block-https",
+      "ui": {"label": "Block HTTPS/SVCB records", "description": "Reply empty to HTTPS/SVCB DNS records (RFC 9460) for every domain, so apps such as Chrome do not use ECH and the site name stays visible to domain rules. Turn off to allow ECH; domain rules then miss ECH sites unless FakeIP is on.", "default": false, "num": 10, "isSortable": true},
+      "dns_rules": [
+        {"query_type": ["HTTPS", "SVCB"], "action": "predefined", "rcode": "NOERROR"}
+      ]
+    },
+    {
       "preset_id": "block-ads",
       "ui": {"label": "Block Ads", "description": "Reject ad-related connections. Downloads rule set (~1 MB).", "default": false, "num": 960, "isSortable": true},
       "rule_set": [

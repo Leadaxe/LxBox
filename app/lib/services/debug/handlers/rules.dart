@@ -598,7 +598,9 @@ CustomRule _ruleFromJsonStrict(Map<String, dynamic> j) {
 
 /// §117 задача 3 / §256 — DNS-опция правила. Wire shape (snake_case как у
 /// остальных полей API): `{"enabled": bool, "server_tag": dns-server-tag,
-/// "force_ipv4": bool}`. Отсутствие ключа → null (поле не задано).
+/// "force_ipv4": bool, "block_https": bool, "fixed_ips": [ip]}`. Отсутствие
+/// ключа → null (поле не задано). §755: `block_https` независим, как
+/// `force_ipv4`; без доменов в правиле сохраняется, но не действует.
 ///
 /// §256: `enabled`/`server_tag`/`force_ipv4` независимы — DNS-опция может
 /// нести только Force IPv4 (глушилка AAAA серверу не нужна). Поэтому
@@ -619,6 +621,11 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
     throw BadRequest('field "$key.force_ipv4" must be bool');
   }
   final forceIpv4 = forceRaw == true;
+  final blockRaw = v['block_https'];
+  if (blockRaw != null && blockRaw is! bool) {
+    throw BadRequest('field "$key.block_https" must be bool');
+  }
+  final blockHttps = blockRaw == true;
   final tagRaw = v['server_tag'];
   if (tagRaw != null && tagRaw is! String) {
     throw BadRequest('field "$key.server_tag" must be string');
@@ -644,6 +651,7 @@ RuleDns? _fieldRuleDns(Map<String, dynamic> m, String key) {
     enabled: enabled,
     serverTag: tag,
     forceIpv4: forceIpv4,
+    blockHttps: blockHttps,
     fixedIps: ips,
   );
 }

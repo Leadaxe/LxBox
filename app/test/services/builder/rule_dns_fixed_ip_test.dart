@@ -151,15 +151,16 @@ void main() {
       expect(m[0].body['answer'], ['*. 300 IN A 1.2.3.4']);
     });
 
-    test('ports → гейт, Fixed IP не эмитится; без адресов — тоже', () {
-      final gated = CustomRuleInline(
+    test('§755: ports не гейтят — Fixed IP эмитится; без адресов — нет', () {
+      final withPort = CustomRuleInline(
         name: 'g',
         domains: ['a.com'],
         ports: ['443'],
         outbound: 'direct-out',
         dns: const RuleDns(fixedIps: ['1.2.3.4']),
       );
-      expect(_apply(gated).dnsMirrors, isEmpty);
+      expect(_apply(withPort).dnsMirrors.every((m) => m.fixedAnswer), true);
+      expect(_apply(withPort).dnsMirrors, isNotEmpty);
       final empty = CustomRuleInline(
         name: 'e',
         domains: ['a.com'],

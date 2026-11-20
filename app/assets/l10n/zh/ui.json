@@ -5129,9 +5129,6 @@
   "Unattributed (no owner)": {
     "value": "无归属（未识别应用）"
   },
-  "Unavailable with port/protocol filters — they are unknown at DNS-query time.": {
-    "value": "使用端口/协议筛选时不可用——DNS 查询时这些信息还未知。"
-  },
   "Unique id — referenced by DNS rules / resolvers": {
     "value": "唯一标识——DNS 规则/解析器通过它引用"
   },
@@ -6862,5 +6859,17 @@
   },
   "Not applied: the detour is unavailable, nodes connect directly.": {
     "value": "未生效：detour 不可用，节点直接连接。"
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "拦截 HTTPS/SVCB 记录"
+  },
+  "Hides ECH from apps like Chrome so the site name stays visible and this rule can match it. Apps with their own DNS-over-HTTPS bypass it.": {
+    "value": "对 Chrome 等应用隐藏 ECH，使网站名称保持可见，本规则即可匹配。自带 DNS-over-HTTPS 的应用会绕过此拦截。"
+  },
+  "Needs a domain condition": {
+    "value": "需要域名条件"
+  },
+  "DNS options apply to these domains on any port and protocol": {
+    "value": "DNS 选项对这些域名的任意端口和协议生效"
   }
 }

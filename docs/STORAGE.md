@@ -64,7 +64,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ refs[]                list          srs — rule-set URLs (§434)
 │       ├─ update_interval_hours int?          srs — §366 TTL, only when not default
 │       ├─ ref, vars             string, object?  preset — preset_id and var overrides
-│       ├─ dns                   object?       §117/§256 — {enabled, serverTag, forceIpv4?}
+│       ├─ dns                   object?       §117/§256/§755 — {enabled, serverTag, forceIpv4?, blockHttps?, fixedIps?}
 │       └─ resolve               object?       §247 — {only, strategy?, serverTag?, …}
 │
 ├─ dns                           object          §044/§061/§439 — DNS records
@@ -1039,7 +1039,7 @@ anchors, see `rule_order.dart`).
     "wifi_bssid":       [ … ],
     "outbound":         "<tag>"     // or "action": "reject" instead of outbound
   },
-  "dns":     { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true },  // §117 task 3 + §256
+  "dns":     { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true, "blockHttps": true },  // §117 task 3 + §256 + §755
   "resolve": { "only": false, "strategy": "ipv4_only", "serverTag": "",
                "disableCache": true, "disableOptimisticCache": true,
                "rewriteTtl": 60, "timeout": "5s", "clientSubnet": "…" }                 // §247
@@ -1050,9 +1050,11 @@ Only non-empty matchers are written. `name` is user-supplied and mutable.
 
 OR semantics inside a category, AND between them. `protocol` and `ip_is_private` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` (or port ranges), `protocol` or `network` the mirror is not emitted.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. Since [§755] there is no port gate: `port`/`port_range` of an inline rule sit on the routing rule, not in the headless set, so every DNS aspect (mirror, `forceIpv4`, `fixedIps`, `blockHttps`) applies to the rule's domains on any port, protocol and `network`.
 
-`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol/network gate applies (the DNS layer is blind to port, protocol and network).
+`dns.blockHttps` ([§755], Block HTTPS/SVCB records) is optional: a serverless rule `{rule_set|match, query_type: [HTTPS, SVCB], action: predefined, rcode: NOERROR}` emitted first among the rule's DNS rules (then Force IPv4, then the server or Fixed IP). Apps get no ECH config and send a plain SNI, so the domain rule sees the site name. It takes effect only when the rule has a domain condition (`domain`/`domain_suffix`/`domain_keyword`/`domain_regex`, or any srs rule); otherwise the stored value is kept but ignored. Absent → `false`.
+
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order), after Block HTTPS (§755). No port gate since §755.
 
 `resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
@@ -1937,3 +1939,4 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
 [§435]: ./spec/tasks/435-node-sections-tailscale.md
 [§445]: ./spec/tasks/445-tailscale-state-dir-lifecycle.md
+[§755]: ./spec/tasks/755-block-https-svcb-records.md

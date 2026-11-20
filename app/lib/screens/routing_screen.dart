@@ -1179,7 +1179,8 @@ class _RoutingScreenState extends State<RoutingScreen>
         ? (preset?.touchesDns ?? false)
         : (rule.dnsMirrorActive ||
             rule.forceIpv4Active ||
-            rule.dnsFixedActive); // §683 — Answer = Fixed IP
+            rule.dnsFixedActive || // §683 — Answer = Fixed IP
+            rule.blockHttpsActive); // §755
 
     Widget? statusButton;
     if (rule is CustomRuleSrs) {

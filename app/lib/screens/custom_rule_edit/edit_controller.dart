@@ -139,6 +139,12 @@ class CustomRuleEditController extends ChangeNotifier {
   late RuleDns? _dns;
   late RuleResolve? _resolve;
 
+  /// §755 — были ли домены в форме на прошлом keystroke: галка Block
+  /// HTTPS ставится на переходе «пусто → не пусто». Стартовое значение — из
+  /// открытого правила, поэтому сохранённое правило с доменами при открытии
+  /// галку не получает.
+  late bool _hadDomains;
+
   /// §683 — последние опции резолва: снятие «Resolve before routing» и
   /// уход с «Resolve only» не теряют Strategy/Advanced.
   RuleResolve _resolveKeep = const RuleResolve();
@@ -274,10 +280,11 @@ class CustomRuleEditController extends ChangeNotifier {
   /// template; правило ссылается по tag, не вводит адрес — решение №2).
   List<String> get dnsServerTags => _dnsServerTags;
 
-  /// §117 гейт: headless rule_set не выражает port/protocol (и они неизвестны
-  /// в момент DNS-запроса) → DNS-чекбокс серый при непустых ports/protocols.
-  /// Live по текущему состоянию формы.
-  bool get dnsGateBlocked =>
+  /// §755: у правила есть порт, диапазон, протокол или `network` — DNS-
+  /// опции действуют на домены правила на любом порту и протоколе (у
+  /// DNS-запроса их нет). Раньше (§117) это был гейт, серивший секцию;
+  /// теперь — только повод для подсказки. Live по текущему состоянию формы.
+  bool get dnsAppliesAnyPort =>
       norm.normalizedPorts(portCtrl.text).isNotEmpty ||
       norm.normalizedPortRanges(portRangeCtrl.text).isNotEmpty ||
       _protocols.isNotEmpty ||
@@ -366,6 +373,7 @@ class CustomRuleEditController extends ChangeNotifier {
     _networkIsExpensive = r.networkIsExpensive;
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
+    _hadDomains = _hasDomainsInForm;
     _fixedChosen = r.dns?.fixedMode ?? false;
     _resolve = r.resolve;
     if (_resolve != null) _resolveKeep = _resolve!;
@@ -406,6 +414,44 @@ class CustomRuleEditController extends ChangeNotifier {
     // бы настройку безвозвратно). Гейт живёт в snapshot() (Save без доменов
     // → resolve отпадает) и в билдере (resolveActive); UI прячет ⚙/статус
     // через resolveEligible.
+    _autoCheckBlockHttps();
+    notifyListeners();
+  }
+
+  /// §755 — в форме inline-правила заполнено хоть одно доменное поле.
+  bool get _hasDomainsInForm =>
+      norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
+      norm
+          .normalizedDomains(domainSuffixCtrl.text, stripLeadingDot: true)
+          .isNotEmpty ||
+      norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
+      norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty;
+
+  /// §755 — автогалка Block HTTPS: домены inline-правила из пустых стали
+  /// непустыми (в том числе повторно — стёрли и ввели заново). Снятая руками
+  /// галка при дальнейшем вводе в непустое поле не возвращается.
+  void _autoCheckBlockHttps() {
+    if (_kind != CustomRuleKind.inline) return;
+    final now = _hasDomainsInForm;
+    if (now && !_hadDomains && !(_dns?.blockHttps ?? false)) {
+      _dns = (_dns ?? const RuleDns()).copyWith(blockHttps: true);
+    }
+    _hadDomains = now;
+  }
+
+  /// §755 — переключатель Block HTTPS доступен: srs — всегда; inline —
+  /// при условии по домену. Live по форме.
+  bool get blockHttpsAvailable => switch (_kind) {
+        CustomRuleKind.srs => true,
+        CustomRuleKind.inline => _hasDomainsInForm,
+        _ => false,
+      };
+
+  /// §755: галка Block HTTPS/SVCB records (HTTPS/SVCB-глушилка).
+  /// Ортогональна enabled/serverTag, как Force IPv4.
+  void setBlockHttps(bool v) {
+    final next = (_dns ?? const RuleDns()).copyWith(blockHttps: v);
+    _dns = next.isEmpty ? null : next;
     notifyListeners();
   }
 
@@ -860,7 +906,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §683 — ошибка поля Fixed IP (номер первой неразбираемой строки) или
   /// null. Только при выбранном Fixed IP; блокирует Save.
   String? get fixedIpError {
-    if (dnsAnswerMode != DnsAnswerMode.fixedIp || dnsGateBlocked) return null;
+    if (dnsAnswerMode != DnsAnswerMode.fixedIp) return null;
     final lines = fixedIpCtrl.text.split('\n');
     for (var i = 0; i < lines.length; i++) {
       final l = lines[i].trim();
@@ -881,8 +927,13 @@ class CustomRuleEditController extends ChangeNotifier {
         for (final l in _fixedIpLines)
           if (RuleDns.ipRecordType(l) != null) l,
     ];
+    // §755 — без доменов inline-правило Block HTTPS не несёт (переключатель
+    // недоступен; стёрли домены — галка не остаётся висеть в хранилище).
+    final blockHttps = (_dns?.blockHttps ?? false) &&
+        (_kind != CustomRuleKind.inline || _hasDomainsInForm);
     if (_dns == null && ips.isEmpty) return null;
-    return (_dns ?? const RuleDns()).copyWith(fixedIps: ips);
+    return (_dns ?? const RuleDns())
+        .copyWith(fixedIps: ips, blockHttps: blockHttps);
   }
 
   /// §117: выбор DNS-сервера для mirror'а (по tag из существующих).

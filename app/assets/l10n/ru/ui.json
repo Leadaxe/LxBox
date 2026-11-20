@@ -5405,9 +5405,6 @@
   "Unattributed (no owner)": {
     "value": "Без владельца (unattributed)"
   },
-  "Unavailable with port/protocol filters — they are unknown at DNS-query time.": {
-    "value": "Недоступно при фильтрах порта/протокола — в момент DNS-запроса они ещё неизвестны."
-  },
   "Unique id — referenced by DNS rules / resolvers": {
     "value": "Уникальный идентификатор — на него ссылаются DNS-правила и резолверы"
   },
@@ -7153,5 +7150,17 @@
   },
   "Not applied: the detour is unavailable, nodes connect directly.": {
     "value": "Не действует: detour недоступен, узлы подключаются напрямую."
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "Блокировать записи HTTPS/SVCB"
+  },
+  "Hides ECH from apps like Chrome so the site name stays visible and this rule can match it. Apps with their own DNS-over-HTTPS bypass it.": {
+    "value": "Скрывает ECH от приложений вроде Chrome: имя сайта остаётся видно, и правило может его сопоставить. Приложения со своим DNS-over-HTTPS обходят блокировку."
+  },
+  "Needs a domain condition": {
+    "value": "Нужно условие по домену"
+  },
+  "DNS options apply to these domains on any port and protocol": {
+    "value": "DNS-опции действуют на эти домены на любом порту и протоколе"
   }
 }

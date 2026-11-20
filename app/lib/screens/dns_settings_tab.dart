@@ -647,13 +647,23 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
         // Правило с одним сервером не тащит пустой Force-тумблер; включают
         // Force в редакторе правила.
         final hasForceAspect = cr.forceIpv4Active;
-        if (!hasServerAspect && !hasForceAspect && !hasFixedAspect) continue;
+        // §755 — Block HTTPS: строка, только когда галка реально действует.
+        final hasBlockHttpsAspect = cr.blockHttpsActive;
+        if (!hasServerAspect &&
+            !hasForceAspect &&
+            !hasFixedAspect &&
+            !hasBlockHttpsAspect) {
+          continue;
+        }
         final mirrors = _dnsMirrorsByRuleId[cr.id] ?? const <DnsMirrorEntry>[];
         Map<String, dynamic>? serverBody;
         Map<String, dynamic>? forceBody;
         Map<String, dynamic>? fixedBody;
+        Map<String, dynamic>? blockHttpsBody;
         for (final m in mirrors) {
-          if (m.fixedAnswer) {
+          if (m.blockHttps) {
+            blockHttpsBody ??= m.body; // §755
+          } else if (m.fixedAnswer) {
             // §683 — тело с адресами (A или AAAA) — для диалога по тапу.
             if (m.body.containsKey('answer')) fixedBody ??= m.body;
           } else if (m.serverless) {
@@ -699,6 +709,18 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                       ? getLocalText.s("matches only domains in the rule-set")
                       : null,
                   onRemove: () => _removeRuleFixedIp(cr),
+                )
+              : null,
+          blockHttpsRow: hasBlockHttpsAspect
+              ? DnsAspectRow(
+                  body: blockHttpsBody ??
+                      const <String, dynamic>{
+                        'query_type': ['HTTPS', 'SVCB'],
+                        'action': 'predefined',
+                        'rcode': 'NOERROR',
+                      },
+                  enabled: true,
+                  onRemove: () => _toggleRuleBlockHttps(cr, false),
                 )
               : null,
           forceIpv4Row: hasForceAspect
@@ -1193,14 +1215,22 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     _track(SettingsStorage.saveCustomRules(_customRules));
   }
 
+  /// §755: ✕ у строки Block HTTPS — пишет `RuleDns.blockHttps` тем же
+  /// путём, что Force IPv4 ([_saveRuleDns]).
+  void _toggleRuleBlockHttps(CustomRule cr, bool value) => _saveRuleDns(
+      cr, (cr.dns ?? const RuleDns()).copyWith(blockHttps: value));
+
   /// §257: свитч Force IPv4 в DNS-блоке правила — пишет `RuleDns.forceIpv4`
   /// (тот же persist-паттерн, что [_toggleRuleDns]). Снятие при пустых
   /// остальных полях обнуляет `dns` целиком (clearDns) — не копим мёртвый
   /// пустой объект в storage/backup (§256-инвариант).
-  void _toggleRuleForceIpv4(CustomRule cr, bool value) {
+  void _toggleRuleForceIpv4(CustomRule cr, bool value) => _saveRuleDns(
+      cr, (cr.dns ?? const RuleDns()).copyWith(forceIpv4: value));
+
+  /// Запись `RuleDns` правила; пустой объект снимается целиком (clearDns).
+  void _saveRuleDns(CustomRule cr, RuleDns next) {
     final idx = _customRules.indexWhere((r) => r.id == cr.id);
     if (idx < 0) return;
-    final next = (cr.dns ?? const RuleDns()).copyWith(forceIpv4: value);
     final clear = next.isEmpty;
     final updated = switch (cr) {
       CustomRuleInline() =>

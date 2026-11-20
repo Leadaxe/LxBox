@@ -874,5 +874,11 @@
   },
   "Keep what the core has learned about each encrypted relay across restarts and config changes. Off: every start begins from the defaults and learns again.": {
     "value": "Сохранять то, что ядро узнало о каждом зашифрованном релее, между перезапусками и сменами конфига. Выключено — каждый старт начинает с умолчаний и учится заново."
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "Блокировать записи HTTPS/SVCB"
+  },
+  "Reply empty to HTTPS/SVCB DNS records (RFC 9460) for every domain, so apps such as Chrome do not use ECH and the site name stays visible to domain rules. Turn off to allow ECH; domain rules then miss ECH sites unless FakeIP is on.": {
+    "value": "Отвечать пусто на DNS-записи HTTPS/SVCB (RFC 9460) для всех доменов: приложения вроде Chrome не используют ECH, и имя сайта остаётся видно правилам по домену. Выключите, чтобы разрешить ECH; тогда правила по домену не видят сайты с ECH, если не включён FakeIP."
   }
 }
