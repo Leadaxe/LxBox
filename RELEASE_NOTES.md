@@ -1,32 +1,38 @@
-# L×Box v2.25.23-rc.1
+# L×Box v2.25.23-rc.2
 
-**The first release candidate on top of [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).**
+**The second release candidate on top of [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).** Everything from rc.1 stays; new since rc.1: Block HTTPS/SVCB records, DNS options of a rule with port and protocol filters, the «Errors (N)» row above the navigation bar, and assistant checks while the core is not up yet.
 
 This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
 not offered to users of the stable release. It is a candidate because the app
 was split into two processes and this was checked on emulators only.
 
-**The app now runs as two processes**: the VPN tunnel and the window live apart, so closing the window frees its memory while the VPN keeps working, and with the VPN off and the window closed nothing stays in memory. **An AI assistant** (Android 16+) can diagnose and manage the network. **An imported backup is no longer lost**: it shows up at once, without a
+**Domain rules no longer miss sites with ECH** ([#227](https://github.com/Leadaxe/LxBox/issues/227)):
+a rule's DNS & Resolve section gets **Block HTTPS/SVCB records**, and a preset
+of the same name does it for every site. **DNS options of a rule work with
+port and protocol filters.** **The app now runs as two processes**: the VPN tunnel and the window live apart, so closing the window frees its memory while the VPN keeps working, and with the VPN off and the window closed nothing stays in memory. **An AI assistant** (Android 16+) can diagnose and manage the network. **An imported backup is no longer lost**: it shows up at once, without a
 restart. **Android TV remote**: the arrow keys no longer get stuck in option lists
 (theme, language and others) or in text fields of forms. **Comments in a
 server's JSON are kept** on the Source tab and in backups. Greyed-out
 dependent settings no longer look enabled. Inside a folder, a server whose
 detour is unavailable gets its own ⚠. Core `v1.14.4-lx.35` (unchanged),
-contract 1.1.172.
+contract 1.1.173.
 
-**Первый релиз-кандидат поверх [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).**
+**Второй релиз-кандидат поверх [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).** Всё из rc.1 остаётся; нового с rc.1: Block HTTPS/SVCB records, DNS-опции правила с фильтрами по портам и протоколам, строка «Errors (N)» над панелью навигации и проверки ассистента, пока ядро ещё не поднялось.
 
 На GitHub это pre-release; в Google Play он уходит в открытое тестирование.
 Пользователям стабильной версии не предлагается. Кандидат — потому что
 приложение разделено на два процесса, а проверено это только на эмуляторах.
 
-**Приложение теперь работает в двух процессах**: туннель VPN и окно живут раздельно — закрыли окно, его память освободилась, а VPN работает; при выключенном VPN и закрытом окне в памяти не остаётся ничего. **ИИ-ассистент** (Android 16+) может диагностировать сеть и управлять ей. **Импортированный бэкап больше не теряется**: он виден сразу, без
+**Правила по домену больше не пропускают сайты с ECH** ([#227](https://github.com/Leadaxe/LxBox/issues/227)):
+в секции DNS & Resolve правила — **Block HTTPS/SVCB records**, а одноимённый
+пресет делает то же для всех сайтов. **DNS-опции правила работают с фильтрами
+по портам и протоколам.** **Приложение теперь работает в двух процессах**: туннель VPN и окно живут раздельно — закрыли окно, его память освободилась, а VPN работает; при выключенном VPN и закрытом окне в памяти не остаётся ничего. **ИИ-ассистент** (Android 16+) может диагностировать сеть и управлять ей. **Импортированный бэкап больше не теряется**: он виден сразу, без
 перезапуска. **Пульт Android TV**: стрелки больше не застревают в списках-переключателях
 (тема, язык и другие) и в текстовых полях форм. **Комментарии в JSON
 сервера сохраняются** — на вкладке Source и в бэкапе. Серые зависимые
 настройки больше не выглядят включёнными. В папке сервер с недоступным
 detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изменений), контракт
-1.1.172.
+1.1.173.
 
 ---
 
@@ -34,6 +40,27 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
 <summary><h2>🇬🇧 English</h2></summary>
 
 ## ⚠️ Changed
+
+- **Block HTTPS/SVCB records: domain rules see sites behind ECH ([task 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227)).** New since rc.1.
+  Without FakeIP, Chrome took the ECH key from the site's HTTPS DNS record and
+  hid the real name behind a shared one such as `cloudflare-ech.com`. A rule
+  like `rutracker.org → vpn-1` then never matched, and the traffic silently
+  left by the default route. A rule's DNS & Resolve section now has **Block
+  HTTPS/SVCB records**: HTTPS and SVCB queries for the rule's domains get an
+  empty answer, the browser sends the name in the clear, and the rule
+  matches. Defaults: the box ticks itself when you fill in domains in a new
+  or edited rule; it is unavailable without a domain condition; **saved rules
+  are not changed** — open the rule and tick it. A new preset of the same name
+  (Routing → Rules → +) does it for every site and is **off by default**.
+  Apps with their own DNS-over-HTTPS (a fixed Secure DNS provider in Chrome,
+  DoH in Firefox) are not affected. **Not checked on a device.**
+- **DNS options of a rule work with port and protocol filters ([task 755](docs/spec/tasks/755-block-https-svcb-records.md)).** New since rc.1.
+  Dedicated server, Fixed IP, Force IPv4 and Block HTTPS were greyed out once
+  a rule had a port, protocol or network filter. They now apply to the rule's
+  domains on any port and protocol; a custom rule's ports moved from its
+  rule-set to the routing rule, the match is the same. **Note:** a Force IPv4
+  box or a DNS option that was set on such a rule and silently did nothing
+  now takes effect.
 
 - **Two processes: the tunnel and the window ([task 747](docs/spec/tasks/747-two-processes-ui-bg.md)).**
   The VPN service with the core runs in its own process, the window with the
@@ -71,6 +98,15 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
   after the next build once the target is back.
 
 ## 🐛 Fixed
+
+- **The «Errors (N)» row no longer hides under the navigation bar ([task 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** New since rc.1.
+  With three-button navigation the red row on the main screen was drawn
+  under the system buttons, and a tap hit the system button instead of
+  opening the error log. The row now sits above the bar.
+- **Assistant URL and exit checks while the core is not up ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New since rc.1.
+  `checkUrl` and `checkExit` called before the core is reachable answer «The
+  VPN core is not reachable yet», like `selectExit`, instead of a raw RPC
+  error.
 
 - **Imported backup shows up at once and is no longer lost ([task 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
   After Settings → Backup → Transfer to desktop → Import, the imported
@@ -114,7 +150,7 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
   for the service and for the UI. Behaviour is unchanged; this prepares
   running the VPN in its own process.
 - CI checks the architecture boundaries on every push.
-- Shared contract 1.1.172 (comments in a JSON node source).
+- Shared contract 1.1.173: Block HTTPS/SVCB records — preset and rule field, DNS options without the port gate (since rc.1); 1.1.172 — comments in a JSON node source.
 - Core `v1.14.4-lx.35`, unchanged.
 
 </details>
@@ -123,6 +159,27 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
 <summary><h2>🇷🇺 Русский</h2></summary>
 
 ## ⚠️ Изменено
+
+- **Block HTTPS/SVCB records: правила по домену видят сайты за ECH ([задача 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227)).** Новое с rc.1.
+  Без FakeIP Chrome брал ключ ECH из HTTPS-записи DNS сайта и прятал настоящее
+  имя за общим вроде `cloudflare-ech.com`. Правило вида `rutracker.org → vpn-1`
+  тогда не срабатывало, и трафик молча уходил маршрутом по умолчанию. В
+  секции DNS & Resolve правила появилась галочка **Block HTTPS/SVCB records**:
+  на HTTPS- и SVCB-запросы доменов правила — пустой ответ, браузер шлёт имя
+  открыто, и правило срабатывает. По умолчанию: галочка ставится сама, когда
+  вы заполняете домены в новом или редактируемом правиле; без условия по
+  домену она недоступна; **сохранённые правила не меняются** — откройте
+  правило и отметьте её. Новый одноимённый пресет (Routing → Rules → +)
+  делает то же для всех сайтов и **по умолчанию выключен**. На приложения со
+  своим DNS-over-HTTPS (заданный провайдер Secure DNS в Chrome, DoH в Firefox)
+  это не действует. **На устройстве не проверено.**
+- **DNS-опции правила работают с фильтрами по портам и протоколам ([задача 755](docs/spec/tasks/755-block-https-svcb-records.md)).** Новое с rc.1.
+  Dedicated server, Fixed IP, Force IPv4 и Block HTTPS были серыми, как только
+  у правила появлялся фильтр по порту, протоколу или сети. Теперь они
+  действуют на домены правила на любом порту и протоколе; порты своего
+  правила переехали из его набора на маршрутное правило, смысл тот же.
+  **Внимание:** отмеченная у такого правила Force IPv4 или DNS-опция, которая
+  раньше молча не действовала, теперь начнёт действовать.
 
 - **Два процесса: туннель и окно ([задача 747](docs/spec/tasks/747-two-processes-ui-bg.md)).**
   Сервис VPN с ядром работает в своём процессе, окно с интерфейсом — в другом.
@@ -159,6 +216,15 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
   после следующей сборки, когда цель снова доступна.
 
 ## 🐛 Исправлено
+
+- **Строка «Errors (N)» больше не уходит под панель навигации ([задача 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** Новое с rc.1.
+  При трёхкнопочной навигации красная строка на главном рисовалась под
+  системными кнопками, и тап попадал в системную кнопку вместо журнала
+  ошибок. Теперь строка стоит над панелью.
+- **Проверки адреса и выхода у ассистента, пока ядро не поднялось ([задача 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** Новое с rc.1.
+  `checkUrl` и `checkExit`, вызванные до того, как ядро стало доступно,
+  отвечают «The VPN core is not reachable yet», как `selectExit`, а не сырой
+  ошибкой RPC.
 
 - **Импортированный бэкап виден сразу и больше не теряется ([задача 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
   После Settings → Backup → Transfer to desktop → Import импортированные
@@ -202,7 +268,7 @@ detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изме�
   сервиса и у интерфейса. Поведение не менялось; это подготовка к запуску
   VPN в отдельном процессе.
 - CI проверяет архитектурные границы на каждом push.
-- Общий контракт 1.1.172 (комментарии в JSON-исходнике узла).
+- Общий контракт 1.1.173: Block HTTPS/SVCB records — пресет и поле правила, DNS-опции без гейта портов (с rc.1); 1.1.172 — комментарии в JSON-исходнике узла.
 - Ядро `v1.14.4-lx.35`, без изменений.
 
 </details>
