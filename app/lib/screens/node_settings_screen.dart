@@ -407,6 +407,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       selfDisplayTag: member == null
           ? TagResolver.displayTag(list.tagPrefix, _originalTag)
           : '',
+      selfSourceId: list.id,
     );
     if (target == null || !mounted) return;
     setState(() => _detour = target.link);

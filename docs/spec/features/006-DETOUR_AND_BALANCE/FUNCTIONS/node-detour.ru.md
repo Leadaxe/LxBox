@@ -28,7 +28,7 @@ directly to this server.». Если последняя сборка detour сн
 
 | Ручка | Значения | Умолчание | Ключ ядра |
 |---|---|---|---|
-| Detour server | None (direct) · член этой папки · detour-Направление · свободный сервер | None | `detour` узла |
+| Detour server | None (direct) · член этой папки · detour-Направление · группа свёртки · свободный сервер | None | `detour` узла |
 
 Секции пикера «Detour server», сверху вниз:
 
@@ -37,6 +37,7 @@ directly to this server.». Если последняя сборка detour сн
 | None (direct) | — | всегда |
 | This folder (N) | члены своей папки, кроме себя и групп; «Chains inside the folder get the folder detour appended» | только в контексте папки |
 | Directions | включённые Направления с «Use as detour», подпись «Switchable detour direction», текущий выбор в скобках | есть хоть одно |
+| Replace groups | группы свёртки включённых источников, все режимы, кроме группы своего источника и тёзки Направления; `режим · источник` (задача 756) | есть хоть одна |
 | Standalone servers | узлы включённых одиночных серверов, кроме себя и групп; `TYPE · server:port` | иначе «No standalone servers available» |
 
 ## Входы / Выходы
@@ -57,6 +58,9 @@ directly to this server.». Если последняя сборка detour сн
 - Узел автовыбора (группа) целью не бывает и сам блока Detour не
   имеет (P12). Запрет живёт в пикере: `detour` на узел автовыбора,
   пришедший в теле или импортом, сборка принимает.
+- Группа свёртки источника (Replace with a group) — цель в любом режиме
+  (Manual, Auto, Both): ссылка корневая, на имя группы. Группу своего
+  источника пикер не предлагает (задача 756).
 - Разрешение ссылки — вторым проходом сборки, когда известны все
   финальные теги; цель может стоять ниже по списку источников.
 - Недоступная цель (задача 739): ссылка на пропавший/выключенный узел,
@@ -96,3 +100,4 @@ directly to this server.». Если последняя сборка detour сн
 | 8 | [252](../../../tasks/252-physical-packet-route-line.md) | РЕАЛИЗОВАНО | Превью пути в порядке пакета |
 | 9 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | Ссылка — адрес `{folder_id?, tag}`, fail-closed |
 | 10 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` уступает detour сборки |
+| 11 | [756](../../../tasks/756-detour-picker-replace-groups.md) | Done | Секция Replace groups в пикере |

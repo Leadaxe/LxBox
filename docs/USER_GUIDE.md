@@ -1121,23 +1121,28 @@ from the settings of whatever you assign the detour to.
 | A whole folder | Folder → **Settings** tab | All folder members |
 | One folder member | Folder → the member | This member only |
 
-The window has four sections:
+The window has five sections:
 
 - **None (direct)** — no detour;
 - **This folder** — members of the same folder; the section appears in the
   settings of a folder and of its members;
 - **Directions** — detour directions; the section appears when such
   directions exist;
+- **Replace groups** — subscriptions and folders replaced with a group by
+  Replace with a group, in any mode; the section appears when such groups
+  exist. The group of the source you are assigning the detour to is not
+  shown;
 - **Standalone servers** — standalone servers.
 
 The window does not offer servers of a subscription, members of another
-folder, auto nodes or groups. A subscription's servers change with every
+folder or auto nodes. A subscription's servers change with every
 update, and a member of another folder lives under that folder's settings;
 a detour through a rotating pool gives an unpredictable path. The Directions
 section lists only enabled directions with Use as detour. To go out through
 such a server anyway, add it as a standalone server (Copy URI in its
 long-press menu, then add the link), or select it in a direction with Use as
-detour and pick that direction.
+detour and pick that direction. To go out through a whole subscription,
+replace it with a group and pick the group in Replace groups.
 
 A subscription or folder whose servers go through intermediate links shows
 two more boxes in its Settings tab. A link is a server another server of the

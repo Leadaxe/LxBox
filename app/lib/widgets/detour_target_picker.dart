@@ -5,6 +5,7 @@ import '../models/direction.dart';
 import '../models/node_link.dart';
 import '../models/node_spec.dart';
 import '../models/server_list.dart';
+import '../models/source_replace.dart';
 import '../services/node_link_address.dart';
 import '../services/selector_info.dart';
 import '../services/tag_resolver.dart';
@@ -190,6 +191,38 @@ List<Direction> visibleDetourDirections(
   ];
 }
 
+/// Задача 756 — группа свёртки источника как цель detour.
+typedef ReplaceGroupTarget = ({String tag, ReplaceMode mode, String source});
+
+/// Задача 756 — группы свёртки (фича 565, «Replace with a group») для секции
+/// Replace groups пикера: включённые источники, все режимы. Имя свёртки —
+/// корневая цель ссылок (`computeNodeLinkPool`), у `both` целью идёт
+/// селектор, двойник `<tag>-auto` отдельно не предлагается (как у
+/// Направлений). Скрыты: группа источника [selfSourceId] (узел не ходит через
+/// группу, в которой состоит), пустое имя и имя, совпавшее с тегом
+/// Направления или его двойника — такая ссылка разрешилась бы в Направление
+/// (`replace_tag_conflict`).
+List<ReplaceGroupTarget> visibleReplaceGroups(
+  List<SubscriptionEntry> entries, {
+  List<Direction> directions = const [],
+  String selfSourceId = '',
+}) {
+  final taken = <String>{
+    for (final d in directions) ...[d.tag, d.autoTag],
+  };
+  final out = <ReplaceGroupTarget>[];
+  for (final e in entries) {
+    final list = e.list;
+    final r = list.replace;
+    if (r == null || !list.enabled) continue;
+    if (selfSourceId.isNotEmpty && list.id == selfSourceId) continue;
+    final tag = r.tag.trim();
+    if (tag.isEmpty || !taken.add(tag)) continue;
+    out.add((tag: tag, mode: r.mode, source: e.displayName));
+  }
+  return out;
+}
+
 /// §239 — единый пикер цели detour. Дисциплина владения:
 ///  - «свободные» одиночные серверы (enabled UserServer) — всегда;
 ///  - члены [currentFolder] — только если она задана (member/override
@@ -197,7 +230,10 @@ List<Direction> visibleDetourDirections(
 ///  - ЧУЖИЕ папки — никогда (их члены живут под чужой политикой);
 ///  - §248 — detour-Направления ([directions] с enabled && isDetour) — секцией
 ///    Directions выше Standalone; вызывающий грузит SettingsStorage.getDirections
-///    перед показом.
+///    перед показом;
+///  - задача 756 — группы свёртки чужих источников секцией Replace groups
+///    (см. [visibleReplaceGroups]); [selfSourceId] — источник, которому
+///    назначают detour, в контексте папки — она сама.
 ///
 /// [selfBareTag] — исключить сам настраиваемый узел (по голому тегу для
 /// членов текущей папки и по display-form для свободных, см. вызовы).
@@ -210,6 +246,7 @@ Future<DetourTarget?> showDetourTargetPicker(
   FolderServers? currentFolder,
   String selfBareTag = '',
   String selfDisplayTag = '',
+  String selfSourceId = '',
 }) {
   // Свободные одиночки (display-form, §080).
   final free = <(String display, NodeSpec node)>[];
@@ -247,6 +284,13 @@ Future<DetourTarget?> showDetourTargetPicker(
 
   // §248 — detour-Направления (фильтрация — см. [visibleDetourDirections]).
   final detourDirections = visibleDetourDirections(directions, folder);
+
+  // Задача 756 — группы свёртки источников.
+  final replaceGroups = visibleReplaceGroups(
+    controller.entries,
+    directions: directions,
+    selfSourceId: selfSourceId.isNotEmpty ? selfSourceId : (folder?.id ?? ''),
+  );
 
   return showAppBottomSheet<DetourTarget>(
     context: context,
@@ -331,6 +375,36 @@ Future<DetourTarget?> showDetourTargetPicker(
                         DetourTarget(
                             link: NodeLink(tag: c.tag),
                             display: c.displayLabel)),
+                  ),
+              ],
+              if (replaceGroups.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Text(getLocalText.s("Replace groups"),
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(color: theme.colorScheme.primary)),
+                ),
+                for (final g in replaceGroups)
+                  ListTile(
+                    title: Text(g.tag,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(
+                      [
+                        switch (g.mode) {
+                          ReplaceMode.manual => getLocalText.s("Manual"),
+                          ReplaceMode.auto => getLocalText.s("Auto"),
+                          ReplaceMode.both => getLocalText.s("Both"),
+                        },
+                        if (g.source.isNotEmpty && g.source != g.tag) g.source,
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: muted),
+                    ),
+                    onTap: () => Navigator.pop(
+                        ctx,
+                        DetourTarget(
+                            link: NodeLink(tag: g.tag), display: g.tag)),
                   ),
               ],
               if (free.isNotEmpty) ...[

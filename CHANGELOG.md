@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- **The Detour server window offers replace groups ([task 756](docs/spec/tasks/756-detour-picker-replace-groups.md)).** A subscription or folder replaced with a group could not be picked as a detour for another server; the window now has a Replace groups section with such groups in every mode.
+  (RU: подписку или папку, свёрнутую в группу, нельзя было выбрать как detour для другого сервера; в окне Detour server появился раздел Replace groups с такими группами во всех режимах.)
 - **The «Errors (N)» row no longer hides under the navigation bar ([task 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** With three-button navigation the red row on the main screen was drawn under the system buttons and a tap hit the system button; the row now sits above the bar.
   (RU: при трёхкнопочной навигации красная строка «Errors (N)» на главном рисовалась под системными кнопками, тап попадал в системную кнопку; теперь строка над панелью.)
 - **Assistant `checkUrl` / `checkExit` while the core is not up ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** They answer «The VPN core is not reachable yet», like `selectExit`, instead of a raw RPC error.

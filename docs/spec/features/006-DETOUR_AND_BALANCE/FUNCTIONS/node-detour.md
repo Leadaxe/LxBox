@@ -29,7 +29,7 @@ or folder ("nodes connect directly").
 
 | Knob | Values | Default | Core key |
 |---|---|---|---|
-| Detour server | None (direct) · member of this folder · detour Direction · free server | None | the node's `detour` |
+| Detour server | None (direct) · member of this folder · detour Direction · replace group · free server | None | the node's `detour` |
 
 Sections of the "Detour server" picker, top to bottom:
 
@@ -38,6 +38,7 @@ Sections of the "Detour server" picker, top to bottom:
 | None (direct) | — | always |
 | This folder (N) | members of its own folder, except itself and groups; "Chains inside the folder get the folder detour appended" | only in the folder context |
 | Directions | enabled Directions with "Use as detour", caption "Switchable detour direction", the current selection in parentheses | when there is at least one |
+| Replace groups | replace groups of enabled sources, every mode, except the group of its own source and a Direction namesake; `mode · source` (task 756) | when there is at least one |
 | Standalone servers | nodes of enabled standalone servers, except itself and groups; `TYPE · server:port` | otherwise "No standalone servers available" |
 
 ## Inputs / Outputs
@@ -58,6 +59,9 @@ the config; a warning if the node dropped out.
 - An auto-select node (group) is never a target and has no Detour block
   itself (P12). The ban lives in the picker: a `detour` to an auto-select
   node that arrives in a body or via import is accepted by the build.
+- A source's replace group (Replace with a group) is a target in every mode
+  (Manual, Auto, Both): the reference is a root one, to the group name. The
+  picker does not offer the group of the node's own source (task 756).
 - The reference is resolved in the build's second pass, when all final tags
   are known; the target may be lower in the source list.
 - Unavailable target (task 739): a reference to a missing/disabled node, a
@@ -98,3 +102,4 @@ the config; a warning if the node dropped out.
 | 8 | [252](../../../tasks/252-physical-packet-route-line.md) | IMPLEMENTED | Path preview in packet order |
 | 9 | [439F](../../../tasks/439F-storage-contract-1-0/spec.md) | Released v2.24.0 | A reference is an address `{folder_id?, tag}`, fail-closed |
 | 10 | [574](../../../tasks/574-tls-fragment-yields-to-detour.md) | Released v2.25.7 | `tls.fragment` yields to a build detour |
+| 11 | [756](../../../tasks/756-detour-picker-replace-groups.md) | Done | Replace groups section in the picker |
