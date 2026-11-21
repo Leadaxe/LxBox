@@ -8,6 +8,39 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **TrustTunnel `tt://` links by the registry ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.175).**
+  The link is now read by a table: the binary container is described in the
+  protocol record of the registry, and the application no longer carries a
+  decoder written for this one format. What changed for the node: the
+  certificate name (`tls.server_name`) is always the host name of the link —
+  a custom SNI is reported and not applied, because the core has one name for
+  both and the certificate is issued for the host name; a certificate chain
+  arrives as one PEM block per certificate; the TLS profile of the link turns
+  on uTLS (Chrome, Safari, Firefox, Android), except with HTTP/3. Notices are
+  the final ones: `tt_field_unsupported` names the setting the node cannot
+  express, `tt_subscription_ignored` — a subscription address next to a
+  server, `tt_subscription_only` — a link that carries only a subscription
+  (nothing is imported). A link with a subscription address that is not
+  `https://` is rejected. The engine can also build a `tt://` link back from a
+  node body, byte for byte as the AdGuard encoder. Not yet: TrustTunnel
+  subscriptions. Issue #194.
+  (RU: Ссылки `tt://` TrustTunnel по реестру: ссылку читает таблица — бинарный
+  контейнер описан в записи протокола реестра, отдельного декодера под этот
+  формат в приложении больше нет. Что изменилось для узла: имя сертификата
+  (`tls.server_name`) — всегда имя хоста из ссылки; свой SNI называется в
+  предупреждении и не применяется, потому что у ядра имя одно на оба смысла, а
+  сертификат выписан на имя хоста; цепочка сертификатов приезжает блоком PEM
+  на каждый сертификат; TLS-профиль ссылки включает uTLS (Chrome, Safari,
+  Firefox, Android), кроме HTTP/3. Предупреждения — финальные:
+  `tt_field_unsupported` называет настройку, которую узел выразить не может,
+  `tt_subscription_ignored` — адрес подписки рядом с сервером,
+  `tt_subscription_only` — ссылку, несущую только подписку (ничего не
+  импортируется). Ссылка с адресом подписки не `https://` отвергается. Движок
+  умеет собрать ссылку `tt://` обратно из тела узла, байт в байт как энкодер
+  AdGuard. Пока нет: подписок TrustTunnel. Issue #194.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Added

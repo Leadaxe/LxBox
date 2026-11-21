@@ -519,7 +519,8 @@ NodeSpec? _registryTypeNode(
   return unknownTypeNodeFromBody(
     type: type,
     body: {...body}..remove('tag'),
-    label: tag is String && tag.isNotEmpty ? tag : label,
+    label: label,
+    tag: tag is String && tag.isNotEmpty ? tag : null,
     rawSource: source,
     server: body['server'],
     port: body['server_port'],

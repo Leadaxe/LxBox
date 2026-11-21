@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done (итерация 1: разбор ссылки; Share-энкодер, подписка и финальные коды — после записи лаунчера §157) |
+| Status | Done (итерация 1: разбор ссылки; итерация 2, 21.11.2026: контракт 1.1.175 — секция реестра, табличный кодек `tlv`, обратный ход, финальные коды; подписка TrustTunnel — вторая очередь, не начата) |
 | Start date | 2026-11-04 |
 | Source | issue #194 (вставка `tt://` из буфера не распознаётся); решение владельца: «поддержка формата tt://, с ним в паре сделать поддержку ссылок» |
-| Related specs | §698 (узел `trusttunnel` из реестра, тип без своей модели), §585/§586 (`UnknownTypeSpec`), §562 (имена схем только из реестра); контракт — запрос лаунчеру `TASKS_LXBOX.md` §157 |
+| Related specs | §698 (узел `trusttunnel` из реестра, тип без своей модели), §585/§586 (`UnknownTypeSpec`), §562 (имена схем только из реестра); контракт — запрос лаунчеру `TASKS_LXBOX.md` §157, ответ §177 (контракт 1.1.175, `MAPPER_ENGINE.md` §4a) |
 
 ## Problem
 
@@ -191,3 +191,102 @@ base64url без padding над бинарным TLV (tag и длина — QUIC
 `with_trusttunnel` узел всё равно выключит страховка core-rejected.
 Запрос лаунчеру — `TASKS_LXBOX.md` §157 (dad60135, f6f169b3: varint QUIC, не
 LEB128).
+
+## Итерация 2 — контракт 1.1.175 (21.11.2026)
+
+Лаунчер ответил на §157 разделом `TASKS_LXBOX.md` §177: секция `mappers.uri`
+записи `trusttunnel` приехала реестром (коммит лаунчера `370e81a4`). Текст
+выше описывает итерацию 1; там, где он расходится с этим разделом, действует
+этот раздел.
+
+### Что изменилось по существу
+
+- **Декодера под схему нет.** `tt_deeplink` и файл
+  `lib/services/parser/tt_deeplink.dart` сняты. Формат раскрывает табличный
+  примитив `tlv` (`lib/services/parser/engine/tlv.dart`) по диалекту секции
+  `mappers.uri.tlv`: место пейлоада (`in`), обёртка base64url, QUIC-varint,
+  таблица полей с типами `varint` / `string` / `bool` / `enum` /
+  `string_list` / `der_pem` / `hostport`, умолчания формата. Кодек не знает
+  ни одного тега. Диалект — поле `MapperSection.tlv`; шаг формы —
+  `"decode": ["tlv"]`, пространство `json`.
+- **Черновик снят целиком**: `assets/contract_draft/uri/trusttunnel.json`
+  удалён, `'trusttunnel'` убран из `kDraftFiles`.
+- **`tls.server_name` ← `hostname`, не `custom_sni`** (решение владельца,
+  §177 п. 2): у клиента AdGuard `custom_sni` — SNI, а сертификат сверяется с
+  `hostname`; у ядра имя одно. `custom_sni` снимается с
+  `tt_field_unsupported`.
+- **Объект контейнера** (отличия от итерации 1): `upstream_protocol` только
+  `http3` (`http2` — умолчание формата, в объект не кладётся); `certificate`
+  — блок PEM на каждый DER-сертификат цепочки, блоки через `\n`, без
+  хвостового перевода строки; тег `0x10 tls_profile` (`enum`, `chrome` —
+  умолчание); строка не UTF-8 — U+FFFD на серию битых байтов, а не отказ;
+  `subscription_url` не `https://` — контейнер не прочитан; пустой контейнер
+  — пустой объект и `field_missing`; ссылка-подписка — объект с одним
+  `subscription_url`, а снимает её запись-селектор `subscription_only`.
+- **`tls_profile` → uTLS**: `chrome_canary` → `chrome`, `safari`, `firefox`,
+  `okhttp` → `android`; `openssl` / `boringssl` uTLS не включают; при `http3`
+  запись молчит с кодом (ядро не совмещает uTLS с QUIC).
+- **Коды** — финальные, тексты из `registry/warnings.json`:
+  `tt_field_unsupported` (warning, параметр `field`),
+  `tt_subscription_ignored` (info), `tt_subscription_only` (error, узел снят);
+  битый контейнер — `form_unrecognized`; нет адреса, порта или пароля —
+  `field_missing`. `uri_param_unknown` и `service_record_ignored` для `tt://`
+  больше не ставятся.
+- **Обратный ход** — `emit.container: "tlv"`: объект собирается по
+  `emit.json_map` (ссылка — путь тела, `$label`, `$param.<запись>`, литерал
+  `=…`, цепочка через `|` — первая давшая значение), сериализуется диалектом
+  в порядке `emit.param_order`; значение, равное умолчанию формата, не
+  пишется.
+
+### Правки движка, общие для всех секций
+
+- `maps_to: null` + `value_map` + `on_invalid: {action: drop}` у селектора:
+  промах таблицы снимает узел кодом, как у записи с путём (раньше код
+  ставился предупреждением, узел жил).
+- `value_map` → `null` больше не применяет `implies` записи (семантика Go
+  `linkmap/exec.go`; у `tls_profile: openssl` иначе появлялся пустой
+  `tls.utls.enabled`).
+- `on_present` / `on_when_false` несут объявленные `params` в предупреждение.
+- Форма с пространством `json` отдаёт фрагмент ссылки источником `fragment`
+  (метка после `#` у контейнера).
+- Узел без своей модели из ссылки: метка — как в ссылке (пустая, если имени
+  нет), тег — фолбэк `<тип>-<адрес>-<порт>`; раньше фолбэк подставлялся и в
+  метку.
+
+### Файлы
+
+- `app/lib/services/parser/engine/tlv.dart` (новый) — кодек; сюда переехали
+  `readVarint`, `writeVarint`, `encodeTlv`, `encodeStringArray`,
+  `splitHostPort`, DER↔PEM.
+- `app/lib/services/parser/engine/section.dart` — `MapperSection.tlv`;
+  `interpreter.dart` — шаг `tlv`, правки движка выше; `emitter.dart` —
+  `_emitTlv`, `_containerValue`, `_paramSpelling`.
+- `app/lib/services/parser/singbox_config.dart`,
+  `mappers/uri_pipeline.dart` — тег и метка узла без модели.
+- `app/test/parser/tt_deeplink_test.dart` — переписан;
+  `app/test/contract/template_contract_test.dart` — раннер читает
+  `sections[]` (кейс 1.1.174, приехал тем же синком).
+- Синк: `app/contract/`, `app/assets/contract/`, `docs/contract/`,
+  `app/contract.lock`.
+
+### Проверка
+
+- Корпус `contract/corpus/uri/trusttunnel/` — 30 из 30
+  (`test/contract/contract_test.dart`).
+- Побайтный паритет обратного хода (ссылка из тела равна исходной) на
+  `http2_basic`, `ipv6_address`, `cert_chain_two`, `tls_profile_firefox`,
+  `tls_profile_okhttp` — группа 8 `tt_deeplink_test.dart`.
+- `flutter analyze` — без замечаний; адресный прогон тестов движка, реестра
+  и корпусов (URI, шаблон) — зелёный.
+
+### Не сделано
+
+- Подписка TrustTunnel (`subscription_url`, ответ JSON `version: 1`) и форма
+  Add server — вторая очередь по §177.
+- Share у узла `trusttunnel`, пришедшего из sing-box JSON:
+  `UnknownTypeSpec.toUri()` по-прежнему отдаёт `rawSource` (у узла из ссылки
+  это сама ссылка). Движковый эмит готов, к `toUri()` не подключён.
+- Задачи §176 (контракт 1.1.174) кроме чтения `sections[]` раннером: отказ
+  загрузки шаблона с `sections` и корневым `vars` вместе, подтверждение
+  списка общих `id` — отдельная задача.
+- Устройство и эмулятор не проверялись.

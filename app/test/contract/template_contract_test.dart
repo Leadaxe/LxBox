@@ -62,9 +62,16 @@ _Case _loadCase(String base) {
   final expected = jsonDecode(File('$base.expected.json').readAsStringSync())
       as Map<String, dynamic>;
 
+  // Контракт 1.1.174 (TEMPLATE_LANG §2.3, TASKS_LXBOX §176) — объявления
+  // лежат либо в плоском корневом `vars[]`, либо в `sections[].vars[]`:
+  // разделы по порядку, внутри раздела переменные по порядку.
   final vars = <WizardVar>[
     for (final v in (tpl['vars'] as List? ?? const []))
       WizardVar.fromJson(v as Map<String, dynamic>),
+    for (final s in (tpl['sections'] as List? ?? const []))
+      if (s is Map)
+        for (final v in (s['vars'] as List? ?? const []))
+          WizardVar.fromJson(v as Map<String, dynamic>),
   ];
 
   return _Case(

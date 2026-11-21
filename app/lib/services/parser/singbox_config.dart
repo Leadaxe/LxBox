@@ -429,22 +429,26 @@ NodeSpec? _ownUnknownTypeNode(
 ///
 /// Общий конструктор двух входов: sing-box-JSON ([_ownUnknownTypeNode]) и
 /// конвейер ссылки (`uri_pipeline.dart`), когда тип известен реестру, а
-/// `parseSingboxEntry` модели для него не знает. Тег — [label], пустой —
-/// имя типа; адрес — [server]/[port], если это строка и число.
+/// `parseSingboxEntry` модели для него не знает. Тег — [tag]; не назван —
+/// [label], пустой — имя типа, и метка тогда равна тегу. С названным [tag]
+/// метка остаётся как пришла: у ссылки без имени она пуста, а тег-фолбэк в
+/// имя не подставляется (иначе `toUri()` вернул бы выдуманное имя). Адрес —
+/// [server]/[port], если это строка и число.
 UnknownTypeSpec unknownTypeNodeFromBody({
   required String type,
   required Map<String, dynamic> body,
   required String label,
   required String rawSource,
+  String? tag,
   Object? server,
   Object? port,
   List<NodeWarning>? warnings,
 }) {
-  final tag = label.isNotEmpty ? label : type;
+  final own = label.isNotEmpty ? label : type;
   return UnknownTypeSpec(
     id: newUuidV4(),
-    tag: tag,
-    label: tag,
+    tag: tag ?? own,
+    label: tag == null ? own : label,
     type: type,
     body: body,
     server: server is String ? server : '',
