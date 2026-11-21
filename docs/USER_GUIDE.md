@@ -290,6 +290,11 @@ schemes are rejected with a note on the entry. A uTLS fingerprint like
 `hellochrome_120` is shortened to `chrome`; an unknown one becomes `chrome`
 with a warning.
 
+A TrustTunnel subscription is the address a TrustTunnel server gives out
+(`https://user:password@host/path`): add it as any subscription URL, the login
+and password from the address are sent to the server. A `tt://` link that
+carries only such an address is added as that subscription.
+
 The **Masquerade** section of your own WireGuard or AmneziaWG server adds
 decoy packets before the handshake: the client sends packets that look like
 QUIC, DNS, STUN or SIP. Where: server screen → Settings → Masquerade.

@@ -28,6 +28,7 @@ import 'dart:convert' show Base64Codec, jsonDecode;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../models/node_warning.dart';
+import '../../contract/registry.dart';
 import '../drop_verdict.dart';
 import 'decoders.dart';
 import 'ini_space.dart';
@@ -2641,7 +2642,18 @@ final class _Run {
     // вердикт, иначе узел исчезает молча.
     if (w is RegistryWarning && _dropped != null) {
       _dropped.explicit = true;
-      _dropped.reason = w;
+      // Контракт 1.1.176 (MAPPER_ENGINE §2.1, §7) — первый параметр,
+      // объявленный кодом, принимает отвергнутое значение: по ИМЕНИ
+      // параметра принимающая сторона узнаёт, что делать с отказом.
+      final own = ContractRegistry.I.declaredParams(w.code);
+      _dropped.reason = own.isEmpty || w.params.containsKey(own.first)
+          ? w
+          : RegistryWarning(
+              code: w.code,
+              path: w.path,
+              value: w.value,
+              params: {...w.params, own.first: w.value ?? value},
+            );
     }
   }
 

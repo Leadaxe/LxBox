@@ -4,6 +4,7 @@ import 'dart:math';
 import 'amnezia_link.dart';
 import 'engine/document.dart';
 import 'engine/section_loader.dart';
+import 'engine/tlv.dart';
 import 'json_comments.dart';
 import 'uri_utils.dart';
 
@@ -176,7 +177,8 @@ DecodedBody decode(String body) {
   final registry = MapperSections.I.documents;
   if (registry == null) return _classifyLegacy(original);
 
-  final match = registry.detect(original, unwrappers: _kUnwrappers);
+  final match = registry.detect(original,
+      unwrappers: _kUnwrappers, jsonUnwrappers: _kJsonUnwrappers);
   if (match == null) {
     return DecodeFailure(
         'no parseable content', original.substring(0, min(original.length, 80)));
@@ -263,6 +265,52 @@ final Map<String, Unwrapper> _kUnwrappers = {
     return decoded.isEmpty ? null : decoded;
   },
 };
+
+/// Распаковщики объектной оболочки: `unwrap` реестра → функция.
+final Map<String, JsonUnwrapper> _kJsonUnwrappers = {
+  'container_link': _containerLink,
+};
+
+/// Контракт 1.1.176 (MAPPER_ENGINE §2.1) — объект JSON с ключами бинарного
+/// контейнера печатается ссылкой: берётся секция ссылок, которая ведёт
+/// написание `container.scheme` и объявила диалект `tlv`; из объекта
+/// снимаются ключи `omit`, поверх пишутся `set`; объект сериализуется тем же
+/// кодеком, что обратный ход (порядок — `emit.param_order` секции, ключ вне
+/// таблицы пропускается). Текст `схема://?<пейлоад>` уходит на повторный
+/// детект, и происхождение узла — эта ссылка.
+///
+/// `null` — секции нет либо объект диалектом не выражается: вид не
+/// распакован.
+String? _containerLink(DocumentSource source, Object json) {
+  final c = source.container;
+  final scheme = c?['scheme'];
+  if (c == null || scheme is! String || json is! Map) return null;
+  for (final type in MapperSections.I.typesFor('uri')) {
+    final section = MapperSections.I.sectionFor('uri', type);
+    final dialect = section?.tlv;
+    final schemes = section?.detect?['scheme_in'];
+    if (dialect == null || schemes is! List || !schemes.contains(scheme)) {
+      continue;
+    }
+    final obj = <String, dynamic>{
+      for (final e in json.entries) '${e.key}': e.value,
+    };
+    for (final k in (c['omit'] as List?) ?? const []) {
+      obj.remove('$k');
+    }
+    for (final e in ((c['set'] as Map?) ?? const {}).entries) {
+      obj['${e.key}'] = e.value;
+    }
+    final order = section!.emit?['param_order'];
+    final payload = encodeTlvObject(
+        dialect, obj, order is List ? [for (final o in order) '$o'] : const []);
+    if (payload == null) return null;
+    return dialect.place == TlvNames.inQuery
+        ? '$scheme://?$payload'
+        : '$scheme://$payload';
+  }
+  return null;
+}
 
 DecodedBody _uriLines(String text, List<String> commentPrefixes) {
   final lines = <String>[];

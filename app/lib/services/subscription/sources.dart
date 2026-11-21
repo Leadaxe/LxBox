@@ -236,9 +236,15 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
             override.isNotEmpty ? override : resolveSubscriptionUserAgent();
         idHeaders = SubscriptionIdentity.fetchHeaders();
       }
+      final target = Uri.parse(u);
+      // Учётные данные из userinfo в текст ошибки не попадают: он уходит в
+      // лог и на экран.
+      final shown =
+          target.userInfo.isEmpty ? u : target.replace(userInfo: '').toString();
       final reqHeaders = <String, String>{
         'User-Agent': effectiveUa,
         ...idHeaders,
+        ...basicAuthHeader(target),
       };
       // 3 попытки с exp backoff (1s, 3s) — worst case ~31s (9+1+9+3+9).
       // Retry нужен для transient'ов мобильной сети (DNS fail, RST сразу
@@ -249,13 +255,13 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
           final resp = await client
-              .get(Uri.parse(u), headers: reqHeaders)
+              .get(target, headers: reqHeaders)
               .timeout(t);
           if (resp.statusCode >= 400 && resp.statusCode < 500) {
-            throw HttpException('HTTP ${resp.statusCode} for $u');
+            throw HttpException('HTTP ${resp.statusCode} for $shown');
           }
           if (resp.statusCode >= 500) {
-            throw HttpException('HTTP ${resp.statusCode} for $u');
+            throw HttpException('HTTP ${resp.statusCode} for $shown');
           }
           return FetchResult(resp.body, _metaFromHeaders(resp.headers),
               Map<String, String>.from(resp.headers));
@@ -283,6 +289,33 @@ Future<FetchResult> _fetch(SubscriptionSource source, http.Client client) async 
     case QrSource(content: final c):
       return FetchResult(c);
   }
+}
+
+/// Учётные данные из userinfo адреса (`https://user:pass@host/…`) заголовком
+/// `Authorization: Basic` (контракт 1.1.176: так отдаёт подписку узел
+/// TrustTunnel). Пустая карта — userinfo в адресе нет.
+///
+/// Заголовок ставится явно, а не оставляется HTTP-клиенту: клиент `dart:io`
+/// кодирует userinfo как написано, вместе с percent-экранированием, и пароль
+/// с `@`, `:` или `%` уходил бы на сервер искажённым; клиент-подмена в тестах
+/// и вовсе ничего не ставит.
+Map<String, String> basicAuthHeader(Uri uri) {
+  final info = uri.userInfo;
+  if (info.isEmpty) return const {};
+  final colon = info.indexOf(':');
+  String plain(String s) {
+    try {
+      return Uri.decodeComponent(s);
+    } catch (_) {
+      return s;
+    }
+  }
+
+  final user = plain(colon < 0 ? info : info.substring(0, colon));
+  final pass = colon < 0 ? '' : plain(info.substring(colon + 1));
+  return {
+    'Authorization': 'Basic ${base64.encode(utf8.encode('$user:$pass'))}',
+  };
 }
 
 /// §650 — значение заголовка вида `base64:…`, расшифрованное в UTF-8.

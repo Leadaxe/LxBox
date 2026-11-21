@@ -60,6 +60,9 @@ List<NodeWarning> _droppedOf(DecodedBody decoded) {
 }
 
 ClipboardAnalysis analyzeClipboard(String text) {
+  // Контракт 1.1.176 — ссылка-указатель на подписку показывается подпиской:
+  // импорт заведёт её по адресу из ссылки (`addFromInput`).
+  text = subscriptionUrlOfLink(text) ?? text;
   if (isSubscriptionUrl(text)) {
     final uri = Uri.tryParse(text);
     return ClipboardAnalysis(

@@ -1034,8 +1034,12 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   /// всех существующих вызовов; §375 (QR-сканер) передаёт `UserSource.qr`.
   Future<void> addFromInput(String input,
       {String? nameHint, UserSource origin = UserSource.paste}) async {
-    final trimmed = input.trim();
-    if (trimmed.isEmpty) return;
+    final pasted = input.trim();
+    if (pasted.isEmpty) return;
+    // Контракт 1.1.176 — ссылка-указатель на подписку (узла в ней нет, код
+    // отказа несёт адрес в параметре `subscription_url`) заводит подписку по
+    // этому адресу вместо отказа.
+    final trimmed = subscriptionUrlOfLink(pasted) ?? pasted;
 
     _busy = true;
     _lastError = null;

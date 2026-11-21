@@ -2,10 +2,10 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Done (итерация 1: разбор ссылки; итерация 2, 21.11.2026: контракт 1.1.175 — секция реестра, табличный кодек `tlv`, обратный ход, финальные коды; подписка TrustTunnel — вторая очередь, не начата) |
+| Status | Done (итерация 1: разбор ссылки; итерация 2, 21.11.2026: контракт 1.1.175 — секция реестра, табличный кодек `tlv`, обратный ход, финальные коды; итерация 3, 21.11.2026: контракт 1.1.176 — подписка TrustTunnel; вкладка формы узла в Add server не делалась) |
 | Start date | 2026-11-04 |
 | Source | issue #194 (вставка `tt://` из буфера не распознаётся); решение владельца: «поддержка формата tt://, с ним в паре сделать поддержку ссылок» |
-| Related specs | §698 (узел `trusttunnel` из реестра, тип без своей модели), §585/§586 (`UnknownTypeSpec`), §562 (имена схем только из реестра); контракт — запрос лаунчеру `TASKS_LXBOX.md` §157, ответ §177 (контракт 1.1.175, `MAPPER_ENGINE.md` §4a) |
+| Related specs | §698 (узел `trusttunnel` из реестра, тип без своей модели), §585/§586 (`UnknownTypeSpec`), §562 (имена схем только из реестра); контракт — запрос лаунчеру `TASKS_LXBOX.md` §157, ответ §177 (контракт 1.1.175, `MAPPER_ENGINE.md` §4a), §178 (контракт 1.1.176, `MAPPER_ENGINE.md` §2.1) |
 
 ## Problem
 
@@ -281,8 +281,7 @@ LEB128).
 
 ### Не сделано
 
-- Подписка TrustTunnel (`subscription_url`, ответ JSON `version: 1`) и форма
-  Add server — вторая очередь по §177.
+- Подписка TrustTunnel — сделана итерацией 3 (ниже).
 - Share у узла `trusttunnel`, пришедшего из sing-box JSON:
   `UnknownTypeSpec.toUri()` по-прежнему отдаёт `rawSource` (у узла из ссылки
   это сама ссылка). Движковый эмит готов, к `toUri()` не подключён.
@@ -290,3 +289,53 @@ LEB128).
   загрузки шаблона с `sections` и корневым `vars` вместе, подтверждение
   списка общих `id` — отдельная задача.
 - Устройство и эмулятор не проверялись.
+
+## Итерация 3 — контракт 1.1.176, подписка TrustTunnel (21.11.2026)
+
+`TASKS_LXBOX.md` §178, коммит лаунчера `05097fe5`.
+
+- **Ответ подписки.** Узел TrustTunnel отдаёт по адресу подписки один объект
+  JSON с теми же ключами, что у полей контейнера ссылки. Вид источника
+  `trusttunnel_endpoint_json` (`registry/source_kinds.json`) объявляет
+  распаковщик `container_link`: объект печатается ссылкой `tt://?…` тем же
+  кодеком, что обратный ход (`container.omit` снимается, `container.set`
+  пишется поверх, порядок — `emit.param_order` секции), текст уходит на
+  повторный детект и читается списком из одной ссылки. Узел и коды — те же,
+  что у ссылки; происхождение узла — эта ссылка. Объект диалектом не
+  выражается (значение не того типа) — вид не распакован.
+  Код: `engine/document.dart` — объектная оболочка в `detect`
+  (`JsonUnwrapper`, `DocumentSource.container`); `body_decoder.dart` —
+  `_containerLink`.
+- **Ссылка-указатель.** Ссылка `tt://` с одним `subscription_url` по-прежнему
+  не узел (`tt_subscription_only`), но код несёт адрес в параметре
+  `subscription_url`: движок кладёт отвергнутое селектором значение в первый
+  параметр, объявленный кодом (`ContractRegistry.declaredParams`).
+  `subscriptionUrlOfLink` (`subscription/input_helpers.dart`) узнаёт указатель
+  по ИМЕНИ параметра, не по схеме. `SubscriptionController.addFromInput`
+  (вставка, QR, поле ввода) заводит по адресу подписку; превью буфера
+  (`clipboard_analysis.dart`) показывает её подпиской. В списке ссылок и в
+  теле чужой подписки строка остаётся отказом с кодом.
+- **Basic Auth.** `basicAuthHeader` (`subscription/sources.dart`): логин и
+  пароль из userinfo адреса уходят заголовком `Authorization: Basic`,
+  percent-экранирование снято. Заголовок ставится явно: клиент `dart:io`
+  ставит его сам, но кодирует userinfo как написано, и пароль с `@`, `:`, `%`
+  уходил бы искажённым. Текст HTTP-ошибки пишется без userinfo.
+- **Форма узла.** Модель формы по `body.form` реестра у LxBox общая
+  (`registry_form.dart`) — корпус `form/trusttunnel_form.json` проходит без
+  правок. Экранная форма у LxBox одна, под OpenConnect
+  (`widgets/openconnect_form.dart`: подписи полей и вкладка Add server);
+  общего экрана «форма по реестру для любого типа» нет. Вкладка TrustTunnel
+  в Add server не делалась — нужны подписи полей и решение владельца о
+  вкладке.
+
+### Проверка
+
+- `contract/corpus/body/trusttunnel/` — 2 из 2
+  (`test/contract/body_contract_test.dart`).
+- `contract/corpus/form/trusttunnel_form.json` — 2 из 2
+  (`test/contract/form_corpus_test.dart`).
+- `contract/corpus/uri/trusttunnel/` — 30 из 30.
+- `app/test/parser/tt_subscription_test.dart` — распаковка ответа, указатель,
+  заголовок Basic у загрузчика, пароль не попадает в текст ошибки.
+- Живой узел TrustTunnel с подпиской не проверялся; устройство и эмулятор не
+  проверялись.

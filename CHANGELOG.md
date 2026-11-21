@@ -21,11 +21,9 @@
   on uTLS (Chrome, Safari, Firefox, Android), except with HTTP/3. Notices are
   the final ones: `tt_field_unsupported` names the setting the node cannot
   express, `tt_subscription_ignored` — a subscription address next to a
-  server, `tt_subscription_only` — a link that carries only a subscription
-  (nothing is imported). A link with a subscription address that is not
+  server, `tt_subscription_only` — a link that carries only a subscription. A link with a subscription address that is not
   `https://` is rejected. The engine can also build a `tt://` link back from a
-  node body, byte for byte as the AdGuard encoder. Not yet: TrustTunnel
-  subscriptions. Issue #194.
+  node body, byte for byte as the AdGuard encoder. Issue #194.
   (RU: Ссылки `tt://` TrustTunnel по реестру: ссылку читает таблица — бинарный
   контейнер описан в записи протокола реестра, отдельного декодера под этот
   формат в приложении больше нет. Что изменилось для узла: имя сертификата
@@ -36,10 +34,34 @@
   Firefox, Android), кроме HTTP/3. Предупреждения — финальные:
   `tt_field_unsupported` называет настройку, которую узел выразить не может,
   `tt_subscription_ignored` — адрес подписки рядом с сервером,
-  `tt_subscription_only` — ссылку, несущую только подписку (ничего не
-  импортируется). Ссылка с адресом подписки не `https://` отвергается. Движок
+  `tt_subscription_only` — ссылку, несущую только подписку. Ссылка с адресом подписки не `https://` отвергается. Движок
   умеет собрать ссылку `tt://` обратно из тела узла, байт в байт как энкодер
-  AdGuard. Пока нет: подписок TrustTunnel. Issue #194.)
+  AdGuard. Issue #194.)
+
+### Added
+
+- **TrustTunnel subscriptions ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.176).**
+  The address a TrustTunnel server gives out as a subscription
+  (`https://user:password@host/path`) is added as any subscription URL: the
+  server's answer becomes a `trusttunnel` node, the same one its `tt://` link
+  would give. The login and password from the address are sent to the server
+  as HTTP Basic credentials — this now works for any subscription URL with
+  credentials in it, and a password with special characters reaches the server
+  intact; the password no longer appears in the text of a download error. A
+  `tt://` link that carries only a subscription address is no longer rejected
+  when you paste it, scan it or type it in: it is added as that subscription.
+  Inside a list of links or another subscription such a link is still skipped
+  with `tt_subscription_only`.
+  (RU: Подписки TrustTunnel: адрес, который сервер TrustTunnel выдаёт как
+  подписку (`https://user:password@host/path`), добавляется как любой URL
+  подписки — ответ сервера становится узлом `trusttunnel`, тем же, что дала бы
+  его ссылка `tt://`. Логин и пароль из адреса уходят серверу как HTTP Basic —
+  теперь это работает у любого URL подписки с учётными данными, и пароль со
+  спецсимволами доходит до сервера без искажений; в текст ошибки загрузки
+  пароль больше не попадает. Ссылка `tt://`, несущая только адрес подписки,
+  при вставке, сканировании или вводе больше не отвергается: по ней
+  добавляется эта подписка. Внутри списка ссылок или чужой подписки такая
+  ссылка по-прежнему пропускается с `tt_subscription_only`.)
 
 ## [2.25.23] — 2026-11-17
 

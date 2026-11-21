@@ -756,6 +756,8 @@ final class ContractRegistry {
         ((warnings['text_params_implicit'] as List?) ?? const []).cast<String>();
     for (final e in byCode.entries) {
       final w = (e.value as Map).cast<String, dynamic>();
+      _declaredParams[e.key] =
+          ((w['params'] as List?) ?? const []).cast<String>();
       _warnings[e.key] = WarningText(
         code: e.key,
         severity: w['severity'] as String? ?? 'warning',
@@ -865,6 +867,13 @@ final class ContractRegistry {
 
   /// Текст кода из `warnings.json`; `null` — кода в реестре нет.
   WarningText? textFor(String code) => _warnings[code];
+
+  /// Параметры, которые код объявил САМ (`params` записи), без неявных
+  /// `path`/`value` (`text_params_implicit`), в порядке объявления.
+  List<String> declaredParams(String code) =>
+      _declaredParams[code] ?? const [];
+
+  final Map<String, List<String>> _declaredParams = {};
 
   /// §480 — СЫРОЙ JSON протокола по `singbox_type`.
   ///
