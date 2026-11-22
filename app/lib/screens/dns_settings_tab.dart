@@ -686,7 +686,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                   enabled: cr.dns!.enabled,
                   onToggle: (v) => _toggleRuleDns(cr, v),
                   note: [
-                    if (cr is CustomRuleSrs) getLocalText.s("matches only domains in the rule-set"),
+                    if (cr.kind == CustomRuleKind.srs) getLocalText.s("matches only domains in the rule-set"),
                     if (missing) getLocalText.s("server missing"),
                   ].join(' · '),
                 )
@@ -705,7 +705,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
                   // l10n-exempt: sing-box wire fields
                   preview: 'action: predefined · answer: '
                       '${cr.dns!.fixedIps.join(', ')}',
-                  note: cr is CustomRuleSrs
+                  note: cr.kind == CustomRuleKind.srs
                       ? getLocalText.s("matches only domains in the rule-set")
                       : null,
                   onRemove: () => _removeRuleFixedIp(cr),
@@ -1181,10 +1181,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     if (idx < 0 || cr.dns == null) return;
     final updated = switch (cr) {
       // §683 — включение сервера выходит из Answer = Fixed IP.
-      CustomRuleInline() => cr.copyWith(
-          dns: cr.dns!.copyWith(
-              enabled: value, fixedIps: value ? const [] : null)),
-      CustomRuleSrs() => cr.copyWith(
+      CustomRuleTree() => cr.copyWith(
           dns: cr.dns!.copyWith(
               enabled: value, fixedIps: value ? const [] : null)),
       _ => cr,
@@ -1203,8 +1200,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     if (idx < 0 || cr.dns == null) return;
     final next = cr.dns!.copyWith(fixedIps: const []);
     final updated = switch (cr) {
-      CustomRuleInline() => cr.copyWith(dns: next),
-      CustomRuleSrs() => cr.copyWith(dns: next),
+      CustomRuleTree() => cr.copyWith(dns: next),
       _ => cr,
     };
     if (identical(updated, cr)) return;
@@ -1233,9 +1229,7 @@ class _DnsSettingsTabState extends State<DnsSettingsTab>
     if (idx < 0) return;
     final clear = next.isEmpty;
     final updated = switch (cr) {
-      CustomRuleInline() =>
-        clear ? cr.copyWith(clearDns: true) : cr.copyWith(dns: next),
-      CustomRuleSrs() =>
+      CustomRuleTree() =>
         clear ? cr.copyWith(clearDns: true) : cr.copyWith(dns: next),
       _ => cr,
     };

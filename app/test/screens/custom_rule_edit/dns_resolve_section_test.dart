@@ -51,8 +51,8 @@ Finder get _appBarSave => find.descendant(
       matching: find.widgetWithIcon(IconButton, Icons.save),
     );
 
-CustomRuleInline _rule({List<String> ips = const ['192.168.1.10']}) =>
-    CustomRuleInline(
+CustomRuleTree _rule({List<String> ips = const ['192.168.1.10']}) =>
+    CustomRuleTree.flat(
       id: 'r1',
       name: 'nas',
       domains: const ['nas.home'],

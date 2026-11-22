@@ -53,7 +53,7 @@ Finder _regexField() => find.descendant(
     );
 
 void main() {
-  final initial = CustomRuleInline(
+  final initial = CustomRuleTree.flat(
     id: 'r1',
     name: 'Oplus',
     domains: ['a.test'],
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(host.closed, isTrue);
-    final saved = host.result?.saved as CustomRuleInline;
+    final saved = host.result?.saved as CustomRuleTree;
     expect(saved.packageRegexes, ['^com\\.oplus\\.', '^a{1,3}\\.b']);
     expect(saved.packages, isEmpty);
   });

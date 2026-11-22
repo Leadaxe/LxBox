@@ -110,63 +110,8 @@ class DnsMirrorEntry {
   final Map<String, dynamic> body;
 }
 
-/// §755 — тело Block HTTPS/SVCB records поверх матча правила.
-DnsMirrorEntry blockHttpsMirror(CustomRule cr, Map<String, dynamic> match) =>
-    DnsMirrorEntry(
-      ruleId: cr.id,
-      ruleName: cr.name,
-      serverless: true,
-      blockHttps: true,
-      body: match
-        ..['query_type'] = const ['HTTPS', 'SVCB']
-        ..['action'] = 'predefined'
-        ..['rcode'] = 'NOERROR',
-    );
-
 /// §683 — TTL записей ответа Fixed IP.
 const int kFixedIpAnswerTtl = 300;
-
-/// §683 — DNS-mirror'ы Answer = Fixed IP: по одному на тип запроса (A и
-/// AAAA), `predefined` + `NOERROR`. Есть адреса семейства — `answer` с
-/// записями `*. 300 IN A|AAAA <ip>` (ядро подставляет имя запроса вместо
-/// `*`, `rewriteRecords`); нет — пустой ответ, приложение берёт другое
-/// семейство. Остальные типы запросов правило не трогает. Неразбираемые
-/// адреса пропускаются (UI их не сохраняет); ни одного годного — ничего.
-List<DnsMirrorEntry> fixedIpMirrors(
-  CustomRule cr,
-  Map<String, dynamic> Function() match,
-) {
-  final v4 = <String>[];
-  final v6 = <String>[];
-  for (final ip in cr.dns?.fixedIps ?? const <String>[]) {
-    switch (RuleDns.ipRecordType(ip)) {
-      case 'A':
-        v4.add(ip.trim());
-      case 'AAAA':
-        v6.add(ip.trim());
-    }
-  }
-  if (v4.isEmpty && v6.isEmpty) return const [];
-  return [
-    for (final (type, ips) in [('A', v4), ('AAAA', v6)])
-      DnsMirrorEntry(
-        ruleId: cr.id,
-        ruleName: cr.name,
-        serverless: true,
-        fixedAnswer: true,
-        body: match()
-          ..['query_type'] = [type]
-          ..['action'] = 'predefined'
-          ..['rcode'] = 'NOERROR'
-          ..addAll({
-            if (ips.isNotEmpty)
-              'answer': [
-                for (final ip in ips) '*. $kFixedIpAnswerTtl IN $type $ip',
-              ],
-          }),
-      ),
-  ];
-}
 
 /// §257 — магическая var `dns_enable`: единственный тумблер DNS-блока
 /// пресета (серверы + DNS-правила + mirror-группа). Семантика:
@@ -344,29 +289,22 @@ class PresetApplyResult {
   });
 }
 
-/// Post-step: пользовательские routing-правила (spec §030).
+/// Post-step: пользовательские routing-правила (spec §030; §757 — тело-дерево).
 ///
-/// Эмит зависит от `cr.kind`:
-///
-/// - `inline` — headless rule со всеми непустыми match-полями сразу. Per
-///   sing-box default rule: внутри domain-family (domain/suffix/keyword/ip_cidr)
-///   — OR; внутри port-family — OR; между категориями — AND. `package_name`
-///   — отдельная категория (AND). `protocol` в headless rule **не
-///   поддерживается**, выносим на routing-rule level.
-///
-/// - `srs` — **local** rule_set по пути из `srsPaths[cr.id]` (pre-resolved
-///   caller'ом через `RuleSetDownloader`). Если правило srs но файла нет
-///   — скипаем и пушим warning. URL в конфиг не попадает: sing-box сам
-///   ничего не качает, всё managed'ится юзером через download button.
-///
-/// Collision handling — auto-suffix через `RuleSetRegistry`.
+/// Правило [CustomRuleTree] выпускается по дереву ([_applyTreeSingle]):
+/// наборы ссылок — `local` по пути из `srsPaths[<id кэша набора>]`
+/// (pre-resolved caller'ом через `RuleSetDownloader`, URL в конфиг не
+/// попадает), ключи `set: true` каждого простого узла — в его inline-набор,
+/// остальные ключи и `invert` — на узле. Теги наборов — схема §6.13
+/// ([assignRuleTags]) по всем правилам [rules].
 ///
 /// [skipDisabled] — по умолчанию `true`: disabled-правила пропускаются как в
 /// production pipeline. **Set `false` для preview-режима**, когда caller хочет
 /// видеть «что родит правило при включении» независимо от Switch (e.g.
-/// `ViewTab` в editor'е — юзер открыл редактор именно для inspect'а формы,
-/// `enabled` тут отдельная история). Production pipeline всегда оставляет
-/// default `true`.
+/// `ViewTab` в editor'е). Production pipeline всегда оставляет default `true`.
+///
+/// Рукописные теги `rule_set` здесь не сверяются с итоговым `route.rule_set`
+/// (превью видит одно правило) — постпроход делает [applyAllCustomRules].
 List<String> applyCustomRules(
   RuleSetRegistry registry,
   List<CustomRule> rules, {
@@ -375,23 +313,19 @@ List<String> applyCustomRules(
   // §683 — превью редактора: собрать и DNS-mirror'ы правила.
   List<DnsMirrorEntry>? dnsMirrors,
 }) {
-  // §062: shim вокруг `_applyInlineSingle` / `_applySrsSingle`. Обходит
-  // ТОЛЬКО inline/srs (фильтруя preset). Сохраняет старый publi API +
-  // backward-compat для тестов. Real pipeline использует [applyAllCustomRules]
-  // которое обходит все kinds в одном цикле сохраняя cross-kind order.
   final warnings = <String>[];
+  final table = ruleConditionTable;
+  final tags = _assignAxisTags(rules, registry.takenTags, table);
   for (final cr in rules) {
     if (skipDisabled && !cr.enabled) continue;
     switch (cr) {
       case CustomRulePreset():
         // Preset-правила обрабатывает applyPresetBundles (spec §033).
         continue;
-      case CustomRuleSrs():
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
-            dnsMirrors: dnsMirrors));
-      case CustomRuleInline():
-        warnings.addAll(
-            _applyInlineSingle(cr, registry, dnsMirrors: dnsMirrors));
+      case CustomRuleTree():
+        warnings.addAll(_applyTreeSingle(cr, tags[cr.id]!, registry, srsPaths,
+                table: table, dnsMirrors: dnsMirrors)
+            .warnings);
       case CustomRuleJson():
         warnings.addAll(_applyJsonSingle(cr, registry));
     }
@@ -399,333 +333,135 @@ List<String> applyCustomRules(
   return warnings;
 }
 
-/// §062: одно srs-правило. Skip если outbound пустой / нет cached file.
-///
-/// §117 задача 3: при активной DNS-опции ([CustomRule.dnsMirrorActive]) в
-/// [dnsMirrors] добавляется mirror — rule_set НЕ генерится, DNS-rule
-/// ссылается на тот же `.srs`-тег + DNS-безопасные доп-фильтры
-/// (package_name / wifi_*; ports/protocols отрезаны гейтом).
-List<String> _applySrsSingle(
-  CustomRuleSrs cr,
-  RuleSetRegistry registry,
-  Map<String, String> srsPaths, {
-  List<DnsMirrorEntry>? dnsMirrors,
-}) {
-  final warnings = <String>[];
-  if (cr.outbound.isEmpty) return warnings;
-  final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
-  // ## 12 контракта (D-100) — rule_set на каждый набор правила, routing-
-  // правило одно со списком тегов. Все файлы обязаны быть в кэше: частично
-  // скачанное правило матчило бы не то, что задумал пользователь (UI держит
-  // его выключенным до полной закачки, см. routing_srs_cache.dart).
-  final cacheIds = cr.cacheIds;
-  if (cacheIds.isEmpty || cacheIds.any((c) => srsPaths[c] == null)) {
-    warnings.add(
-        'SRS rule "${cr.name}" skipped: no cached file (Download first).');
-    return warnings;
-  }
-  final tags = <String>[];
-  for (var i = 0; i < cacheIds.length; i++) {
-    tags.add(registry.addRuleSet({
-      'type': 'local',
-      'tag': i == 0 ? requestedTag : '$requestedTag-${i + 1}',
-      'format': 'binary',
-      'path': srsPaths[cacheIds[i]]!,
-    }));
-  }
-  // Один набор — строка, как до ## 12: конфиг байт-в-байт прежний.
-  final Object tag = tags.length == 1 ? tags.first : tags;
-  // §247 — resolve-опция: нетерминальное resolve-правило перед route (тот же
-  // srs-tag и AND-фильтры). Для srs всегда eligible — домены в `.srs` возможны
-  // (содержимое не парсим; IP-only лист просто не даст домена — безвредно).
-  if (cr.resolveActive) {
-    registry.addRule(_resolveToRoute(
-      tag,
-      cr.resolve!,
-      ports: cr.intPorts,
-      portRanges: cr.portRanges,
-      packages: cr.packages,
-      packageRegexes: cr.packageRegexes,
-      protocols: cr.protocols,
-      network: cr.network,
-      ipIsPrivate: cr.ipIsPrivate,
-      sourceIpCidrs: cr.sourceIpCidrs,
-      sourceIpIsPrivate: cr.sourceIpIsPrivate,
-      inbounds: cr.inbounds,
-      wifiSsids: cr.wifiSsids,
-      wifiBssids: cr.wifiBssids,
-      networkTypes: cr.networkTypes,
-      networkIsExpensive: cr.networkIsExpensive,
-    ));
-  }
-  // §247 resolve-only: терминальный route не эмитится (см. inline-ветку).
-  if (!(cr.resolveActive && cr.resolve!.only)) {
-    registry.addRule(_outboundToRoute(
-      tag,
-      cr.outbound,
-      ports: cr.intPorts,
-      portRanges: cr.portRanges,
-      packages: cr.packages,
-      packageRegexes: cr.packageRegexes,
-      protocols: cr.protocols,
-      network: cr.network,
-      ipIsPrivate: cr.ipIsPrivate,
-      // §030/new_fields — у srs нет своего headless match → source/inbound
-      // (вкл. source_ip_cidr) ВСЕ на routing-rule level.
-      sourceIpCidrs: cr.sourceIpCidrs,
-      sourceIpIsPrivate: cr.sourceIpIsPrivate,
-      inbounds: cr.inbounds,
-      wifiSsids: cr.wifiSsids,
-      wifiBssids: cr.wifiBssids,
-      networkTypes: cr.networkTypes,
-      networkIsExpensive: cr.networkIsExpensive,
-    ));
-  }
-  if (dnsMirrors != null &&
-      (cr.dnsMirrorActive ||
-          cr.forceIpv4Active ||
-          cr.dnsFixedActive ||
-          cr.blockHttpsActive)) {
-    // DNS-безопасные AND-поля правила (srs: rule_set + package/wifi/source/
-    // inbound — ports/protocols отрезаны гейтом). Общие для обоих mirror'ов.
-    Map<String, dynamic> srsMatch() {
-      final m = <String, dynamic>{'rule_set': tag};
-      if (cr.packages.isNotEmpty) m['package_name'] = cr.packages;
-      // §712 — DNS-правило ядра принимает package_name_regex.
-      if (cr.packageRegexes.isNotEmpty) {
-        m['package_name_regex'] = cr.packageRegexes;
-      }
-      if (cr.wifiSsids.isNotEmpty) m['wifi_ssid'] = cr.wifiSsids;
-      if (cr.wifiBssids.isNotEmpty) m['wifi_bssid'] = cr.wifiBssids;
-      // §694 — DNS-правило ядра принимает тип/лимитность сети.
-      if (cr.networkTypes.isNotEmpty) m['network_type'] = cr.networkTypes;
-      if (cr.networkIsExpensive) m['network_is_expensive'] = true;
-      // §030/new_fields — DNS-rule 1.14 принимает source_ip_cidr/inbound.
-      if (cr.sourceIpCidrs.isNotEmpty) m['source_ip_cidr'] = cr.sourceIpCidrs;
-      if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
-      return m;
-    }
-
-    // §755 — порядок внутри правила: Block HTTPS → Force IPv4 → сервер/Fixed IP.
-    if (cr.blockHttpsActive) dnsMirrors.add(blockHttpsMirror(cr, srsMatch()));
-    // §256 — Force IPv4 (AAAA-глушилка) ПЕРЕД server-mirror'ом (симметрия §253).
-    if (cr.forceIpv4Active) {
-      final mirror = srsMatch()
-        ..['ip_version'] = 6
-        ..['action'] = 'predefined'
-        ..['rcode'] = 'NOERROR';
-      dnsMirrors.add(DnsMirrorEntry(
-        ruleId: cr.id,
-        ruleName: cr.name,
-        serverless: true,
-        body: mirror,
-      ));
-    }
-    if (cr.dnsMirrorActive) {
-      dnsMirrors.add(DnsMirrorEntry(
-        ruleId: cr.id,
-        ruleName: cr.name,
-        serverTag: cr.dns!.serverTag,
-        body: srsMatch(),
-      ));
-    }
-    // §683 — Answer = Fixed IP на месте server-mirror'а (режимы взаимоисключающие).
-    if (cr.dnsFixedActive) dnsMirrors.addAll(fixedIpMirrors(cr, srsMatch));
-  }
-  return warnings;
+/// §757 — теги наборов всех записей оси (§6.13 п. 1–5): базу берёт каждая
+/// запись `inline` | `srs` (включённая и выключенная, verbatim-JSON тоже),
+/// пресеты — нет. Имя для базы — с обрезанными краями. Ключ — id правила.
+Map<String, RuleTags> _assignAxisTags(
+  List<CustomRule> rules,
+  Set<String> reserved,
+  RuleConditionTable table,
+) {
+  final axis = [
+    for (final r in rules)
+      if (r is CustomRuleTree || r is CustomRuleJson) r,
+  ];
+  final assigned = assignRuleTags(
+    [
+      for (final r in axis)
+        RuleTagInput(
+          name: r.name.trim(),
+          root: r is CustomRuleTree ? r.root : null,
+        ),
+    ],
+    reserved: reserved,
+    table: table,
+  );
+  return {for (var i = 0; i < axis.length; i++) axis[i].id: assigned[i]};
 }
 
-/// §062: одно inline-правило. Headless rule_set с непустыми match-полями
-/// (если они есть), плюс routing rule с routing-level полями (protocol /
-/// ip_is_private / wifi_*). Если оба пусты — skip.
+/// §757 — что правило-дерево зарегистрировало в реестре (постпроход
+/// висячих рукописных тегов снимает это целиком).
+class _TreeEmitted {
+  _TreeEmitted(this.rule);
+
+  final CustomRuleTree rule;
+  final List<Map<String, dynamic>> routeRules = [];
+  final Set<String> setTags = {};
+  final List<String> warnings = [];
+}
+
+/// §757 — одно правило-дерево: наборы, resolve-правило (§247), маршрутное
+/// правило, DNS-зеркала (§6.11). Всё или ничего: нет файла хоть одного
+/// набора дерева — правило, его наборы и зеркала не выпускаются.
 ///
-/// §117 задача 3: при активной DNS-опции ([CustomRule.dnsMirrorActive])
-/// mirror шарит **тот же** headless rule_set (§755: порты в набор не
-/// кладутся, протоколы и `network` туда и не попадали) + wifi_* на
-/// DNS-rule уровне.
-List<String> _applyInlineSingle(
-  CustomRuleInline cr,
-  RuleSetRegistry registry, {
+/// Пустая цель — правило не выпускается (как до §757).
+_TreeEmitted _applyTreeSingle(
+  CustomRuleTree cr,
+  RuleTags tags,
+  RuleSetRegistry registry,
+  Map<String, String> srsPaths, {
+  required RuleConditionTable table,
   List<DnsMirrorEntry>? dnsMirrors,
 }) {
-  final warnings = <String>[];
-  if (cr.outbound.isEmpty) return warnings;
-
-  // DNS-безопасные AND-поля для mirror-body (общие для server- и
-  // forceIpv4-mirror'ов). rule_set несёт domain/wifi/source; здесь —
-  // только `inbound` (route-only, в headless его нет; DNS-rule 1.14 принимает).
-  Map<String, dynamic> mirrorBody(String ruleSetTag) {
-    final m = <String, dynamic>{};
-    if (ruleSetTag.isNotEmpty) m['rule_set'] = ruleSetTag;
-    if (cr.inbounds.isNotEmpty) m['inbound'] = cr.inbounds;
-    return m;
-  }
-
-  // §256 — Force IPv4 (AAAA-глушилка) эмитится ПЕРЕД server-mirror'ом
-  // (симметрия §253: ip_version-гейт первым, маршрут вторым — иначе
-  // server-mirror без ip_version перехватит AAAA-запрос до глушилки).
-  // Serverless: `predefined` отвечает локально, server не нужен.
-  void addForceIpv4Mirror(String ruleSetTag) {
-    if (dnsMirrors == null || !cr.forceIpv4Active) return;
-    final matchFields = mirrorBody(ruleSetTag);
-    // Без матча (нет rule_set/inbound — правило только source_ip_is_private
-    // и т.п.) глушилка гасила бы AAAA ГЛОБАЛЬНО. Не эмитим — нечего точечно
-    // матчить на DNS-слое.
-    if (matchFields.isEmpty) return;
-    final mirror = matchFields
-      ..['ip_version'] = 6
-      ..['action'] = 'predefined'
-      ..['rcode'] = 'NOERROR';
-    dnsMirrors.add(DnsMirrorEntry(
-      ruleId: cr.id,
-      ruleName: cr.name,
-      serverless: true,
-      body: mirror,
-    ));
-  }
-
-  // §755 — Block HTTPS/SVCB records: первым из зеркал правила. Пустой матч
-  // не эмитим — иначе HTTPS-записи глушились бы глобально.
-  void addBlockHttpsMirror(String ruleSetTag) {
-    if (dnsMirrors == null || !cr.blockHttpsActive) return;
-    final matchFields = mirrorBody(ruleSetTag);
-    if (matchFields.isEmpty) return;
-    dnsMirrors.add(blockHttpsMirror(cr, matchFields));
-  }
-
-  void addDnsMirror(String ruleSetTag) {
-    // §683 — Answer = Fixed IP на месте server-mirror'а. Пустой матч — не
-    // эмитим (иначе ответ подменялся бы для всех доменов).
-    if (dnsMirrors != null && cr.dnsFixedActive) {
-      if (mirrorBody(ruleSetTag).isEmpty) return;
-      dnsMirrors.addAll(fixedIpMirrors(cr, () => mirrorBody(ruleSetTag)));
-      return;
+  final out = _TreeEmitted(cr);
+  if (cr.outbound.isEmpty) return out;
+  final res = emitRuleTree(
+    ruleName: cr.name,
+    body: cr.body,
+    tags: tags,
+    refPath: (ref) => srsPaths[CustomRuleTree.cacheIdFor(cr.id, ref)],
+    table: table,
+    sideInlineSets: true,
+  );
+  out.warnings.addAll(res.warnings);
+  if (!res.emitted) return out;
+  for (final rs in res.ruleSets) {
+    // Теги разведены заранее (§6.13) — набор регистрируется с точным тегом.
+    if (registry.tryRegisterRuleSet(rs)) {
+      out.warnings.add('rule_set "${rs['tag']}" skipped: conflicts with '
+          'earlier registered rule_set');
+    } else {
+      out.setTags.add(rs['tag'] as String);
     }
-    if (dnsMirrors == null || !cr.dnsMirrorActive) return;
-    final mirror = mirrorBody(ruleSetTag);
-    // Пустой матч (только ip_is_private/source_ip_is_private) — DNS-rule
-    // «match всё» не эмитим.
-    if (mirror.isEmpty) return;
-    dnsMirrors.add(DnsMirrorEntry(
-      ruleId: cr.id,
-      ruleName: cr.name,
-      serverTag: cr.dns!.serverTag,
-      body: mirror,
-    ));
   }
-  final requestedTag = cr.name.trim().isEmpty ? 'unnamed' : cr.name.trim();
-  // Inline: all non-empty match fields в один headless rule.
-  final match = <String, dynamic>{};
-  if (cr.domains.isNotEmpty) match['domain'] = cr.domains;
-  if (cr.domainSuffixes.isNotEmpty) {
-    match['domain_suffix'] = cr.domainSuffixes;
-  }
-  if (cr.domainKeywords.isNotEmpty) {
-    match['domain_keyword'] = cr.domainKeywords;
-  }
-  // §712 — Go RE2, не anchored; headless 1.14 принимает.
-  if (cr.domainRegexes.isNotEmpty) match['domain_regex'] = cr.domainRegexes;
-  if (cr.ipCidrs.isNotEmpty) match['ip_cidr'] = cr.ipCidrs;
-  // §755 — `port`/`port_range` НЕ в наборе, а на маршрутном правиле (как у
-  // srs): (набор) AND (порт) — тот же смысл (ядро сливает группы внешнего
-  // правила с группами набора, rule_abstract.go matchWithOuterGroups), а
-  // набор остаётся пригодным для ссылки из DNS-правила (у DNS-запроса порта
-  // сайта нет).
-  final intPorts = cr.intPorts;
-  if (cr.packages.isNotEmpty) match['package_name'] = cr.packages;
-  if (cr.packageRegexes.isNotEmpty) {
-    match['package_name_regex'] = cr.packageRegexes;
-  }
-  // §030/new_fields — sing-box 1.14 (`DefaultHeadlessRule`) ПРИНИМАЕТ в
-  // headless: `source_ip_cidr`, `wifi_ssid`, `wifi_bssid`. Раньше (§051, под
-  // 1.12) wifi выносился на routing-rule level — теперь кладём прямо в match.
-  // AND с domain/port-группами внутри одного headless rule.
-  if (cr.sourceIpCidrs.isNotEmpty) match['source_ip_cidr'] = cr.sourceIpCidrs;
-  if (cr.wifiSsids.isNotEmpty) match['wifi_ssid'] = cr.wifiSsids;
-  if (cr.wifiBssids.isNotEmpty) match['wifi_bssid'] = cr.wifiBssids;
-  // §694 — тип/лимитность сети: headless 1.14 принимает, рядом с wifi.
-  if (cr.networkTypes.isNotEmpty) match['network_type'] = cr.networkTypes;
-  if (cr.networkIsExpensive) match['network_is_expensive'] = true;
-  // `ip_is_private`, `source_ip_is_private`, `inbound`, `protocol` НЕ
-  // поддерживаются в headless rule — sing-box отрежет конфиг на парсинге.
-  // Выносим на routing-rule level (там OR/AND с rule_set per default-rule
-  // formula).
-
-  if (match.isEmpty) {
-    // Нет полей для inline headless rule. Если есть routing-level
-    // поля (protocol / ip_is_private / source_ip_is_private / inbound) —
-    // эмитим routing rule без rule_set, иначе правило пустое, скипаем.
-    if (intPorts.isEmpty &&
-        cr.portRanges.isEmpty &&
-        cr.protocols.isEmpty &&
-        cr.network.isEmpty &&
-        !cr.ipIsPrivate &&
-        !cr.sourceIpIsPrivate &&
-        cr.inbounds.isEmpty) {
-      return warnings;
-    }
-    registry.addRule(_outboundToRoute(
-      '',
-      cr.outbound,
-      ports: intPorts,
-      portRanges: cr.portRanges,
-      protocols: cr.protocols,
-      network: cr.network,
-      ipIsPrivate: cr.ipIsPrivate,
-      sourceIpIsPrivate: cr.sourceIpIsPrivate,
-      inbounds: cr.inbounds,
-    ));
-    addBlockHttpsMirror(''); // §755 — пустой матч не эмитится
-    addForceIpv4Mirror(''); // §256 — AAAA-глушилка перед server-mirror'ом
-    addDnsMirror(''); // routing-level-only правило: DNS-rule без rule_set
-    return warnings;
-  }
-
-  final tag = registry.addRuleSet({
-    'type': 'inline',
-    'tag': requestedTag,
-    'rules': [match],
-  });
-  // §247 — resolve-опция: нетерминальное resolve-правило ПЕРЕД терминальным
-  // route (тот же матч/tag). Гейт resolveActive: только при непустой
-  // domain-группе (чистый ip/port/proto-матч резолвить нечего).
+  final match = res.match!;
+  // §247 — нетерминальное resolve-правило ПЕРЕД терминальным (тот же матч и
+  // теги); resolve-only — терминальное не выпускается (трафик проваливается
+  // к следующим правилам / route.final).
   if (cr.resolveActive) {
-    registry.addRule(_resolveToRoute(
-      tag,
-      cr.resolve!,
-      ports: intPorts,
-      portRanges: cr.portRanges,
-      protocols: cr.protocols,
-      network: cr.network,
-      ipIsPrivate: cr.ipIsPrivate,
-      sourceIpIsPrivate: cr.sourceIpIsPrivate,
-      inbounds: cr.inbounds,
-    ));
+    out.routeRules.add(registry.addRule(ruleTreeResolveRule(match, cr.resolve!)));
   }
-  // Protocol + ip_is_private + source_ip_is_private + inbound — на routing
-  // rule level (headless их не поддерживает). `ip_is_private` становится OR
-  // с rule_set (per sing-box default-rule formula). source_ip_cidr/wifi_* уже
-  // в headless match выше.
-  //
-  // §247 resolve-only: терминальное route-правило НЕ эмитится — трафик
-  // проваливается к следующим правилам / route.final (осознанный advanced-
-  // выбор юзера, предупреждение показано в UI; билдер не варнит).
   if (!(cr.resolveActive && cr.resolve!.only)) {
-    registry.addRule(_outboundToRoute(
-      tag,
-      cr.outbound,
-      ports: intPorts,
-      portRanges: cr.portRanges,
-      protocols: cr.protocols,
-      network: cr.network,
-      ipIsPrivate: cr.ipIsPrivate,
-      sourceIpIsPrivate: cr.sourceIpIsPrivate,
-      inbounds: cr.inbounds,
-    ));
+    out.routeRules.add(registry.addRule(res.routeRule!));
   }
-  addBlockHttpsMirror(tag); // §755 — первым из зеркал правила
-  addForceIpv4Mirror(tag); // §256 — AAAA-глушилка перед server-mirror'ом
-  addDnsMirror(tag);
+  if (dnsMirrors != null) {
+    // §6.11 — Block HTTPS → Force IPv4 → сервер либо пара Fixed IP.
+    dnsMirrors.addAll(ruleTreeDnsMirrors(
+      ruleId: cr.id,
+      ruleName: cr.name,
+      enabled: cr.enabled,
+      dns: cr.dns,
+      mirror: ruleTreeMirrorMatcher(match, res.inlineSets, table),
+      hasRefsOrDomain: ruleTreeHasRefsOrDomain(cr.root, table),
+    ).entries);
+  }
+  return out;
+}
+
+/// §757 — постпроход «рукописный `rule_set`» (§6.13): правило-дерево с
+/// тегом, которого нет в итоговом `route.rule_set`, снимается целиком —
+/// маршрутное и resolve-правило, его наборы и DNS-зеркала; предупреждение
+/// называет правило и тег. Снятое правило освобождает свои наборы, поэтому
+/// проход повторяется до неподвижной точки.
+List<String> _dropDanglingTreeRules(
+  RuleSetRegistry registry,
+  List<_TreeEmitted> emitted,
+  List<DnsMirrorEntry> dnsMirrors,
+) {
+  final warnings = <String>[];
+  final live = [...emitted];
+  var changed = true;
+  while (changed) {
+    changed = false;
+    final finalTags = {
+      for (final rs in registry.getRuleSets())
+        if (rs['tag'] is String) rs['tag'] as String,
+    };
+    for (final e in [...live]) {
+      if (e.routeRules.isEmpty) continue;
+      final dangling = ruleTreeDanglingTags(e.rule.root, finalTags);
+      if (dangling.isEmpty) continue;
+      registry.removeRules(e.routeRules);
+      registry.removeRuleSets(e.setTags);
+      dnsMirrors.removeWhere((m) => m.ruleId == e.rule.id);
+      live.remove(e);
+      changed = true;
+      final name = e.rule.name.trim().isEmpty ? 'unnamed' : e.rule.name.trim();
+      final tags = (dangling.toList()..sort()).map((t) => '"$t"').join(', ');
+      warnings.add('Rule "$name" skipped: rule_set $tags not found in the '
+          'config.');
+    }
+  }
   return warnings;
 }
 
@@ -753,6 +489,21 @@ UnifiedApplyResult applyAllCustomRules(
 }) {
   final state = _PresetSharedState();
   final warnings = <String>[];
+  final table = ruleConditionTable;
+  // §757 (§6.13) — теги раздаются один раз до обхода: заняты теги шаблона
+  // (уже в реестре) и наборов всех пресетов, стоящих в правилах (включённых
+  // и нет; набор, выключенный гейтом, тоже занимает свой тег).
+  final reserved = {
+    ...registry.takenTags,
+    for (final cr in rules)
+      if (cr is CustomRulePreset)
+        for (final p in presets)
+          if (p.presetId == cr.presetId)
+            for (final rs in p.ruleSets)
+              if (rs['tag'] case final String tag when tag.isNotEmpty) tag,
+  };
+  final tags = _assignAxisTags(rules, reserved, table);
+  final trees = <_TreeEmitted>[];
   for (final cr in rules) {
     switch (cr) {
       case CustomRulePreset():
@@ -769,19 +520,20 @@ UnifiedApplyResult applyAllCustomRules(
           globalVars: globalVars,
           presetNodes: presetNodes,
         ));
-      case CustomRuleInline():
+      case CustomRuleTree():
         if (!cr.enabled) continue;
-        warnings.addAll(
-            _applyInlineSingle(cr, registry, dnsMirrors: state.dnsMirrors));
-      case CustomRuleSrs():
-        if (!cr.enabled) continue;
-        warnings.addAll(_applySrsSingle(cr, registry, srsPaths,
-            dnsMirrors: state.dnsMirrors));
+        final e = _applyTreeSingle(cr, tags[cr.id]!, registry, srsPaths,
+            table: table, dnsMirrors: state.dnsMirrors);
+        warnings.addAll(e.warnings);
+        trees.add(e);
       case CustomRuleJson():
         if (!cr.enabled) continue;
         warnings.addAll(_applyJsonSingle(cr, registry));
     }
   }
+  // §757 — итоговый `route.rule_set` известен только после всех правил и
+  // пресетов.
+  warnings.addAll(_dropDanglingTreeRules(registry, trees, state.dnsMirrors));
   return UnifiedApplyResult(
     extraDnsServers: state.dnsServers,
     dnsServerPresetIdByTag: state.dnsServerPresetIdByTag,
@@ -819,141 +571,6 @@ class UnifiedApplyResult {
     this.dnsMirrors = const [],
     this.warnings = const [],
   });
-}
-
-/// `outbound` (tag или `kOutboundReject`) → routing rule. Опциональные
-/// AND-поля (port/port_range/packages/protocol) — для srs-режима, где эти
-/// фильтры нельзя зашить в remote rule_set.
-Map<String, dynamic> _outboundToRoute(
-  Object tag,
-  String outbound, {
-  List<int>? ports,
-  List<String>? portRanges,
-  List<String>? packages,
-  List<String>? packageRegexes,
-  List<String>? protocols,
-  List<String>? network,
-  bool ipIsPrivate = false,
-  List<String>? sourceIpCidrs,
-  bool sourceIpIsPrivate = false,
-  List<String>? inbounds,
-  List<String>? wifiSsids,
-  List<String>? wifiBssids,
-  List<String>? networkTypes,
-  bool networkIsExpensive = false,
-}) {
-  final rule = <String, dynamic>{};
-  // ## 12 — `tag`: String (один набор / headless) или List<String> (srs с
-  // несколькими наборами); sing-box принимает `rule_set` в обеих формах.
-  final hasTag = tag is List ? tag.isNotEmpty : (tag as String).isNotEmpty;
-  if (hasTag) rule['rule_set'] = tag;
-  if (ports != null && ports.isNotEmpty) rule['port'] = ports;
-  if (portRanges != null && portRanges.isNotEmpty) {
-    rule['port_range'] = portRanges;
-  }
-  if (packages != null && packages.isNotEmpty) rule['package_name'] = packages;
-  if (packageRegexes != null && packageRegexes.isNotEmpty) {
-    rule['package_name_regex'] = packageRegexes;
-  }
-  if (protocols != null && protocols.isNotEmpty) rule['protocol'] = protocols;
-  // §240 — L4-транспорт. AND с protocol/rule_set, OR внутри списка.
-  if (network != null && network.isNotEmpty) rule['network'] = network;
-  if (ipIsPrivate) rule['ip_is_private'] = true;
-  // §030/new_fields — source-IP-CIDR на routing-rule level. Для inline он
-  // обычно живёт в headless match (sing-box 1.14 принимает), но для srs/
-  // routing-level-fallback кладётся сюда. OR-группа источника, AND с rule_set.
-  if (sourceIpCidrs != null && sourceIpCidrs.isNotEmpty) {
-    rule['source_ip_cidr'] = sourceIpCidrs;
-  }
-  // §030/new_fields — `source_ip_is_private` / `inbound` ВСЕГДА routing-rule
-  // level: headless rule_set этих полей не имеет (sing-box 1.14
-  // DefaultHeadlessRule). AND с остальным правилом.
-  if (sourceIpIsPrivate) rule['source_ip_is_private'] = true;
-  if (inbounds != null && inbounds.isNotEmpty) rule['inbound'] = inbounds;
-  // §051 — wifi_ssid / wifi_bssid эмитятся только non-empty. sing-box
-  // AND-ит со всеми остальными полями rule'а; без них — fallback на любую
-  // сеть (поведение pre-§051).
-  //
-  // ⚠ Cross-product semantic risk (low impact): sing-box обрабатывает
-  // wifi_ssid и wifi_bssid как **независимые** OR-списки, AND-ясь на уровне
-  // правила. Несколько chip'ов с разными BSSID-парами в editor становятся
-  // `wifi_ssid:[A,B] AND wifi_bssid:[X,Y]` — теоретически matches «A на BSSID Y»
-  // (не задумано юзером). На практике риск мал — BSSID = глобально уникальный
-  // MAC, коллизии "правильный SSID + чужой BSSID" нереалистичны. Для exact
-  // pair semantic нужно эмитить N отдельных rules (по одному chip'у),
-  // решение deferred до реального use-case.
-  if (wifiSsids != null && wifiSsids.isNotEmpty) rule['wifi_ssid'] = wifiSsids;
-  if (wifiBssids != null && wifiBssids.isNotEmpty) {
-    rule['wifi_bssid'] = wifiBssids;
-  }
-  // §694 — тип/лимитность сети по умолчанию; AND с остальным правилом.
-  if (networkTypes != null && networkTypes.isNotEmpty) {
-    rule['network_type'] = networkTypes;
-  }
-  if (networkIsExpensive) rule['network_is_expensive'] = true;
-  if (outbound == kOutboundReject) {
-    rule['action'] = 'reject';
-  } else {
-    rule['outbound'] = outbound;
-  }
-  return rule;
-}
-
-/// §247 — нетерминальное resolve-правило (route rule action `resolve`,
-/// sing-box 1.14). Тот же матч, что у парного route-правила (переиспользует
-/// [_outboundToRoute] для всей AND-механики match-полей), но вместо
-/// outbound/reject — `action: resolve` + непустые опции [RuleResolve].
-/// Эмитится ПЕРЕД терминальным route (или вместо него при `only`).
-Map<String, dynamic> _resolveToRoute(
-  Object tag,
-  RuleResolve r, {
-  List<int>? ports,
-  List<String>? portRanges,
-  List<String>? packages,
-  List<String>? packageRegexes,
-  List<String>? protocols,
-  List<String>? network,
-  bool ipIsPrivate = false,
-  List<String>? sourceIpCidrs,
-  bool sourceIpIsPrivate = false,
-  List<String>? inbounds,
-  List<String>? wifiSsids,
-  List<String>? wifiBssids,
-  List<String>? networkTypes,
-  bool networkIsExpensive = false,
-}) {
-  final rule = _outboundToRoute(
-    tag,
-    '',
-    ports: ports,
-    portRanges: portRanges,
-    packages: packages,
-    packageRegexes: packageRegexes,
-    protocols: protocols,
-    // §240×§247 — матч resolve-правила обязан совпадать с терминальным,
-    // иначе резолв цеплял бы трафик другого транспорта.
-    network: network,
-    ipIsPrivate: ipIsPrivate,
-    sourceIpCidrs: sourceIpCidrs,
-    sourceIpIsPrivate: sourceIpIsPrivate,
-    inbounds: inbounds,
-    wifiSsids: wifiSsids,
-    wifiBssids: wifiBssids,
-    networkTypes: networkTypes,
-    networkIsExpensive: networkIsExpensive,
-  );
-  rule.remove('outbound');
-  rule['action'] = 'resolve';
-  // Пустое/null поле = ключ не эмитится (дефолты ядра: strategy наследует
-  // dns.strategy, server — DNS-роутинг).
-  if (r.strategy.isNotEmpty) rule['strategy'] = r.strategy;
-  if (r.serverTag.isNotEmpty) rule['server'] = r.serverTag;
-  if (r.disableCache) rule['disable_cache'] = true;
-  if (r.disableOptimisticCache) rule['disable_optimistic_cache'] = true;
-  if (r.rewriteTtl != null) rule['rewrite_ttl'] = r.rewriteTtl;
-  if (r.timeout.isNotEmpty) rule['timeout'] = r.timeout;
-  if (r.clientSubnet.isNotEmpty) rule['client_subnet'] = r.clientSubnet;
-  return rule;
 }
 
 /// §225 (#17) — одно raw-JSON правило. Тело — JSON-объект `{...}` (один rule)

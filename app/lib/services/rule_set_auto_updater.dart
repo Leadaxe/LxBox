@@ -8,6 +8,7 @@ import '../models/parser_config.dart';
 import '../models/preset_rule_set.dart';
 import 'app_log.dart';
 import 'rule_set_downloader.dart';
+import 'storage_migration/rule_set_cache_ids.dart';
 import 'settings_storage.dart';
 import 'template_loader.dart';
 
@@ -228,9 +229,9 @@ class RuleSetAutoUpdater {
           c.cacheId,
       ];
 
-  /// Собрать протухшие рулсеты: свои `CustomRuleSrs` + remote-рулсеты
-  /// пресетов. Выключенные правила пропускаем — их `.srs` в конфиг не идёт,
-  /// качать его незачем. Включённое правило без файла берём (§601).
+  /// Собрать протухшие рулсеты: свои правила с наборами (§757 — `refs`
+  /// дерева) + remote-рулсеты пресетов. Выключенные правила пропускаем — их
+  /// `.srs` в конфиг не идёт, качать его незачем. Включённое правило без файла берём (§601).
   static Future<List<_Candidate>> _candidatesFor(
     List<CustomRule> rules, {
     WizardTemplate? template,
@@ -238,17 +239,20 @@ class RuleSetAutoUpdater {
   }) async {
     final now = DateTime.now();
     final out = <_Candidate>[];
+    // §757 — старые позиционные имена файлов кэша — в имена по ссылке.
+    await migrateRuleSetCacheIds(rules);
 
     // Шаблон и §534 userVars (гейт наборов на ref-переменной, §265) читаем
     // лениво, один раз на проход.
     for (final r in rules) {
       if (!r.enabled) continue;
 
-      if (r is CustomRuleSrs) {
-        // ## 12 — кандидат на каждый набор правила, у каждого свой кэш и
-        // свои метаданные; TTL общий (поле правила).
-        for (var i = 0; i < r.srsUrls.length; i++) {
-          final cacheId = CustomRuleSrs.cacheIdAt(r.id, i);
+      if (r is CustomRuleTree) {
+        // ## 12 / §757 — кандидат на каждый набор дерева, у каждого свой кэш
+        // (по ссылке) и свои метаданные; TTL общий (поле правила).
+        final refs = r.allRefs;
+        for (var i = 0; i < refs.length; i++) {
+          final cacheId = CustomRuleTree.cacheIdFor(r.id, refs[i]);
           final meta = await RuleSetDownloader.readMeta(cacheId);
           if (!shouldUpdatePure(
               meta: meta, intervalHours: r.updateIntervalHours, now: now)) {
@@ -256,7 +260,7 @@ class RuleSetAutoUpdater {
           }
           out.add(_Candidate(
             cacheId: cacheId,
-            url: r.srsUrls[i],
+            url: refs[i],
             label: i == 0 ? r.name : '${r.name} #${i + 1}',
           ));
         }
@@ -284,7 +288,8 @@ class RuleSetAutoUpdater {
               await RuleSetDownloader.readMetaForPreset(r.presetId, rs.tag);
           if (!shouldUpdatePure(
               meta: meta,
-              intervalHours: rs.updateIntervalHours,
+              // §757 (§180) — период записи пресета главнее шаблонного.
+              intervalHours: r.updateIntervalHours ?? rs.updateIntervalHours,
               now: now)) {
             continue;
           }

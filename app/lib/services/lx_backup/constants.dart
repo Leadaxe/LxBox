@@ -9,10 +9,15 @@ const int kLxBackupFormat0x = 1;
 /// Маркер контракта 1.0 в ключе `lx_backup` (BACKUP.md §8).
 const int kLxBackupFormat10 = 2;
 
+/// §757 (контракт 1.1.179) — маркер `lx_backup: 3`: тело правила — дерево,
+/// `refs` внутри простых правил. Читается тем же декодером, что 2.
+const int kLxBackupFormat11 = 3;
+
 /// §438 — формат, который эта сторона пишет, и старший, который читает. Файл
 /// с `lx_backup` выше отвергается целиком, а не разбирается частично
-/// (BACKUP.md §8); младший `1` читается legacy-входом.
-const int kLxBackupVersion = kLxBackupFormat10;
+/// (BACKUP.md §8); младший `1` читается legacy-входом. §757 — пишется 3,
+/// 2 и 3 читаются одним путём.
+const int kLxBackupVersion = kLxBackupFormat11;
 
 /// Значения `exported_by.app`. §401 — только они: ключами карманов
 /// `extensions.<приложение>` эти имена больше не служат, механизм упразднён.
@@ -178,6 +183,13 @@ const String kWarnGroupDegraded = 'backup_group_degraded';
 /// только при `count > 0`. Файл без ключа `rules` правил не трогает и кода не
 /// даёт: «ключа нет» и `rules: []` — разные файлы.
 const String kWarnRulesReplaced = 'backup_rules_replaced';
+
+/// §757 (контракт 1.1.178, TASKS_LXBOX §181 п. 3) — правило ссылается на
+/// набор-локальный файл другой машины (`file://` в `refs`): ввозится
+/// ВЫКЛЮЧЕННЫМ, ссылки сохраняются и уходят обратно на экспорте. Detail —
+/// `<имя правила>: <первая file://-ссылка>` (параметры реестра `rule`,
+/// `ref`).
+const String kWarnRuleRefLocalFile = 'backup_rule_ref_local_file';
 
 /// Переносимые имена переменных — зеркало `registry/vars.json` (portable=true).
 ///

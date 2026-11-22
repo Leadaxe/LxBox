@@ -14,7 +14,7 @@ CustomRuleEditController _ctrl(CustomRule initial) => CustomRuleEditController(
     );
 
 CustomRuleEditController _empty() =>
-    _ctrl(CustomRuleInline(id: 'r1', name: 'r', outbound: 'vpn-1'));
+    _ctrl(CustomRuleTree.flat(id: 'r1', name: 'r', outbound: 'vpn-1'));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +51,7 @@ void main() {
     });
 
     test('сохранённое правило с доменами при открытии галку не получает', () {
-      final c = _ctrl(CustomRuleInline(
+      final c = _ctrl(CustomRuleTree.flat(
         id: 'r2',
         name: 'old',
         domains: const ['a.com'],
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('srs: доступна, по умолчанию выключена', () {
-      final c = _ctrl(CustomRuleSrs(
+      final c = _ctrl(CustomRuleTree.flat(
           id: 's1', name: 's', srsUrl: 'https://e/x.srs', outbound: 'vpn-1'));
       expect(c.blockHttpsAvailable, isTrue);
       expect(c.dns?.blockHttps ?? false, isFalse);

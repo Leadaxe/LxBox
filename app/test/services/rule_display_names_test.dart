@@ -57,7 +57,7 @@ void main() {
   group('ruleDisplayNames', () {
     test('позиционно выровнен, ordinal по порядку списка', () {
       final rules = <CustomRule>[
-        CustomRuleInline(name: 'First'),
+        CustomRuleTree.flat(name: 'First'),
         presetRule(),
         presetRule(),
       ];
@@ -88,7 +88,7 @@ void main() {
     });
 
     test('selfId исключает собственные имена при rename', () {
-      final r = CustomRuleInline(name: 'Mine');
+      final r = CustomRuleTree.flat(name: 'Mine');
       expect(
         RoutingHelpers.uniqueCustomRuleName('Mine', r.id, [r], null),
         'Mine',

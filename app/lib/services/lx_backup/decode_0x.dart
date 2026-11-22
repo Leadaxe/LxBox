@@ -739,7 +739,7 @@ CustomRule? _ruleBodyFromJson(
   switch (kindName) {
     case 'inline':
       final match = (j['match'] as Map?)?.cast<String, dynamic>() ?? const {};
-      return CustomRuleInline(
+      return CustomRuleTree.flat(
         name: name,
         enabled: enabled,
         orderNum: orderNum,
@@ -784,7 +784,7 @@ CustomRule? _ruleBodyFromJson(
       );
 
     case 'srs':
-      return CustomRuleSrs(
+      return CustomRuleTree.flat(
         name: name,
         enabled: enabled,
         orderNum: orderNum,

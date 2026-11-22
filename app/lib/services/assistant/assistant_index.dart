@@ -184,7 +184,15 @@ List<AssistantConnection> assistantConnections(
 /// §750 — у правила есть условия отбора, кроме пакетов: маршрут приложения
 /// тогда зависит от них. У srs-правила условия лежат ещё и в наборе.
 bool assistantRuleConditional(CustomRule r) {
-  if (r is CustomRuleSrs) return true;
+  if (r.allRefs.isNotEmpty) return true;
+  // §757 — у правила с группами условия под-правил плоскими полями не
+  // видны: группа сама по себе — условие отбора.
+  if (r is CustomRuleTree && r.hasGroups) return true;
+  final leaf = r.flatLeaf;
+  if (leaf != null &&
+      leaf.conditions.keys.any((k) => !kRuleFormFieldKeys.contains(k))) {
+    return true;
+  }
   return r.domains.isNotEmpty ||
       r.domainSuffixes.isNotEmpty ||
       r.domainKeywords.isNotEmpty ||
@@ -239,12 +247,14 @@ Map<String, dynamic> buildAssistantIndex({
     'app_rules': [
       for (final r in sortRulesByNum(rules))
         if (r.enabled &&
-            (r is CustomRuleInline || r is CustomRuleSrs) &&
-            (r.packages.isNotEmpty || r.packageRegexes.isNotEmpty))
+            r is CustomRuleTree &&
+            // §757 — приложения всех простых узлов дерева.
+            (r.conditionValues(kRuleKeyPackageName).isNotEmpty ||
+                r.conditionValues(kRuleKeyPackageNameRegex).isNotEmpty))
           {
             'name': r.name,
-            'packages': [...r.packages],
-            'package_regexes': [...r.packageRegexes],
+            'packages': r.conditionValues(kRuleKeyPackageName),
+            'package_regexes': r.conditionValues(kRuleKeyPackageNameRegex),
             'outbound': r.outbound,
             'conditional': assistantRuleConditional(r),
           },

@@ -100,6 +100,9 @@ const _codesInCode = <String>{
   // §640 — контракт 1.1.116: замещение правил приёмника файлом с ключом
   // `rules` (BACKUP.md §9 п. 7).
   kWarnRulesReplaced,
+  // §757 — контракт 1.1.178 (§181 п. 3): правило с `file://` в `refs`
+  // ввозится выключенным.
+  kWarnRuleRefLocalFile,
 };
 
 void main() {

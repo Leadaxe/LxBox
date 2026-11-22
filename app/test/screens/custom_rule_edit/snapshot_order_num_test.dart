@@ -20,7 +20,7 @@ void main() {
   group('§381 snapshot() сохраняет orderNum', () {
     test('inline: номер переносится из initial', () {
       final ctrl = _controllerFor(
-        CustomRuleInline(name: 'flibusta', orderNum: 1042, domains: ['a.ru']),
+        CustomRuleTree.flat(name: 'flibusta', orderNum: 1042, domains: ['a.ru']),
       );
       addTearDown(ctrl.dispose);
 
@@ -29,7 +29,7 @@ void main() {
 
     test('inline: правило без правок не грязное', () {
       final ctrl = _controllerFor(
-        CustomRuleInline(name: 'flibusta', orderNum: 1042, domains: ['a.ru']),
+        CustomRuleTree.flat(name: 'flibusta', orderNum: 1042, domains: ['a.ru']),
       );
       addTearDown(ctrl.dispose);
 
@@ -38,7 +38,7 @@ void main() {
 
     test('srs: номер переносится из initial', () {
       final ctrl = _controllerFor(
-        CustomRuleSrs(
+        CustomRuleTree.flat(
           name: 'geosite',
           orderNum: 1007,
           srsUrl: 'https://example.invalid/x.srs',
@@ -72,7 +72,7 @@ void main() {
 
     test('неразмеченное правило остаётся с null (разметку делает markRuleOrder)',
         () {
-      final ctrl = _controllerFor(CustomRuleInline(name: 'fresh'));
+      final ctrl = _controllerFor(CustomRuleTree.flat(name: 'fresh'));
       addTearDown(ctrl.dispose);
 
       expect(ctrl.snapshot().orderNum, isNull);

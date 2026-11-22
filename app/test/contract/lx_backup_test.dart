@@ -858,7 +858,7 @@ void main() {
       expect(preset.presetId, 'block-ads');
       expect(preset.varsValues['outbound'], 'direct',
           reason: 'значения переменных пресета потеряны на импорте');
-      final srs = file.rules.last as CustomRuleSrs;
+      final srs = file.rules.last as CustomRuleTree;
       expect(srs.srsUrl, 'https://example-1.com/geo.srs',
           reason: 'URL rule-set потерян — правило приедет пустым');
     });
@@ -904,22 +904,25 @@ void main() {
         final raw = (await buildLxBackup(
           lists: const [],
           rules: [
-            CustomRuleSrs(
+            CustomRuleTree.flat(
               name: 'Multi',
               srsUrls: const ['https://x/a.srs', 'https://x/b.srs'],
               outbound: 'direct',
             ),
-            CustomRuleSrs(name: 'Single', srsUrl: 'https://x/d.srs', outbound: 'direct'),
+            CustomRuleTree.flat(name: 'Single', srsUrl: 'https://x/d.srs', outbound: 'direct'),
           ],
           vars: const {},
         )).json;
         final rules = (jsonDecode(raw) as Map<String, dynamic>)['rules'] as List;
         final multi = rules[0] as Map<String, dynamic>;
         final single = rules[1] as Map<String, dynamic>;
-        // §438 — в 1.0 `refs` всегда список, одиночного `ref` у srs нет.
+        // §438 — в 1.0 `refs` всегда список, одиночного `ref` у srs нет;
+        // §757 — `refs` в теле правила, не на записи.
         expect(multi.containsKey('ref'), isFalse);
-        expect(multi['refs'], ['https://x/a.srs', 'https://x/b.srs']);
-        expect(single['refs'], ['https://x/d.srs']);
+        expect(multi.containsKey('refs'), isFalse);
+        expect((multi['body'] as Map)['refs'],
+            ['https://x/a.srs', 'https://x/b.srs']);
+        expect((single['body'] as Map)['refs'], ['https://x/d.srs']);
 
         // Круг: import(export(x)) = x по составу наборов.
         final back = parseLxBackup(raw, knownOutbounds: {'direct'});

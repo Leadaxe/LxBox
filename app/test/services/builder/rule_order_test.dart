@@ -302,7 +302,7 @@ void main() {
 CustomRulePreset _preset(String id) =>
     CustomRulePreset(name: id, presetId: id, varsValues: const {});
 
-CustomRuleInline _inline(String name) => CustomRuleInline(name: name);
+CustomRuleTree _inline(String name) => CustomRuleTree.flat(name: name);
 
 /// Каталог по раскладке §370 §2 (подмножество, достаточное для тестов).
 List<SelectableRule> _catalog() => [

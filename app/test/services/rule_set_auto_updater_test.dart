@@ -124,24 +124,24 @@ void main() {
 
   group('§366 TTL в модели правила', () {
     test('дефолт — неделя, и он НЕ пишется в запись', () {
-      final r = CustomRuleSrs(name: 'x', srsUrl: 'http://a/b.srs');
+      final r = CustomRuleTree.flat(name: 'x', srsUrl: 'http://a/b.srs');
       expect(r.updateIntervalHours, kDefaultSrsTtlHours);
       expect(ruleToRecord(r).containsKey('update_interval_hours'), isFalse);
     });
 
     test('не-дефолтный TTL переживает round-trip записи', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
           name: 'x', srsUrl: 'http://a/b.srs', updateIntervalHours: 720);
-      final back = ruleFromRecord(ruleToRecord(r)).value! as CustomRuleSrs;
+      final back = ruleFromRecord(ruleToRecord(r)).value! as CustomRuleTree;
       expect(back.updateIntervalHours, 720);
     });
 
     test('0 (Never) сохраняется, а не подменяется дефолтом', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
           name: 'x', srsUrl: 'http://a/b.srs', updateIntervalHours: 0);
       expect(ruleToRecord(r)['update_interval_hours'], 0);
       expect(
-          (ruleFromRecord(ruleToRecord(r)).value! as CustomRuleSrs)
+          (ruleFromRecord(ruleToRecord(r)).value! as CustomRuleTree)
               .updateIntervalHours,
           0);
     });
@@ -152,7 +152,7 @@ void main() {
         'id': 'abc',
         'name': 'old',
         'ref': 'http://a/b.srs',
-      }).value! as CustomRuleSrs;
+      }).value! as CustomRuleTree;
       expect(back.updateIntervalHours, kDefaultSrsTtlHours);
     });
 
@@ -164,7 +164,7 @@ void main() {
           'name': 'bad',
           'ref': 'http://a/b.srs',
           'update_interval_hours': bad,
-        }).value! as CustomRuleSrs;
+        }).value! as CustomRuleTree;
         expect(back.updateIntervalHours, kDefaultSrsTtlHours, reason: '$bad');
       }
     });
@@ -217,7 +217,7 @@ void main() {
       if (await tempDir.exists()) await tempDir.delete(recursive: true);
     });
 
-    CustomRuleSrs srs(String id, {required bool enabled}) => CustomRuleSrs(
+    CustomRuleTree srs(String id, {required bool enabled}) => CustomRuleTree.flat(
           id: id,
           name: id,
           srsUrl: 'https://example.invalid/$id.srs',

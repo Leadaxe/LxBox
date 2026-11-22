@@ -6,7 +6,7 @@
 /// какие доменные (`group: domain`) — из таблицы условий реестра
 /// ([RuleConditionTable]); имён ключей условий здесь нет.
 ///
-/// Волна A: к `buildConfig` пока не подключено.
+/// Волна B: подключено к сборке (`post_steps/custom_rules.dart`).
 library;
 
 import '../../models/custom_rule.dart' show RuleDns, RuleResolve;

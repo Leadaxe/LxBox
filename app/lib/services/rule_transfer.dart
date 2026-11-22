@@ -359,7 +359,7 @@ SanitizedImportRule sanitizeImportedRule(
   // ── srs: кэша `.srs` у получателя нет — правило приезжает выключенным
   // («tap ☁ to download, then enable», предикат `_copyPreset`). §398 —
   // preset-ветки здесь больше нет: пресеты до этой точки не доходят.
-  final needsSrs = rule is CustomRuleSrs;
+  final needsSrs = rule.allRefs.isNotEmpty; // §757 — наборы дерева
   if (needsSrs || forceDisable) {
     rule = rule.withEnabled(false);
   }
@@ -575,14 +575,12 @@ SanitizedImportDnsItem<DnsRuleRef> sanitizeImportedDnsRule(
 // локальный pattern-match вместо расширения базового класса.
 
 CustomRule _withDns(CustomRule rule, RuleDns dns) => switch (rule) {
-      CustomRuleInline() => rule.copyWith(dns: dns),
-      CustomRuleSrs() => rule.copyWith(dns: dns),
+      CustomRuleTree() => rule.copyWith(dns: dns),
       _ => rule,
     };
 
 CustomRule _withResolve(CustomRule rule, RuleResolve resolve) =>
     switch (rule) {
-      CustomRuleInline() => rule.copyWith(resolve: resolve),
-      CustomRuleSrs() => rule.copyWith(resolve: resolve),
+      CustomRuleTree() => rule.copyWith(resolve: resolve),
       _ => rule,
     };

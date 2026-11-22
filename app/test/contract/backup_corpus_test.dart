@@ -331,8 +331,23 @@ void _checkRules(_State state, Map<String, dynamic> expected) {
     // проверяем; есть — все наборы правила по порядку.
     final wantRefs = want['refs'];
     if (wantRefs is List) {
-      expect(got.srsUrls, wantRefs.cast<String>(),
+      // §757 — все ссылки дерева pre-order.
+      expect(got.allRefs, wantRefs.cast<String>(),
           reason: 'refs правила ${want['name']}');
+    }
+    // §757 (§180) — настройки наборов правила: `update_interval_hours`
+    // (нет ключа — значение по умолчанию); `srs_mode` и `download_detour`
+    // сторона игнорирует молча.
+    final wantRuleSet = want['rule_set'];
+    if (wantRuleSet is Map) {
+      final wantHours = wantRuleSet['update_interval_hours'];
+      final gotHours = switch (got) {
+        CustomRuleTree(:final updateIntervalHours) => updateIntervalHours,
+        CustomRulePreset(:final updateIntervalHours) => updateIntervalHours,
+        _ => null,
+      };
+      expect(gotHours, wantHours is num ? wantHours.toInt() : kDefaultSrsTtlHours,
+          reason: 'update_interval_hours правила ${want['name']}');
     }
     // §438 — цель как вид: тег | `reject` | `drop`. У preset цели нет —
     // она из шаблона, и ожидание её не несёт.

@@ -452,7 +452,7 @@ void main() {
           }),
         ],
         routing: [
-          CustomRuleInline(
+          CustomRuleTree.flat(
               name: 'Streaming',
               dns: const RuleDns(enabled: true, serverTag: 'quad9_doh')),
         ],

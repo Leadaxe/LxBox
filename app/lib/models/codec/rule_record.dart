@@ -2,9 +2,15 @@
 /// (`contract/docs/ONE_NAMESPACE.md` §1, спека §439 §1.2).
 ///
 /// **Запись = метаданные приложения + `body` = правило sing-box как есть.**
-/// Метаданные — `kind`, `id`, `name`, `enabled`, `num`, `refs`, `ref`, `vars`;
+/// Метаданные — `kind`, `id`, `name`, `enabled`, `num`, `ref`, `vars`;
 /// поля LxBox рядом с телом — `dns{}`, `resolve{}`, `update_interval_hours`
-/// (srs), `verbatim` (inline).
+/// (srs, preset), `verbatim` (inline).
+///
+/// §757 (контракт 1.1.179) — `body` — дерево условий: `refs` пишутся внутри
+/// простых правил тела, `kind` (`inline` | `srs`) выводится из дерева.
+/// Читаются обе формы: `refs` / `ref` на записи (старая) переносятся в
+/// корень тела. Какие ключи — условия, решает таблица условий реестра
+/// (`ruleConditionTable`), списка ключей в кодеке нет.
 ///
 /// Один кодек на хранение, бэкап, файл правил, секции узла и Debug API, поэтому
 /// строки (`id`, `name`) не режутся: имя srs-правила — тег `rule_set` в
@@ -18,45 +24,18 @@
 ///
 /// Чтение терпимо: чужой `kind` и битая форма — [RecordRead.dropped], не
 /// исключение; скаляр вместо списка читается списком; незнакомые ключи корня
-/// записи игнорируются молча. Незнакомые ключи `body` — в
-/// [RecordRead.unknownKeys]; с `unknownAsVerbatim` inline-запись с ними
-/// читается [CustomRuleJson] с телом целиком.
+/// записи игнорируются молча. Ключи `body` вне таблицы условий (на любом
+/// уровне дерева) — в [RecordRead.unknownKeys]; с `unknownAsVerbatim`
+/// inline-запись с ними читается [CustomRuleJson] с телом целиком.
 library;
 
 import 'dart:convert';
 
 import '../../config/consts.dart' show kDirectOutboundTag;
+import '../../services/contract/rule_conditions.dart';
 import '../custom_rule.dart';
+import '../rule_tree.dart';
 import 'record_read.dart';
-
-/// Ключи `body` правила маршрута, которые типизированная модель держит (имена
-/// sing-box). Всё остальное при чтении — в `unknownKeys`.
-const Set<String> kRuleBodyKeys = {
-  'domain',
-  'domain_suffix',
-  'domain_keyword',
-  'domain_regex',
-  'ip_cidr',
-  'port',
-  'port_range',
-  'package_name',
-  'package_name_regex',
-  'protocol',
-  'network',
-  'ip_is_private',
-  'source_ip_cidr',
-  'source_ip_is_private',
-  'inbound',
-  'wifi_ssid',
-  'wifi_bssid',
-  'network_type',
-  'network_is_expensive',
-  'outbound',
-  'action',
-  // `rule_set` намеренно НЕ в списке: в теле записи это ссылка на набор
-  // конфига, наборы едут `refs[]`. Вырезать молча нельзя — правило без
-  // единственного матчера стало бы match-all (норма лаунчера 14.09.2026, B3).
-};
 
 /// Текст тела [CustomRuleJson], прочитанного из записи.
 const JsonEncoder _verbatimText = JsonEncoder.withIndent('  ');
@@ -120,20 +99,23 @@ Map<String, dynamic> ruleToRecord(CustomRule r) {
     if (r.orderNum != null) 'num': r.orderNum,
   };
   switch (r) {
-    case CustomRuleInline():
-      out['body'] = _ruleBody(r, includeMatch: true);
-    case CustomRuleSrs():
-      // Источники наборов — снаружи `body`: это не sing-box. `rule_set` в
-      // тело вписывает сборка (ONE_NAMESPACE §1, D-100).
-      out['refs'] = List<String>.of(r.srsUrls);
-      if (r.updateIntervalHours != kDefaultSrsTtlHours) {
+    case CustomRuleTree():
+      // §757 — `refs` внутри простых правил тела (`ruleTreeBodyToJson`),
+      // на записи их больше нет; `kind` — выведенный из дерева.
+      if (r.kind == CustomRuleKind.srs &&
+          r.updateIntervalHours != kDefaultSrsTtlHours) {
         out['update_interval_hours'] = r.updateIntervalHours;
       }
-      out['body'] = _ruleBody(r, includeMatch: false);
+      out['body'] = ruleTreeBodyToJson(r.body);
     case CustomRulePreset():
       out['ref'] = r.presetId;
       if (r.varsValues.isNotEmpty) {
         out['vars'] = Map<String, String>.of(r.varsValues);
+      }
+      // §757 (§180) — период обновления наборов пресета: хранится и
+      // провозится.
+      if (r.updateIntervalHours != null) {
+        out['update_interval_hours'] = r.updateIntervalHours;
       }
     case CustomRuleJson():
       out['verbatim'] = true;
@@ -143,55 +125,6 @@ Map<String, dynamic> ruleToRecord(CustomRule r) {
   if (r.dns != null) out['dns'] = r.dns!.toJson();
   if (r.resolve != null) out['resolve'] = r.resolve!.toJson();
   return out;
-}
-
-Map<String, dynamic> _ruleBody(CustomRule r, {required bool includeMatch}) {
-  final b = <String, dynamic>{};
-  if (includeMatch) {
-    if (r.domains.isNotEmpty) b['domain'] = List<String>.of(r.domains);
-    if (r.domainSuffixes.isNotEmpty) {
-      b['domain_suffix'] = List<String>.of(r.domainSuffixes);
-    }
-    if (r.domainKeywords.isNotEmpty) {
-      b['domain_keyword'] = List<String>.of(r.domainKeywords);
-    }
-    if (r.domainRegexes.isNotEmpty) {
-      b['domain_regex'] = List<String>.of(r.domainRegexes);
-    }
-    if (r.ipCidrs.isNotEmpty) b['ip_cidr'] = List<String>.of(r.ipCidrs);
-  }
-  // Типы sing-box: `port` — числа (нечисловые отбрасываются, сборка их тоже
-  // не эмитит), `port_range` — строки `"a:b"`.
-  final ports = r.intPorts;
-  if (ports.isNotEmpty) b['port'] = ports;
-  if (r.portRanges.isNotEmpty) b['port_range'] = List<String>.of(r.portRanges);
-  if (r.packages.isNotEmpty) b['package_name'] = List<String>.of(r.packages);
-  if (r.packageRegexes.isNotEmpty) {
-    b['package_name_regex'] = List<String>.of(r.packageRegexes);
-  }
-  if (r.protocols.isNotEmpty) b['protocol'] = List<String>.of(r.protocols);
-  if (r.network.isNotEmpty) b['network'] = List<String>.of(r.network);
-  if (r.ipIsPrivate) b['ip_is_private'] = true;
-  if (r.sourceIpCidrs.isNotEmpty) {
-    b['source_ip_cidr'] = List<String>.of(r.sourceIpCidrs);
-  }
-  if (r.sourceIpIsPrivate) b['source_ip_is_private'] = true;
-  if (r.inbounds.isNotEmpty) b['inbound'] = List<String>.of(r.inbounds);
-  if (r.wifiSsids.isNotEmpty) b['wifi_ssid'] = List<String>.of(r.wifiSsids);
-  if (r.wifiBssids.isNotEmpty) b['wifi_bssid'] = List<String>.of(r.wifiBssids);
-  // §694 — пусто/false не пишутся: правило без условия — байт в байт как было.
-  if (r.networkTypes.isNotEmpty) {
-    b['network_type'] = List<String>.of(r.networkTypes);
-  }
-  if (r.networkIsExpensive) b['network_is_expensive'] = true;
-  // Пустая цель пишется как есть: сборка такое правило пропускает, а запись
-  // без `outbound` читается целью по умолчанию и попала бы в конфиг.
-  if (r.outbound == kOutboundReject) {
-    b['action'] = 'reject';
-  } else {
-    b['outbound'] = r.outbound;
-  }
-  return b;
 }
 
 /// Запись 1.0 → правило LxBox.
@@ -234,95 +167,59 @@ RecordRead<CustomRule> ruleFromRecord(
           json: body == null ? '' : _verbatimText.convert(body),
         ));
       }
+      final table = ruleConditionTable;
       final b = body ?? const <String, dynamic>{};
-      final unknown = [
-        for (final k in b.keys)
-          if (!kRuleBodyKeys.contains(k)) k,
-        // §438 — `action` модель выражает ровно одним значением, `reject`
-        // (цель kOutboundReject). Самостоятельный эффект ядра (`sniff`,
-        // `resolve`, `hijack-dns`, …) у типизированного правила дома не имеет:
-        // прочитанный как правило на direct-out, он молча стал бы маршрутом.
-        if (b.containsKey('action') && b['action'] != 'reject') 'action',
-      ]..sort();
-      if (kind == 'inline' && unknownAsVerbatim && unknown.isNotEmpty) {
-        return RecordRead.ok(
-          CustomRuleJson(
-            id: id,
-            name: name,
-            enabled: enabled,
-            orderNum: orderNum,
-            json: _verbatimText.convert(b),
-          ),
-          unknownKeys: unknown,
-        );
+      // §757 — ключи вне таблицы условий и служебных (на любом уровне
+      // дерева) и цель, которую модель не выражает: `action` кроме
+      // `reject` (§438 — самостоятельный эффект ядра, прочитанный правилом
+      // на direct-out, молча стал бы маршрутом) и `method`.
+      final unknown = <String>{};
+      final cleaned = _cleanNode(b, table, unknown, isRoot: true);
+      if (b.containsKey('action') && b['action'] != 'reject') {
+        unknown.add('action');
       }
-      final outbound = _outboundOf(b);
-      final dns = RuleDns.fromJson(j['dns']);
-      final resolve = RuleResolve.fromJson(j['resolve']);
-      if (kind == 'inline') {
-        return RecordRead.ok(
-          CustomRuleInline(
-            id: id,
-            name: name,
-            enabled: enabled,
-            orderNum: orderNum,
-            domains: _strList(b['domain']),
-            domainSuffixes: _strList(b['domain_suffix']),
-            domainKeywords: _strList(b['domain_keyword']),
-            domainRegexes: _strList(b['domain_regex']),
-            ipCidrs: _strList(b['ip_cidr']),
-            ports: _portList(b['port']),
-            portRanges: _strList(b['port_range']),
-            packages: _strList(b['package_name']),
-            packageRegexes: _strList(b['package_name_regex']),
-            protocols: _strList(b['protocol']),
-            network: _strList(b['network']),
-            ipIsPrivate: b['ip_is_private'] == true,
-            sourceIpCidrs: _strList(b['source_ip_cidr']),
-            sourceIpIsPrivate: b['source_ip_is_private'] == true,
-            inbounds: _strList(b['inbound']),
-            wifiSsids: _strList(b['wifi_ssid']),
-            wifiBssids: _strList(b['wifi_bssid']),
-            networkTypes: _strList(b['network_type']),
-            networkIsExpensive: b['network_is_expensive'] == true,
-            outbound: outbound,
-            dns: dns,
-            resolve: resolve,
-          ),
-          unknownKeys: unknown,
-        );
+      if (b.containsKey('method')) unknown.add('method');
+      final unknownKeys = unknown.toList()..sort();
+      RecordRead<CustomRule> verbatim() => RecordRead.ok(
+            CustomRuleJson(
+              id: id,
+              name: name,
+              enabled: enabled,
+              orderNum: orderNum,
+              json: _verbatimText.convert(b),
+            ),
+            unknownKeys: unknownKeys,
+          );
+      if (kind == 'inline' && unknownAsVerbatim && unknownKeys.isNotEmpty) {
+        return verbatim();
       }
-      final refs = _strList(j['refs']);
-      final ref = j['ref'];
+      // §757 — тело-дерево; ссылки старой формы (на записи) переносятся в
+      // корень, `refs` в дереве главнее.
+      final tree = parseRuleTreeBody(
+        cleaned,
+        table,
+        recordRefs: legacyRecordRefs(j),
+      );
+      if (tree == null) {
+        // Структура не дерево (`logical` без `mode` / детей, цель не у
+        // корня) — хранилище держит тело как есть, прочие пути отказывают.
+        if (unknownAsVerbatim) return verbatim();
+        return RecordRead.drop('rule "$name": body is not a rule');
+      }
       return RecordRead.ok(
-        CustomRuleSrs(
+        CustomRuleTree(
           id: id,
           name: name,
           enabled: enabled,
           orderNum: orderNum,
-          // `refs` главнее одиночного `ref` (## 12).
-          srsUrls: refs.isNotEmpty ? refs : [if (ref is String) ref],
+          root: tree.root,
+          outbound: _outboundOf(b),
+          dns: RuleDns.fromJson(j['dns']),
+          resolve: RuleResolve.fromJson(j['resolve']),
           updateIntervalHours:
-              CustomRuleSrs.ttlHoursFrom(j['update_interval_hours']),
-          ports: _portList(b['port']),
-          portRanges: _strList(b['port_range']),
-          packages: _strList(b['package_name']),
-          packageRegexes: _strList(b['package_name_regex']),
-          protocols: _strList(b['protocol']),
-          network: _strList(b['network']),
-          ipIsPrivate: b['ip_is_private'] == true,
-          sourceIpCidrs: _strList(b['source_ip_cidr']),
-          sourceIpIsPrivate: b['source_ip_is_private'] == true,
-          inbounds: _strList(b['inbound']),
-          wifiSsids: _strList(b['wifi_ssid']),
-          wifiBssids: _strList(b['wifi_bssid']),
-          networkTypes: _strList(b['network_type']),
-          networkIsExpensive: b['network_is_expensive'] == true,
-          outbound: outbound,
-          dns: dns,
-          resolve: resolve,
+              CustomRuleTree.ttlHoursFrom(j['update_interval_hours']),
         ),
-        unknownKeys: unknown,
+        unknownKeys: unknownKeys,
       );
     case 'preset':
       final ref = j['ref'];
@@ -339,6 +236,10 @@ RecordRead<CustomRule> ruleFromRecord(
                   e.key.toString(): e.value?.toString() ?? '',
               }
             : const {},
+        // §757 (§180) — `null`: поля нет, действует период шаблона.
+        updateIntervalHours: j['update_interval_hours'] is num
+            ? CustomRuleTree.ttlHoursFrom(j['update_interval_hours'])
+            : null,
       ));
     default:
       return RecordRead.drop('rule "$name": unknown kind "$kind"');
@@ -372,9 +273,63 @@ List<String> _strList(Object? v) {
   return [v.toString()];
 }
 
-/// Порты тела: только числа 0–65535, строками модели. Нечисловое отбрасывается
-/// на чтении так же, как на записи ([CustomRule.intPorts]).
-List<String> _portList(Object? v) => [
-      for (final e in _strList(v))
-        if (int.tryParse(e) case final p? when p >= 0 && p <= 65535) '$p',
-    ];
+/// §757 — узел тела без ключей вне таблицы условий и служебных (они — в
+/// [unknown]) и со значениями условий в форме дерева: скаляр вместо списка —
+/// списком, элементы — `toString()`, порты — только числа 0–65535, флаг —
+/// `== true` (терпимое чтение, как у кодека до §757). Цель (`outbound`,
+/// `action`, `method`) остаётся у корня.
+Map<String, dynamic> _cleanNode(
+  Map<String, dynamic> m,
+  RuleConditionTable table,
+  Set<String> unknown, {
+  required bool isRoot,
+}) {
+  final out = <String, dynamic>{};
+  for (final e in m.entries) {
+    final k = e.key;
+    final v = e.value;
+    if (RuleConditionTable.targetKeys.contains(k)) {
+      out[k] = v;
+      continue;
+    }
+    if (k == RuleConditionTable.kRules && v is List) {
+      out[k] = [
+        for (final c in v)
+          c is Map
+              ? _cleanNode(c.cast<String, dynamic>(), table, unknown,
+                  isRoot: false)
+              : c,
+      ];
+      continue;
+    }
+    if (k == RuleConditionTable.kInvert) {
+      out[k] = v == true;
+      continue;
+    }
+    if (RuleConditionTable.serviceKeys.contains(k) ||
+        k == RuleConditionTable.kRuleSet) {
+      out[k] = v;
+      continue;
+    }
+    final desc = table.key(k);
+    if (desc == null) {
+      unknown.add(k);
+      continue;
+    }
+    if (desc.isBool) {
+      out[k] = v == true;
+    } else if (desc.isIntList) {
+      out[k] = [
+        for (final s in _strList(v))
+          if (int.tryParse(s.trim()) case final p? when p >= 0 && p <= 65535)
+            p,
+      ];
+    } else if (k == kRuleKeyWifiBssid) {
+      // §051 — ядро сравнивает BSSID с учётом регистра: нижний регистр.
+      out[k] = [for (final b in _strList(v)) b.trim().toLowerCase()];
+    } else {
+      out[k] = _strList(v);
+    }
+  }
+  return out;
+}

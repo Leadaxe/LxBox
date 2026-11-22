@@ -93,25 +93,30 @@ void main() {
     test('app_rules: порядок применения, выключенные и без пакетов отброшены, '
         'conditional', () {
       final rules = <CustomRule>[
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'Later', orderNum: 1005, packages: ['b.app'], outbound: 'vpn-2'),
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'First',
             orderNum: 1001,
             packages: ['a.app'],
             outbound: 'direct-out'),
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'Off', orderNum: 1000, enabled: false, packages: ['c.app']),
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'Domains only', orderNum: 1002, domains: ['example.com']),
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'Regex + Wi-Fi',
             orderNum: 1003,
             packageRegexes: [r'^org\.example\.'],
             wifiSsids: ['Office'],
             outbound: 'reject'),
-        CustomRuleSrs(
-            name: 'Set', orderNum: 1004, packages: ['d.app'], outbound: 'vpn-1'),
+        CustomRuleTree.flat(
+            name: 'Set',
+            orderNum: 1004,
+            // §757 — правило с набором: вид srs выводится из ссылок.
+            srsUrl: 'https://x/set.srs',
+            packages: ['d.app'],
+            outbound: 'vpn-1'),
         CustomRulePreset(
             name: 'Preset', orderNum: 900, presetId: 'p', varsValues: {
           'outbound': 'vpn-2',

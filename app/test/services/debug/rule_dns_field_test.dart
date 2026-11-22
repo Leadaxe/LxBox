@@ -53,7 +53,7 @@ void main() {
 
   group('Debug API RuleDns read (§256)', () {
     test('serializeCustomRule отдаёт dns.force_ipv4 когда true', () async {
-      final built = CustomRuleInline(
+      final built = CustomRuleTree.flat(
         name: 'r',
         domainSuffixes: ['ru'],
         outbound: 'direct-out',
@@ -76,7 +76,7 @@ void main() {
 
     test('force_ipv4 скрыт когда false (симметрия с resolve-полями)',
         () async {
-      final built = CustomRuleInline(
+      final built = CustomRuleTree.flat(
         name: 'r',
         domainSuffixes: ['ru'],
         outbound: 'direct-out',

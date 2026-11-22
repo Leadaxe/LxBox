@@ -203,13 +203,13 @@ void main() {
     setUp(() => RuleNameResolver.I.clear());
     tearDown(() => RuleNameResolver.I.clear());
 
-    CustomRuleInline rule(String name, {
+    CustomRuleTree rule(String name, {
       List<String> suffixes = const [],
       List<String> domains = const [],
       List<String> ssids = const [],
       List<String> bssids = const [],
     }) =>
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: name,
           enabled: true,
           domains: domains,

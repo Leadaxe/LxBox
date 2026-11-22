@@ -514,7 +514,7 @@ void main() {
         SettingsStorage.sourceKeyForChain('c2'),
       ]);
       await SettingsStorage.saveCustomRules([
-        CustomRuleInline(
+        CustomRuleTree.flat(
           id: 'r1',
           name: 'R',
           domainSuffixes: const ['.example-1.com'],

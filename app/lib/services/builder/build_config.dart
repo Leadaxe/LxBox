@@ -21,6 +21,7 @@ import '../json_clone.dart';
 import '../node_hash.dart';
 import '../safe_regex.dart';
 import '../rule_set_downloader.dart';
+import '../storage_migration/rule_set_cache_ids.dart';
 import '../tailscale_state/state_keys.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -718,9 +719,12 @@ Future<BuildResult?> _buildConfig({
   // Pre-resolve srs local paths (sing-box получает file:// — rule set
   // `{type: local, path: …}`). Удалённо ничего не качается.
   final srsPaths = <String, String>{};
+  // §757 — старые позиционные имена файлов кэша — в имена по ссылке.
+  await migrateRuleSetCacheIds(customRules);
   for (final cr in customRules) {
-    if (cr is! CustomRuleSrs) continue;
-    // ## 12 — по файлу на каждый набор правила; ключ — id кэша набора.
+    if (cr is! CustomRuleTree) continue;
+    // ## 12 / §757 — по файлу на каждый набор дерева; ключ — id кэша набора
+    // по ссылке (`<id>~<h8>`).
     for (final cacheId in cr.cacheIds) {
       final p = await RuleSetDownloader.cachedPath(cacheId);
       if (p != null) srsPaths[cacheId] = p;

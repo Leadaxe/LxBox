@@ -5,6 +5,7 @@ import '../contract/registry.dart';
 import '../json_clone.dart';
 import 'if_engine.dart';
 import 'preset_node_loop.dart' show kPresetNodeRecordFieldNames;
+import 'rule_tree_emit.dart' show ruleSetFormatOf;
 
 /// Результат expansion одного `CustomRule(kind: preset)` через его
 /// `SelectableRule`-определение в шаблоне (spec §033).
@@ -620,6 +621,7 @@ PresetFragments _expandPresetBody(
     // (routing rule зарегистрируется, но rule_set не матчит).
     if (result['type'] == 'remote') {
       final tag = result['tag'] as String;
+      final url = result['url'];
       final localPath = srsPaths[tag];
       if (localPath == null) {
         warnings.add(
@@ -635,8 +637,10 @@ PresetFragments _expandPresetBody(
         ..remove('download_detour')
         ..remove('update_interval')
         ..['path'] = localPath;
+      // §757 (§181 п. 1) — без явного `format` — по расширению ссылки
+      // (`.json` — `source`, иначе `binary`).
       if (result['format'] is! String) {
-        result['format'] = 'binary';
+        result['format'] = ruleSetFormatOf(url is String ? url : '');
       }
     }
     expandedRuleSets.add(result);

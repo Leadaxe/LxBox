@@ -170,8 +170,21 @@
       },
       {
         "rule_set": "All groups",
+        "package_name": [
+          "com.example.browser"
+        ],
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
+        "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "ip_version": 6,
         "action": "predefined",
@@ -179,15 +192,28 @@
       },
       {
         "rule_set": "All groups",
+        "package_name": [
+          "com.example.browser"
+        ],
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
+        "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "server": "my-doh"
       },
       {
         "rule_set": [
           "Geo sets",
-          "Geo sets-2"
+          "Geo sets:6765fa2f"
         ],
         "server": "google_udp"
       },
@@ -717,6 +743,9 @@
         "port_range": [
           "10000:10100"
         ],
+        "package_name": [
+          "com.example.browser"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -725,9 +754,18 @@
           "tcp"
         ],
         "ip_is_private": true,
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
         "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "action": "resolve",
         "strategy": "prefer_ipv4",
@@ -747,6 +785,9 @@
         "port_range": [
           "10000:10100"
         ],
+        "package_name": [
+          "com.example.browser"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -755,9 +796,18 @@
           "tcp"
         ],
         "ip_is_private": true,
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
         "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "outbound": "vpn-2"
       },
@@ -769,7 +819,7 @@
       {
         "rule_set": [
           "Geo sets",
-          "Geo sets-2"
+          "Geo sets:6765fa2f"
         ],
         "port": [
           443
@@ -864,18 +914,6 @@
             ],
             "ip_cidr": [
               "198.51.100.0/24"
-            ],
-            "package_name": [
-              "com.example.browser"
-            ],
-            "source_ip_cidr": [
-              "10.0.0.0/8"
-            ],
-            "wifi_ssid": [
-              "Home WiFi"
-            ],
-            "wifi_bssid": [
-              "aa:bb:cc:dd:ee:ff"
             ]
           }
         ]
@@ -895,13 +933,13 @@
         "type": "local",
         "tag": "Geo sets",
         "format": "binary",
-        "path": "<sandbox>/docs/rule_sets/r-srs-multi.srs"
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi~0a7c4584.srs"
       },
       {
         "type": "local",
-        "tag": "Geo sets-2",
+        "tag": "Geo sets:6765fa2f",
         "format": "binary",
-        "path": "<sandbox>/docs/rule_sets/r-srs-multi~1.srs"
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi~6765fa2f.srs"
       },
       {
         "tag": "ru-direct:ru-domains",

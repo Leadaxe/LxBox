@@ -252,6 +252,7 @@ Future<void> applyCustomDns(
           :final id,
           :final name,
           :final body,
+          :final srsUrl,
           server: final legacyServer,
           rule: final legacyRule,
         ):
@@ -281,7 +282,8 @@ Future<void> applyCustomDns(
         extraDnsSrsRuleSets.add({
           'type': 'local',
           'tag': tag,
-          'format': 'binary',
+          // §757 (§181 п. 1) — формат по расширению ссылки.
+          'format': ruleSetFormatOf(srsUrl ?? ''),
           'path': path,
         });
         final dnsRule = <String, dynamic>{

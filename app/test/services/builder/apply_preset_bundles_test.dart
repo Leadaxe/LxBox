@@ -159,7 +159,7 @@ void main() {
 
     test('inline правила пропускаются (обрабатывает applyCustomRules)', () {
       final preset = _ruDirect();
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'Firefox .ru',
         domainSuffixes: const ['ru'],
       );

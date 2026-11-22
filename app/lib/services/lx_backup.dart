@@ -111,8 +111,9 @@ Map<String, dynamic>? _tryDecodeObject(String body) {
 /// `backup_chain_exists`, который отвечает на другой вопрос.
 ///
 /// §438 — формат опознаётся ключом `lx_backup` одним сравнением ещё до
-/// разбора тела (BACKUP.md §8): `1` — декодер 0.x, `2` — декодер 1.0.
-/// Больше [kLxBackupVersion] — отказ целиком; вне `{1, 2}` — не наш файл.
+/// разбора тела (BACKUP.md §8): `1` — декодер 0.x, `2` и `3` (§757) —
+/// декодер 1.0. Больше [kLxBackupVersion] — отказ целиком; вне `{1, 2, 3}`
+/// — не наш файл.
 LxBackupFile parseLxBackup(
   String raw, {
   Set<String> knownOutbounds = const {},
@@ -173,7 +174,7 @@ LxBackupFile decodeLxBackup(
   if (version < kLxBackupFormat0x) {
     throw const FormatException('Это не файл LX Backup: нет поля lx_backup');
   }
-  if (version == kLxBackupFormat10) {
+  if (version == kLxBackupFormat10 || version == kLxBackupFormat11) {
     return _parse10(
       decoded,
       takenTags: takenTags,
@@ -913,8 +914,7 @@ Set<String>? lxImportKnownTargets({
 /// (`reject` у отказа), `outbound` тела правила вида json. У пресета цели
 /// нет — она из шаблона. Пустая строка — цели нет, проверять нечего.
 String _ruleTarget(CustomRule r) => switch (r) {
-      CustomRuleInline(:final outbound) => outbound,
-      CustomRuleSrs(:final outbound) => outbound,
+      CustomRuleTree(:final outbound) => outbound,
       CustomRulePreset() => '',
       CustomRuleJson(:final json) => switch (_tryDecodeObject(json.trim())) {
           {'outbound': final String o} => o,

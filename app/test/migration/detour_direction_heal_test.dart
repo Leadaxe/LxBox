@@ -186,14 +186,14 @@ void main() {
         'route_final': routeFinal,
         'storage_version': 1,
         'rules': [
-          ruleToRecord(CustomRuleInline(
+          ruleToRecord(CustomRuleTree.flat(
                   name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
           ruleToRecord(CustomRulePreset(
             name: 'Block Ads',
             presetId: 'block-ads',
             varsValues: const {'outbound': 'vpn-3'},
           )),
-          ruleToRecord(CustomRuleSrs(
+          ruleToRecord(CustomRuleTree.flat(
             name: 'GeoIP RU',
             srsUrl: 'https://example.com/geoip-ru.srs',
             outbound: 'vpn-3',
@@ -215,7 +215,12 @@ void main() {
       final rules = await SettingsStorage.getCustomRules();
       expect(rules.map((r) => r.outbound), everyElement('vpn-3'));
       // srs-правило цело наравне с inline/preset — heal вообще не вызывался.
-      expect(rules.whereType<CustomRuleSrs>().single.outbound, 'vpn-3');
+      expect(
+          rules
+              .whereType<CustomRuleTree>()
+              .singleWhere((r) => r.kind == CustomRuleKind.srs)
+              .outbound,
+          'vpn-3');
       expect(res.rules, 0);
       expect(res.detours, 0);
     });

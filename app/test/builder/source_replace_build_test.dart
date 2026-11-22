@@ -150,7 +150,7 @@ void main() {
     final r = await build(
       [sub(both, disabled: {'A': off, 'B': off}), loose()],
       rules: [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           id: 'r1',
           name: 'Via Pick',
           domainSuffixes: const ['.example-2.com'],

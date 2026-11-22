@@ -150,7 +150,10 @@ LxBackupFile _parse10(
 
   final by = _obj(decoded['exported_by']) ?? const <String, dynamic>{};
   return LxBackupFile(
-    version: kLxBackupFormat10,
+    // §757 — 2 и 3 читаются одним путём; версия — как в файле.
+    version: decoded['lx_backup'] == kLxBackupFormat11
+        ? kLxBackupFormat11
+        : kLxBackupFormat10,
     exportedByApp: _str(by['app']),
     exportedByVersion: _str(by['version']),
     exportedAt: _str(decoded['exported_at']),
@@ -467,9 +470,9 @@ LxFolder _folder10(Map<String, dynamic> j, int position) {
 /// `inline` с ключами тела, которых типизированное правило не держит
 /// (`method: drop`, самостоятельный `action`, незнакомый матчер), переносится
 /// видом json — телом целиком, без потерь: вырезать ключ значило бы изменить
-/// смысл правила (норма B3). `rule_set` в теле (наборы едут `refs[]`) и
-/// `srs` с незнакомым ключом дома не имеют — запись отбрасывается целиком с
-/// [kWarnUnknownField].
+/// смысл правила (норма B3). `srs` с незнакомым ключом дома не имеет —
+/// запись отбрасывается целиком с [kWarnUnknownField]. §757 — `rule_set` в
+/// теле — рукописные теги дерева, читаются типизированно.
 List<CustomRule> _rule10(
   Map<String, dynamic> j,
   Set<String> knownPresets,
@@ -522,7 +525,7 @@ CustomRule? _ruleRecord10(
   }
 
   if (read.unknownKeys.isNotEmpty) {
-    if (kind != 'inline' || read.unknownKeys.contains('rule_set')) {
+    if (kind != 'inline') {
       warnings.add(LxBackupWarning(
         kWarnUnknownField,
         'rules[$label].body: ${read.unknownKeys.join(', ')}',
@@ -536,6 +539,15 @@ CustomRule? _ruleRecord10(
         warnings.add(LxBackupWarning(kWarnUnknownField, 'rules[$label].$key'));
       }
     }
+  }
+  // §757 (§181 п. 3) — набор-файл другой машины: у приёмника его нет, правило
+  // ввозится выключенным, ссылки остаются в дереве.
+  final localRef = rule.allRefs
+      .where((r) => r.trim().toLowerCase().startsWith('file://'))
+      .firstOrNull;
+  if (localRef != null) {
+    warnings.add(LxBackupWarning(kWarnRuleRefLocalFile, '$label: $localRef'));
+    return rule.withEnabled(false);
   }
   return rule;
 }
@@ -744,6 +756,12 @@ const Set<String> _rule10Keys = {
   'id',
   'dns',
   'resolve',
+  // §757 (§180, контракт 1.1.177) — поля записи «Поддержка: лаунчер» (режим
+  // наборов, detour скачивания ядром): сторона LxBox их не хранит и не
+  // предупреждает. `update_interval_hours` — общее поле, объявлено таблицей
+  // среза.
+  'srs_mode',
+  'download_detour',
 };
 
 const Set<String> _dns10Keys = {

@@ -331,6 +331,27 @@ class RuleSetDownloader {
     } catch (_) {}
   }
 
+  /// §757 — переименовать файл набора [fromId] и его метаданные в [toId]
+  /// (миграция id кэша по ссылке, `storage_migration/rule_set_cache_ids.dart`).
+  /// `true` — файл набора переименован; нет исходного файла или у [toId]
+  /// файл уже есть — ничего не делается.
+  static Future<bool> renameCache(String fromId, String toId) async {
+    if (fromId == toId) return false;
+    try {
+      final from = await _file(fromId);
+      final to = await _file(toId);
+      if (!await from.exists() || await to.exists()) return false;
+      await from.rename(to.path);
+      final meta = await _metaFile(fromId);
+      if (await meta.exists()) {
+        await meta.rename((await _metaFile(toId)).path);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ─── Preset bundles (spec §033 / task 011) ─────────────────────────────
   //
   // Для bundle-пресетов с remote `rule_set` в шаблоне мы кэшируем файл

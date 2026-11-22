@@ -1,5 +1,5 @@
 {
-  "lx_backup": 2,
+  "lx_backup": 3,
   "exported_by": {
     "app": "lxbox",
     "version": "0.0.0+0",
@@ -592,12 +592,12 @@
       "name": "Geo sets",
       "enabled": true,
       "num": 1010,
-      "refs": [
-        "https://example.com/rules/a.srs",
-        "https://example.com/rules/b.srs"
-      ],
       "update_interval_hours": 24,
       "body": {
+        "refs": [
+          "https://example.com/rules/a.srs",
+          "https://example.com/rules/b.srs"
+        ],
         "port": [
           443
         ],
@@ -617,10 +617,10 @@
       "name": "Uncached set",
       "enabled": true,
       "num": 1011,
-      "refs": [
-        "https://example.com/rules/c.srs"
-      ],
       "body": {
+        "refs": [
+          "https://example.com/rules/c.srs"
+        ],
         "outbound": "vpn-1"
       }
     },

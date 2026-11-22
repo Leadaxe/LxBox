@@ -1,4 +1,5 @@
 import '../../../models/custom_rule.dart';
+import '../../../models/rule_tree.dart' show ruleTreeBodyToJson;
 import '../../rule_set_downloader.dart';
 import '../../template_loader.dart';
 
@@ -24,9 +25,30 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
     'num': r.orderNum,
   };
   switch (r) {
-    case CustomRuleInline():
+    case CustomRuleTree():
+      // §757 — плоские поля — корень-простой узел; дерево, которое ими не
+      // выражается (группы, `invert`, рукописный `rule_set`, ключи вне
+      // формы), — целиком в `body` (форма записи `rules[].body`).
+      final leaf = r.flatLeaf;
+      final plain = leaf != null &&
+          !leaf.invert &&
+          leaf.ruleSet.isEmpty &&
+          leaf.conditions.keys.every(kRuleFormFieldKeys.contains);
+      final refs = r.allRefs;
+      final firstCache = r.cacheIds.isEmpty ? null : r.cacheIds.first;
+      final cachedPath = firstCache == null
+          ? null
+          : await RuleSetDownloader.cachedPath(firstCache);
+      final mtime = firstCache == null
+          ? null
+          : await RuleSetDownloader.lastUpdated(firstCache);
       return {
         ...base,
+        if (refs.isNotEmpty) ...{
+          'srs_url': refs.first,
+          // ## 12 — все наборы правила по порядку (`srs_url` = первый).
+          'srs_urls': refs,
+        },
         if (r.domains.isNotEmpty) 'domains': r.domains,
         if (r.domainSuffixes.isNotEmpty) 'domain_suffixes': r.domainSuffixes,
         if (r.domainKeywords.isNotEmpty) 'domain_keywords': r.domainKeywords,
@@ -51,45 +73,18 @@ Future<Map<String, Object?>> serializeCustomRule(CustomRule r) async {
         // §694 — тип/лимитность сети.
         if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
         if (r.networkIsExpensive) 'network_is_expensive': true,
+        if (!plain) 'body': ruleTreeBodyToJson(r.body),
         'outbound': r.outbound,
         // §117 задача 3 — DNS-опция правила (DNS follows the rule).
         if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
         // §247 — resolve-опция (route action resolve).
         if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!),
-      };
-    case CustomRuleSrs():
-      final cachedPath = await RuleSetDownloader.cachedPath(r.id);
-      final mtime = await RuleSetDownloader.lastUpdated(r.id);
-      return {
-        ...base,
-        'srs_url': r.srsUrl,
-        // ## 12 — все наборы правила по порядку (`srs_url` = первый).
-        'srs_urls': r.srsUrls,
-        if (r.ports.isNotEmpty) 'ports': r.ports,
-        if (r.portRanges.isNotEmpty) 'port_ranges': r.portRanges,
-        if (r.packages.isNotEmpty) 'packages': r.packages,
-        if (r.packageRegexes.isNotEmpty) 'package_regexes': r.packageRegexes,
-        if (r.protocols.isNotEmpty) 'protocols': r.protocols,
-        // §240 — L4-транспорт (tcp/udp/icmp).
-        if (r.network.isNotEmpty) 'network': r.network,
-        if (r.ipIsPrivate) 'ip_is_private': true,
-        // §030/new_fields — source-ось + inbound.
-        if (r.sourceIpCidrs.isNotEmpty) 'source_ip_cidrs': r.sourceIpCidrs,
-        if (r.sourceIpIsPrivate) 'source_ip_is_private': true,
-        if (r.inbounds.isNotEmpty) 'inbounds': r.inbounds,
-        if (r.wifiSsids.isNotEmpty) 'wifi_ssids': r.wifiSsids,
-        if (r.wifiBssids.isNotEmpty) 'wifi_bssids': r.wifiBssids,
-        // §694 — тип/лимитность сети.
-        if (r.networkTypes.isNotEmpty) 'network_type': r.networkTypes,
-        if (r.networkIsExpensive) 'network_is_expensive': true,
-        'outbound': r.outbound,
-        if (r.dns != null) 'dns': _serializeRuleDns(r.dns!),
-        if (r.resolve != null) 'resolve': _serializeRuleResolve(r.resolve!), // §247
-        'srs': {
-          'cached': cachedPath != null,
-          'path': cachedPath,
-          'mtime': mtime?.toUtc().toIso8601String(),
-        },
+        if (refs.isNotEmpty)
+          'srs': {
+            'cached': cachedPath != null,
+            'path': cachedPath,
+            'mtime': mtime?.toUtc().toIso8601String(),
+          },
       };
     case CustomRulePreset():
       final preset = await _lookupPreset(r.presetId);

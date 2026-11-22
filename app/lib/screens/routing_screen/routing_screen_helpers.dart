@@ -89,8 +89,9 @@ class RoutingHelpers {
       isRuleSetEnabledFor(rs, preset, rule, globalVars: globalVars);
 
   /// Composite ключ для `_srsCached` / `_srsDownloading` у preset-rule_set'ов.
-  /// У `CustomRuleSrs` там просто `rule.id`; у preset'ов — `<id>|<tag>`,
-  /// чтобы не путаться между несколькими rule_set'ами одного пресета.
+  /// У правила с наборами (§757 — `refs` в дереве) там просто `rule.id`; у
+  /// preset'ов — `<id>|<tag>`, чтобы не путаться между несколькими
+  /// rule_set'ами одного пресета.
   static String presetSrsKey(CustomRulePreset rule, String tag) =>
       '${rule.id}|$tag';
 
@@ -124,7 +125,8 @@ class RoutingHelpers {
   /// без файла остаётся включённым («ждёт скачивания»): набора без файла в
   /// конфиге нет (билдер его пропускает), автообновление его скачивает.
   ///
-  /// - `CustomRuleSrs` — «скачано», когда есть файлы ВСЕХ наборов (## 12).
+  /// - правило с наборами (§757 — все `refs` дерева) — «скачано», когда есть
+  ///   файлы ВСЕХ наборов (## 12).
   /// - `CustomRulePreset` — наборы, включённые гейтом (§534, [presetCachePlan]).
   ///
   /// [isCached] / [isPresetCached] — для тестов; по умолчанию дисковый кэш.
@@ -143,7 +145,7 @@ class RoutingHelpers {
     final cached = <String>{};
     final activeDiskIds = <String>{};
     for (final r in rules) {
-      if (r is CustomRuleSrs) {
+      if (r is CustomRuleTree && r.allRefs.isNotEmpty) {
         // Srs-правило резервирует свой id в disk-namespace'е независимо от
         // того, скачан файл или нет — чтобы prune не удалил ещё-не-скачанный.
         activeDiskIds
@@ -179,7 +181,9 @@ class RoutingHelpers {
     Map<String, String> globalVars = const {},
   }) {
     if (!rule.enabled) return false;
-    if (rule is CustomRuleSrs) return !srsCached.contains(rule.id);
+    if (rule is CustomRuleTree && rule.allRefs.isNotEmpty) {
+      return !srsCached.contains(rule.id);
+    }
     if (rule is CustomRulePreset && preset != null) {
       return presetNeedsDownload(rule, preset, srsCached,
           globalVars: globalVars);

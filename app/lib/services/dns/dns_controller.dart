@@ -254,9 +254,7 @@ class DnsController {
       for (final cr in activeRules)
         if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
           switch (cr) {
-            CustomRuleInline() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            CustomRuleSrs() =>
+            CustomRuleTree() =>
               cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
             _ => cr,
           }
@@ -265,7 +263,8 @@ class DnsController {
     ];
     final mirrorSrsPaths = <String, String>{
       for (final cr in previewRules)
-        if (cr is CustomRuleSrs) cr.id: '<srs>',
+        // §757 — ключ — id кэша набора по ссылке.
+        for (final c in cr.cacheIds) c: '<srs>',
     };
     final unifiedMirrors = applyAllCustomRules(
       RuleSetRegistry(),

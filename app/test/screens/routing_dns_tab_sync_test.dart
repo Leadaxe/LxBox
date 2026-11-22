@@ -70,7 +70,7 @@ void main() {
     // Правило с DNS-опцией: на вкладке DNS — строка с её свитчем, на Rules —
     // тайл со свитчем правила.
     await SettingsStorage.saveCustomRules([
-      CustomRuleInline(
+      CustomRuleTree.flat(
         id: _ruleId,
         name: 'Sync check',
         domainSuffixes: const ['example.org'],

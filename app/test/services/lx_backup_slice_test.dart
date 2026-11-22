@@ -97,7 +97,7 @@ SubscriptionServers _subscription({
       ],
       chains: const [SourceChain(tag: 'relay', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')])],
       rules: [
-        CustomRuleSrs(
+        CustomRuleTree.flat(
           id: 'r-geo',
           name: 'Geo',
           srsUrl: 'https://example-5.com/geo.srs',
@@ -319,7 +319,7 @@ void main() {
           )));
       for (final r in [
         ...s.rules,
-        CustomRuleInline(
+        CustomRuleTree.flat(
           id: 'i',
           name: 'I',
           domains: const ['a.example'],
@@ -486,7 +486,7 @@ void main() {
       expect(folder.pingTimeoutMs, 2500);
 
       expect(got.chains.single.tag, 'relay');
-      expect((got.file.rules.single as CustomRuleSrs).updateIntervalHours, 720);
+      expect((got.file.rules.single as CustomRuleTree).updateIntervalHours, 720);
       expect(got.file.dns!.servers, s.dnsServers);
     });
 

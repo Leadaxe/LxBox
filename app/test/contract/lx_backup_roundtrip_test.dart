@@ -226,21 +226,21 @@ _State _source() {
         presetId: 'traffic-processing',
         orderNum: 0,
       ),
-      CustomRuleInline(
+      CustomRuleTree.flat(
         id: 'r-ads',
         name: 'Ads',
         domainSuffixes: const ['.ads.example-2.com'],
         outbound: kOutboundReject,
         orderNum: 960,
       ),
-      CustomRuleInline(
+      CustomRuleTree.flat(
         id: 'r-corp',
         name: 'Corp',
         domainSuffixes: const ['.corp.example-1.com'],
         outbound: 'vpn-1',
         orderNum: 1000,
       ),
-      CustomRuleSrs(
+      CustomRuleTree.flat(
         id: 'r-geo',
         name: 'Geo',
         srsUrls: const ['https://example-3.com/a.srs', 'https://example-3.com/b.srs'],
@@ -337,7 +337,7 @@ void main() {
       expect(out.warnings, isEmpty,
           reason: 'в состоянии нет настроек без дома в 1.0');
       final doc = jsonDecode(out.json) as Map<String, dynamic>;
-      expect(doc['lx_backup'], 2);
+      expect(doc['lx_backup'], 3); // §757 — контракт 1.1.179
       expect(doc.keys, [
         'lx_backup',
         'exported_by',

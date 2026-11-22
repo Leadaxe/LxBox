@@ -260,7 +260,7 @@ CustomRule readLegacyCustomRule(Map<String, dynamic> j) {
   };
 }
 
-CustomRuleInline _readInline(Map<String, dynamic> j) => CustomRuleInline(
+CustomRuleTree _readInline(Map<String, dynamic> j) => CustomRuleTree.flat(
       id: _id(j),
       name: (j['name'] as String?) ?? '',
       enabled: (j['enabled'] as bool?) ?? true,
@@ -285,7 +285,7 @@ CustomRuleInline _readInline(Map<String, dynamic> j) => CustomRuleInline(
       resolve: RuleResolve.fromJson(j['resolve']),
     );
 
-CustomRuleSrs _readSrs(Map<String, dynamic> j) => CustomRuleSrs(
+CustomRuleTree _readSrs(Map<String, dynamic> j) => CustomRuleTree.flat(
       id: _id(j),
       name: (j['name'] as String?) ?? '',
       enabled: (j['enabled'] as bool?) ?? true,
@@ -335,7 +335,7 @@ String? _id(Map<String, dynamic> j) {
 String _outbound(Map<String, dynamic> j) =>
     (j['outbound'] as String?) ?? (j['target'] as String?) ?? kDirectOutboundTag;
 
-/// `CustomRuleSrs.ttlHoursFrom` 2.23.2.
+/// `CustomRuleTree.ttlHoursFrom` 2.23.2.
 int _ttlHours(Object? v) {
   final n = v is num ? v.toInt() : null;
   if (n == null || n < 0) return kDefaultSrsTtlHours;

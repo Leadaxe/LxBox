@@ -184,7 +184,7 @@ void main() {
     // §594 — `label` у цепочки упразднён: имя цепочки — её тег.
     expect(got.chains.single.tag, isNotEmpty);
 
-    final ads = got.rules.whereType<CustomRuleSrs>().single;
+    final ads = got.rules.whereType<CustomRuleTree>().single;
     expect(ads.updateIntervalHours, 24);
     expect(got.rules.whereType<CustomRuleJson>().single.name, 'Corp',
         reason: 'verbatim: тело не перетипизировано');

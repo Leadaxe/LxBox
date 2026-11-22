@@ -415,7 +415,7 @@ void main() {
             s,
       ]);
       await SettingsStorage.saveCustomRules([
-        CustomRuleInline(
+        CustomRuleTree.flat(
             name: 'to-vpn-3', domains: const ['x.example'], outbound: 'vpn-3'),
         ...await SettingsStorage.getCustomRules(),
       ]);

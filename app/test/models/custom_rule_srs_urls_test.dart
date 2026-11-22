@@ -1,39 +1,45 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
+import 'package:lxbox/services/builder/rule_tree_tags.dart' show ruleRefHash;
 import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
 
 /// ## 12 контракта (D-100) — несколько `.srs`-наборов в одном правиле.
 void main() {
-  group('CustomRuleSrs.srsUrls', () {
+  group('CustomRuleTree.srsUrls', () {
     test('одиночный srsUrl → список из одного, srsUrl = первый', () {
-      final r = CustomRuleSrs(name: 'a', srsUrl: ' https://x/a.srs ');
+      final r = CustomRuleTree.flat(name: 'a', srsUrl: ' https://x/a.srs ');
       expect(r.srsUrls, ['https://x/a.srs']);
       expect(r.srsUrl, 'https://x/a.srs');
-      expect(r.cacheIds, [r.id]);
+      // §757 — id кэша набора по ссылке.
+      expect(r.cacheIds, ['${r.id}~${ruleRefHash('https://x/a.srs')}']);
     });
 
     test('список главнее одиночного; trim, пустые и повторы отброшены', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
         name: 'a',
         srsUrl: 'https://x/ignored.srs',
         srsUrls: const ['https://x/a.srs', ' ', 'https://x/b.srs', 'https://x/a.srs'],
       );
       expect(r.srsUrls, ['https://x/a.srs', 'https://x/b.srs']);
       expect(r.srsUrl, 'https://x/a.srs');
-      expect(r.cacheIds, [r.id, '${r.id}~1']);
+      expect(r.cacheIds, [
+        '${r.id}~${ruleRefHash('https://x/a.srs')}',
+        '${r.id}~${ruleRefHash('https://x/b.srs')}',
+      ]);
     });
 
-    test('запись: refs — список при одном и нескольких наборах', () {
-      final one = ruleToRecord(CustomRuleSrs(name: 'a', srsUrl: 'https://x/a.srs'));
-      expect(one['refs'], ['https://x/a.srs']);
+    test('запись: refs — список при одном и нескольких наборах (§757 — в теле)', () {
+      final one = ruleToRecord(CustomRuleTree.flat(name: 'a', srsUrl: 'https://x/a.srs'));
+      expect((one['body'] as Map)['refs'], ['https://x/a.srs']);
+      expect(one.containsKey('refs'), isFalse);
       expect(one.containsKey('ref'), isFalse);
 
-      final two = ruleToRecord(CustomRuleSrs(
+      final two = ruleToRecord(CustomRuleTree.flat(
         name: 'a',
         srsUrls: const ['https://x/a.srs', 'https://x/b.srs'],
       ));
-      expect(two['refs'], ['https://x/a.srs', 'https://x/b.srs']);
+      expect((two['body'] as Map)['refs'], ['https://x/a.srs', 'https://x/b.srs']);
     });
 
     test('чтение: refs главнее ref; без refs — ref', () {
@@ -63,7 +69,7 @@ void main() {
     });
 
     test('round-trip записи сохраняет порядок', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
           name: 'a', srsUrls: const ['https://x/c.srs', 'https://x/a.srs']);
       expect(ruleFromRecord(ruleToRecord(r)).value!.srsUrls,
           ['https://x/c.srs', 'https://x/a.srs']);

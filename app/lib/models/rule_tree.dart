@@ -10,7 +10,7 @@
 /// Какие ключи — условия, берётся из таблицы условий реестра
 /// ([RuleConditionTable]); имён ключей условий здесь нет.
 ///
-/// Пока не подключено к `CustomRule`, кодеку записи и сборке — волна A §757.
+/// Подключено к `CustomRuleTree`, кодеку записи и сборке (волна B §757).
 library;
 
 import '../services/contract/rule_conditions.dart';
@@ -268,7 +268,7 @@ List<String>? _readStringList(Object? raw) {
 }
 
 /// §757 — тело в новой форме (`refs` внутри простого правила, цель на
-/// корне). Рукописный `rule_set` из одного тега — строкой.
+/// корне). Рукописный `rule_set` — списком.
 Map<String, dynamic> ruleTreeBodyToJson(RuleTreeBody body) => {
   ..._nodeToJson(body.root),
   ...body.target,
@@ -277,10 +277,9 @@ Map<String, dynamic> ruleTreeBodyToJson(RuleTreeBody body) => {
 Map<String, dynamic> _nodeToJson(RuleNode n) => switch (n) {
   RuleLeaf() => {
     if (n.refs.isNotEmpty) kRuleRefsKey: List<String>.of(n.refs),
-    if (n.ruleSet.isNotEmpty)
-      RuleConditionTable.kRuleSet: n.ruleSet.length == 1
-          ? n.ruleSet.first
-          : List.of(n.ruleSet),
+    // §757 — списком всегда (корпус `backup/v11_rule_refs_in_body`, «Hand
+    // set»): тело записи хранит теги в форме списка.
+    if (n.ruleSet.isNotEmpty) RuleConditionTable.kRuleSet: List.of(n.ruleSet),
     for (final e in n.conditions.entries)
       e.key: e.value is List ? List.of(e.value as List) : e.value,
     if (n.invert) RuleConditionTable.kInvert: true,

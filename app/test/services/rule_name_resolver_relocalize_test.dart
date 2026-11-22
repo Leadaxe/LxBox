@@ -60,7 +60,7 @@ void main() {
   test('relocalize не трогает условия inline-правил (только титулы)', () {
     RuleNameResolver.I.setRules(
       [
-        CustomRuleInline(name: 'Home', domainSuffixes: ['a.com']),
+        CustomRuleTree.flat(name: 'Home', domainSuffixes: ['a.com']),
         CustomRulePreset(name: 'Block Ads', presetId: 'block-ads'),
       ],
       template: template('Block Ads'),

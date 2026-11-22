@@ -52,7 +52,7 @@ void main() {
 
   group('RuleDns model (§117 задача 3)', () {
     test('round-trip записи rules[] с dns', () {
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'r1',
         domains: ['example.com'],
         outbound: 'vpn-1',
@@ -77,7 +77,7 @@ void main() {
     });
 
     test('dns с enabled:false сохраняет serverTag (выбор не теряется)', () {
-      final rule = CustomRuleSrs(
+      final rule = CustomRuleTree.flat(
         name: 's1',
         srsUrl: 'https://e/x.srs',
         dns: const RuleDns(enabled: false, serverTag: 'cloudflare_udp'),
@@ -91,25 +91,25 @@ void main() {
     test('гейт dnsMirrorActive: §755 ports/protocols не гейтят; disabled / пустой tag', () {
       const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
       expect(
-        CustomRuleInline(name: 'ok', domains: ['a.com'], dns: dnsOn)
+        CustomRuleTree.flat(name: 'ok', domains: ['a.com'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'p', domains: ['a.com'], ports: ['443'], dns: dnsOn)
             .dnsMirrorActive,
         true,
         reason: 'ports — §755 гейт снят',
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'pr', domains: ['a.com'], portRanges: ['1:99'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'proto',
                 domains: ['a.com'],
                 protocols: ['quic'],
@@ -119,7 +119,7 @@ void main() {
         reason: 'protocols — §755 гейт снят',
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'net',
                 domains: ['a.com'],
                 network: ['udp'],
@@ -129,13 +129,13 @@ void main() {
         reason: '§240 network — §755 гейт снят',
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'off', enabled: false, domains: ['a.com'], dns: dnsOn)
             .dnsMirrorActive,
         false,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'no-srv',
                 domains: ['a.com'],
                 dns: const RuleDns(enabled: true, serverTag: ''))
@@ -146,7 +146,7 @@ void main() {
 
     // §256 — Force IPv4 (AAAA-глушилка).
     test('forceIpv4 roundtrip + скрыт когда false', () {
-      final on = CustomRuleInline(
+      final on = CustomRuleTree.flat(
         name: 'f',
         domains: ['a.com'],
         dns: const RuleDns(forceIpv4: true),
@@ -156,7 +156,7 @@ void main() {
       expect(r.dns!.forceIpv4, true);
 
       // false → ключ не пишется (симметрия с resolve-опциями).
-      final off = CustomRuleInline(
+      final off = CustomRuleTree.flat(
         name: 'f2',
         domains: ['a.com'],
         dns: const RuleDns(enabled: true, serverTag: 'google_udp'),
@@ -170,7 +170,7 @@ void main() {
       const force = RuleDns(forceIpv4: true);
       // Домены + галка, без сервера → активна (глушилка серверу не нужна).
       expect(
-        CustomRuleInline(name: 'd', domains: ['a.com'], dns: force)
+        CustomRuleTree.flat(name: 'd', domains: ['a.com'], dns: force)
             .forceIpv4Active,
         true,
         reason: 'serverTag не требуется',
@@ -178,20 +178,20 @@ void main() {
       // Только приложение (package_name), без доменов → активна (кейс
       // «глючному приложению v4»).
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'app', packages: ['com.x'], dns: force)
             .forceIpv4Active,
         true,
       );
       // §755: ports / protocols больше не гейтят.
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'p', domains: ['a.com'], ports: ['443'], dns: force)
             .forceIpv4Active,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'pr',
                 domains: ['a.com'],
                 protocols: ['quic'],
@@ -201,7 +201,7 @@ void main() {
       );
       // disabled правило → неактивна.
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'off',
                 enabled: false,
                 domains: ['a.com'],
@@ -211,7 +211,7 @@ void main() {
       );
       // галка выкл → неактивна.
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'g',
                 domains: ['a.com'],
                 dns: const RuleDns(enabled: true, serverTag: 'google_udp'))
@@ -227,55 +227,68 @@ void main() {
     const fixed = RuleDns(fixedIps: ['10.1.1.1']);
 
     test('ip_cidr-only: ни зеркало, ни Force IPv4, ни Fixed IP', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
           name: 'lan', ipCidrs: ['10.0.0.0/8'], outbound: 'vpn-1', dns: dnsOn);
       expect(r.dnsLayerEligible, false);
       expect(r.dnsMirrorActive, false, reason: 'набор «только IP»');
       expect(
-        CustomRuleInline(name: 'f', ipCidrs: ['10.0.0.0/8'], dns: force)
+        CustomRuleTree.flat(name: 'f', ipCidrs: ['10.0.0.0/8'], dns: force)
             .forceIpv4Active,
         false,
       );
       expect(
-        CustomRuleInline(name: 'x', ipCidrs: ['10.0.0.0/8'], dns: fixed)
+        CustomRuleTree.flat(name: 'x', ipCidrs: ['10.0.0.0/8'], dns: fixed)
             .dnsFixedActive,
         false,
       );
-      // routing-level поля не делают правило DNS-способным.
+      // routing-level поле `ip_is_private` не делает правило DNS-способным.
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'priv',
                 ipCidrs: ['10.0.0.0/8'],
                 ipIsPrivate: true,
+                dns: dnsOn)
+            .dnsMirrorActive,
+        false,
+      );
+      // §757 — `source_ip_is_private` в таблице условий `dns: true`: идёт в
+      // зеркало, правило DNS-способно.
+      expect(
+        CustomRuleTree.flat(
+                name: 'priv-src',
+                ipCidrs: ['10.0.0.0/8'],
                 sourceIpIsPrivate: true,
                 dns: dnsOn)
             .dnsMirrorActive,
-        false,
+        true,
       );
     });
 
-    test('ip_cidr + inbound: набор всё равно «только IP» → не DNS-способно',
-        () {
-      expect(
-        CustomRuleInline(
-                name: 'i',
-                ipCidrs: ['10.0.0.0/8'],
-                inbounds: ['tun-in'],
-                dns: dnsOn)
-            .dnsMirrorActive,
-        false,
-      );
+    // §757 — гейт `ip_cidr + inbound` снят (TASKS_LXBOX §182 п. 2.4, кейс
+    // корпуса `ip_cidr_inbound_mirror`): зеркало по `inbound`.
+    test('ip_cidr + inbound: зеркало по inbound → DNS-способно (§757)', () {
+      final r = CustomRuleTree.flat(
+          name: 'i',
+          ipCidrs: ['10.0.0.0/8'],
+          inbounds: ['tun-in'],
+          outbound: 'vpn-1',
+          dns: dnsOn);
+      expect(r.dnsMirrorActive, true);
+      final m = applyAllCustomRules(RuleSetRegistry(), [r], const [])
+          .dnsMirrors
+          .single;
+      expect(m.body, {'inbound': ['tun-in']});
     });
 
     test('inbound-only / package / source_ip / wifi / домен — DNS-способно',
         () {
       expect(
-        CustomRuleInline(name: 'in', inbounds: ['tun-in'], dns: dnsOn)
+        CustomRuleTree.flat(name: 'in', inbounds: ['tun-in'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'pkg',
                 ipCidrs: ['10.0.0.0/8'],
                 packages: ['com.x'],
@@ -285,18 +298,18 @@ void main() {
         reason: 'package_name — не-IP item, ядро принимает',
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'src', sourceIpCidrs: ['192.168.1.0/24'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(name: 'wifi', wifiSsids: ['Home'], dns: dnsOn)
+        CustomRuleTree.flat(name: 'wifi', wifiSsids: ['Home'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'dom',
                 ipCidrs: ['10.0.0.0/8'],
                 domainKeywords: ['nas'],
@@ -308,7 +321,7 @@ void main() {
 
     test('srs — всегда DNS-способно (содержимое файла не разбирается)', () {
       expect(
-        CustomRuleSrs(name: 's', srsUrl: 'https://e/geoip.srs', dns: dnsOn)
+        CustomRuleTree.flat(name: 's', srsUrl: 'https://e/geoip.srs', dns: dnsOn)
             .dnsLayerEligible,
         true,
       );
@@ -319,7 +332,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'lan',
             ipCidrs: ['10.0.0.0/8'],
             outbound: 'vpn-1',
@@ -340,17 +353,17 @@ void main() {
 
     test('только network_type или network_is_expensive → DNS-способно', () {
       expect(
-        CustomRuleInline(name: 'c', networkTypes: ['cellular'], dns: dnsOn)
+        CustomRuleTree.flat(name: 'c', networkTypes: ['cellular'], dns: dnsOn)
             .dnsMirrorActive,
         true,
       );
       expect(
-        CustomRuleInline(name: 'm', networkIsExpensive: true, dns: dnsOn)
+        CustomRuleTree.flat(name: 'm', networkIsExpensive: true, dns: dnsOn)
             .dnsLayerEligible,
         true,
       );
       expect(
-        CustomRuleInline(
+        CustomRuleTree.flat(
                 name: 'ip+c',
                 ipCidrs: ['10.0.0.0/8'],
                 networkTypes: ['cellular'],
@@ -363,7 +376,7 @@ void main() {
 
     test('srs-зеркало несёт network_type / network_is_expensive', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'cn-list',
         srsUrl: 'https://e/cn.srs',
         networkTypes: ['cellular'],
@@ -372,7 +385,7 @@ void main() {
         dns: dnsOn,
       );
       final result = applyAllCustomRules(reg, [srs], const [],
-          srsPaths: {srs.id: '/tmp/cn.srs'});
+          srsPaths: {CustomRuleTree.cacheIdFor(srs.id, srs.srsUrl): '/tmp/cn.srs'});
       final m = result.dnsMirrors.single;
       expect(m.body['network_type'], ['cellular']);
       expect(m.body['network_is_expensive'], true);
@@ -380,13 +393,13 @@ void main() {
   });
 
   group('applyAllCustomRules — сбор mirror-группы', () {
-    test('inline+dns: mirror шарит headless rule_set (wifi внутри rule_set)',
+    test('inline+dns: mirror шарит inline-набор, wifi/приложение ключами (§757)',
         () {
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'tg-via-vpn',
             domainSuffixes: ['telegram.org'],
             packages: ['org.telegram.messenger'],
@@ -403,15 +416,16 @@ void main() {
       expect(m.ruleId, isNotEmpty);
       expect(m.presetId, null);
       expect(m.serverTag, 'google_udp');
-      expect(m.body['rule_set'], 'tg-via-vpn');
-      // §030/new_fields: wifi_* теперь ВНУТРИ shared headless rule_set
-      // (sing-box 1.14) — в DNS-mirror body не дублируется.
-      expect(m.body.containsKey('wifi_ssid'), false);
+      // §757 — в наборе только домен; приложение и Wi-Fi — на маршрутном
+      // правиле и ключами в зеркале.
+      expect(m.body, {
+        'rule_set': 'tg-via-vpn',
+        'package_name': ['org.telegram.messenger'],
+        'wifi_ssid': ['HomeWifi'],
+      });
       expect(reg.getRuleSets().single['rules'], [
         {
           'domain_suffix': ['telegram.org'],
-          'package_name': ['org.telegram.messenger'],
-          'wifi_ssid': ['HomeWifi'],
         },
       ]);
       expect(m.body.containsKey('server'), false,
@@ -423,7 +437,7 @@ void main() {
 
     test('srs+dns: rule_set не генерится, mirror ссылается на .srs-тег', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'cn-list',
         srsUrl: 'https://e/cn.srs',
         packages: ['com.app'],
@@ -434,7 +448,7 @@ void main() {
         reg,
         [srs],
         const [],
-        srsPaths: {srs.id: '/tmp/cn.srs'},
+        srsPaths: {CustomRuleTree.cacheIdFor(srs.id, srs.srsUrl): '/tmp/cn.srs'},
       );
 
       expect(reg.getRuleSets(), hasLength(1),
@@ -448,7 +462,7 @@ void main() {
     // §256 — srs + Force IPv4: serverless-mirror с .srs-тегом.
     test('srs+forceIpv4 → serverless-mirror ссылается на .srs-тег', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'cn-list',
         srsUrl: 'https://e/cn.srs',
         outbound: 'vpn-2',
@@ -458,7 +472,7 @@ void main() {
         reg,
         [srs],
         const [],
-        srsPaths: {srs.id: '/tmp/cn.srs'},
+        srsPaths: {CustomRuleTree.cacheIdFor(srs.id, srs.srsUrl): '/tmp/cn.srs'},
       );
       final m = result.dnsMirrors.single;
       expect(m.serverless, true);
@@ -477,7 +491,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'gated',
             domains: ['a.com'],
             ports: ['443'],
@@ -505,7 +519,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'ports-only',
             ports: ['22'],
             outbound: 'direct-out',
@@ -526,7 +540,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'rt',
             domainSuffixes: ['rutracker.org'],
             network: ['tcp', 'udp'],
@@ -557,7 +571,7 @@ void main() {
 
     test('blockHttps без доменов не эмитится (значение в хранилище остаётся)',
         () {
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'apps',
         packages: ['com.android.chrome'],
         outbound: 'vpn-1',
@@ -571,7 +585,7 @@ void main() {
     });
 
     test('blockHttps srs и Fixed IP: глушилка первой, Fixed IP следом', () {
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'cf',
         srsUrl: 'https://e/cf.srs',
         outbound: 'vpn-1',
@@ -581,7 +595,7 @@ void main() {
         RuleSetRegistry(),
         [srs],
         const [],
-        srsPaths: {srs.id: '/tmp/cf.srs'},
+        srsPaths: {CustomRuleTree.cacheIdFor(srs.id, srs.srsUrl): '/tmp/cf.srs'},
       );
       final ms = result.dnsMirrors;
       expect(ms.first.blockHttps, true);
@@ -591,7 +605,7 @@ void main() {
     });
 
     test('blockHttps round-trip записи rules[]; нет ключа → false', () {
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'b',
         domains: ['a.com'],
         outbound: 'vpn-1',
@@ -610,7 +624,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'ru',
             domainSuffixes: ['ru'],
             outbound: 'direct-out',
@@ -637,7 +651,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'ru',
             domainSuffixes: ['ru'],
             outbound: 'direct-out',
@@ -662,7 +676,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'glitchy',
             packages: ['com.buggy.ipv6'],
             outbound: 'direct-out',
@@ -675,8 +689,9 @@ void main() {
       expect(m.serverless, true);
       expect(m.body['ip_version'], 6);
       expect(m.body['action'], 'predefined');
-      // rule_set — headless-тег правила (package_name внутри него).
-      expect(m.body['rule_set'], 'glitchy');
+      // §757 — набора нет; приложение — ключом зеркала.
+      expect(m.body['package_name'], ['com.buggy.ipv6']);
+      expect(m.body.containsKey('rule_set'), false);
     });
 
     test('§755: forceIpv4 + ports → serverless-mirror собирается, набор без порта', () {
@@ -684,7 +699,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'p',
             domains: ['a.com'],
             ports: ['443'],
@@ -702,7 +717,7 @@ void main() {
       final result = applyAllCustomRules(
         reg,
         [
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'first-rule',
             domains: ['a.com'],
             outbound: 'vpn-1',
@@ -713,7 +728,7 @@ void main() {
             presetId: 'ru-direct',
             varsValues: {'outbound': 'direct-out'},
           ),
-          CustomRuleInline(
+          CustomRuleTree.flat(
             name: 'last-rule',
             domains: ['b.com'],
             outbound: 'vpn-2',

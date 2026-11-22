@@ -80,9 +80,9 @@ void main() {
       SettingsStorage.saveCustomRules(rules);
 
   test('move за целевым: свободный номер — соседи не двигаются', () async {
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
-    final b = CustomRuleInline(name: 'b')..orderNum = 1010;
-    final c = CustomRuleInline(name: 'c')..orderNum = 1020;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
+    final b = CustomRuleTree.flat(name: 'b')..orderNum = 1010;
+    final c = CustomRuleTree.flat(name: 'c')..orderNum = 1020;
     await seed([a, b, c]);
 
     final out = await move(c.id, a.id);
@@ -96,11 +96,11 @@ void main() {
 
   test('move в занятую точку: сдвигается сплошной блок, дальний не трогается',
       () async {
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
-    final b = CustomRuleInline(name: 'b')..orderNum = 1001;
-    final c = CustomRuleInline(name: 'c')..orderNum = 1002;
-    final far = CustomRuleInline(name: 'far')..orderNum = 1090;
-    final moved = CustomRuleInline(name: 'moved')..orderNum = 1050;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
+    final b = CustomRuleTree.flat(name: 'b')..orderNum = 1001;
+    final c = CustomRuleTree.flat(name: 'c')..orderNum = 1002;
+    final far = CustomRuleTree.flat(name: 'far')..orderNum = 1090;
+    final moved = CustomRuleTree.flat(name: 'moved')..orderNum = 1050;
     await seed([a, b, c, far, moved]);
 
     await move(moved.id, a.id);
@@ -116,8 +116,8 @@ void main() {
 
   test('move с after:null — правило уходит в начало пользовательской зоны',
       () async {
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
-    final moved = CustomRuleInline(name: 'moved')..orderNum = 1050;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
+    final moved = CustomRuleTree.flat(name: 'moved')..orderNum = 1050;
     await seed([a, moved]);
 
     final out = await move(moved.id, null);
@@ -131,7 +131,7 @@ void main() {
     final head = CustomRulePreset(
         name: 'Traffic Processing', presetId: 'traffic-processing')
       ..orderNum = 0;
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
     await seed([head, a]);
 
     expect(() => move(head.id, a.id), throwsA(isA<BadRequest>()));
@@ -141,8 +141,8 @@ void main() {
     final head = CustomRulePreset(
         name: 'Traffic Processing', presetId: 'traffic-processing')
       ..orderNum = 0;
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
-    final b = CustomRuleInline(name: 'b')..orderNum = 1001;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
+    final b = CustomRuleTree.flat(name: 'b')..orderNum = 1001;
     await seed([head, a, b]);
 
     await move(b.id, a.id);
@@ -153,7 +153,7 @@ void main() {
   });
 
   test('неизвестный id → 404, after == id → 400', () async {
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
     await seed([a]);
 
     expect(() => move('no-such-uuid', null), throwsA(isA<NotFound>()));
@@ -162,9 +162,9 @@ void main() {
   });
 
   test('storage без num (до §370) размечается на первом move', () async {
-    final a = CustomRuleInline(name: 'a'); // orderNum == null
-    final b = CustomRuleInline(name: 'b');
-    final c = CustomRuleInline(name: 'c');
+    final a = CustomRuleTree.flat(name: 'a'); // orderNum == null
+    final b = CustomRuleTree.flat(name: 'b');
+    final c = CustomRuleTree.flat(name: 'c');
     await seed([a, b, c]);
     expect((await SettingsStorage.getCustomRules()).first.orderNum, isNull);
 
@@ -177,8 +177,8 @@ void main() {
   });
 
   test('порядок переживает перезагрузку storage (ось, а не массив)', () async {
-    final a = CustomRuleInline(name: 'a')..orderNum = 1000;
-    final b = CustomRuleInline(name: 'b')..orderNum = 1010;
+    final a = CustomRuleTree.flat(name: 'a')..orderNum = 1000;
+    final b = CustomRuleTree.flat(name: 'b')..orderNum = 1010;
     await seed([a, b]);
     await move(b.id, null);
 
@@ -216,7 +216,7 @@ void main() {
   });
 
   test('GET /rules отдаёт num — API виден снаружи', () async {
-    await seed([CustomRuleInline(name: 'a')..orderNum = 1042]);
+    await seed([CustomRuleTree.flat(name: 'a')..orderNum = 1042]);
 
     final res = await rulesHandler(
       DebugRequest.forTest(
