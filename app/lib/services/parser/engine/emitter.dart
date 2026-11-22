@@ -1582,6 +1582,18 @@ final class _Emit {
     final always = _jsonAlways();
 
     for (final e in _jsonMap().entries) {
+      // Ссылка `json_map` — не только путь тела: цепочка `a|b`, литерал `=…`,
+      // `$label`, `$param.<запись>` читаются тем же правилом, что и у
+      // бинарного контейнера ([_containerValue]) — примитив один на формы.
+      if (_isContainerRef(e.value)) {
+        final v = _containerValue(e.value);
+        if (v != null) {
+          map[e.key] = v is List ? v.join(',') : '$v';
+        } else if (always.containsKey(e.key)) {
+          map[e.key] = always[e.key]!;
+        }
+        continue;
+      }
       final v = _read(e.value);
       if (v == null) {
         if (always.containsKey(e.key)) map[e.key] = always[e.key]!;
@@ -1667,6 +1679,10 @@ final class _Emit {
         ? '$scheme://?$payload'
         : '$scheme://$payload';
   }
+
+  /// Ссылка `json_map`, которая не сводится к одному пути тела.
+  static bool _isContainerRef(String ref) =>
+      ref.startsWith('=') || ref.startsWith(r'$') || ref.contains('|');
 
   /// Значение ключа контейнера по ссылке `json_map`: путь тела, `$label`,
   /// `$param.<запись>`, литерал `=…` либо ЦЕПОЧКА через `|` — первая ссылка,

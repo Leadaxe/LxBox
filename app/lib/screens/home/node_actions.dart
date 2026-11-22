@@ -211,7 +211,7 @@ Future<void> copyNodeUri(BuildContext context, String tag,
   // §606 — ссылка строится ДО диалога: реестр отказывает формату (WireGuard с
   // несколькими `peers`) пустой строкой, и без сообщения «Copy link» молчал —
   // да ещё после вопроса про ключ, которого в буфер всё равно не отдать.
-  final uri = node.toUri();
+  final uri = node.shareUri();
   if (uri.isEmpty) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

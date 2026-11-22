@@ -11,8 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/services/parser/engine/emitter.dart';
+import 'package:lxbox/services/parser/engine/section.dart';
 import 'package:lxbox/services/parser/engine/section_loader.dart';
 import 'package:lxbox/services/parser/engine/tlv.dart';
+import 'package:lxbox/services/parser/singbox_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/subscription/input_helpers.dart';
 
@@ -302,5 +304,155 @@ void main() {
       expect((_bodyOf(n)['tls'] as Map).containsKey('utls'), isFalse);
       expect(n.label, 'N');
     });
+  });
+  // Узел из sing-box JSON хранится текстом записи, а Share отдаёт ссылку,
+  // собранную движком по секции реестра (contract 1.1.176, emit.container tlv).
+  group('9. Share узла из sing-box JSON', () {
+    List<String> corpusLinks() => [
+          for (final f in Directory('$kVendorRoot/corpus/uri/trusttunnel')
+              .listSync()
+              .whereType<File>()
+              .where((f) => f.path.endsWith('.uri'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path)))
+            f.readAsLinesSync().firstWhere((l) => l.startsWith('tt://'),
+                orElse: () => ''),
+        ].where((l) => l.isNotEmpty).toList();
+
+    // Тот же узел, как если бы он пришёл записью конфига: хранение — JSON.
+    UnknownTypeSpec asJsonNode(UnknownTypeSpec n) => UnknownTypeSpec(
+          id: 'j',
+          tag: n.tag,
+          label: n.label,
+          type: n.type,
+          body: n.body,
+          server: n.server,
+          port: n.port,
+          rawSource: const JsonEncoder.withIndent('  ').convert(n.body),
+        );
+
+    // Те же пять кейсов, что TestContractTLVEmitByteParity лаунчера.
+    for (final name in const [
+      'http2_basic',
+      'ipv6_address',
+      'cert_chain_two',
+      'tls_profile_firefox',
+      'tls_profile_okhttp',
+    ]) {
+      test('паритет байт в байт: $name', () {
+        final link = File('$kVendorRoot/corpus/uri/trusttunnel/$name.uri')
+            .readAsLinesSync()
+            .firstWhere((l) => l.startsWith('tt://'));
+        final json = asJsonNode(parseUri(link)! as UnknownTypeSpec);
+        expect(json.shareUri(), link);
+        expect(json.toUri(), json.rawSource, reason: 'хранение не меняется');
+      });
+    }
+
+    test('круг по корпусу: тело и метка возвращаются', () {
+      var seen = 0;
+      for (final link in corpusLinks()) {
+        final n = parseUri(link);
+        if (n is! UnknownTypeSpec) continue;
+        seen++;
+        final shared = asJsonNode(n).shareUri();
+        expect(shared, startsWith('tt://?'), reason: link);
+        final back = parseUri(shared)! as UnknownTypeSpec;
+        expect(back.body, n.body, reason: link);
+        expect(back.label, n.label, reason: link);
+      }
+      expect(seen, greaterThanOrEqualTo(15));
+    });
+
+    test('запись endpoints[] конфига: имя ссылки — тег записи', () {
+      final nodes = parseSingboxConfigs([
+        {
+          'endpoints': [
+            {
+              'type': 'trusttunnel',
+              'tag': 'Office',
+              'server': '1.2.3.4',
+              'server_port': 443,
+              'username': 'alice',
+              'password': 's3cr3t',
+              'tls': {'enabled': true, 'server_name': 'vpn.example.com'},
+            },
+          ],
+        },
+      ]);
+      final n = nodes.single as UnknownTypeSpec;
+      expect(n.toUri().trimLeft(), startsWith('{'));
+      final back = parseUri(n.shareUri())! as UnknownTypeSpec;
+      expect(back.label, 'Office');
+      expect(back.body['server'], '1.2.3.4');
+      expect(back.body['server_port'], 443);
+      expect(back.body['username'], 'alice');
+      expect(back.body['password'], 's3cr3t');
+      expect((back.body['tls'] as Map)['server_name'], 'vpn.example.com');
+    });
+
+    test('узел, пришедший ссылкой, отдаёт её как есть', () {
+      // Неизвестный тег на круге теряется — исходная ссылка его хранит.
+      final link = File(
+              '$kVendorRoot/corpus/uri/trusttunnel/unknown_tag_skipped.uri')
+          .readAsLinesSync()
+          .firstWhere((l) => l.startsWith('tt://'));
+      final n = parseUri(link)!;
+      expect(n.shareUri(), n.rawSource);
+      expect(n.shareUri(), n.toUri());
+    });
+
+    test('тип без обратного хода в реестре: остаётся текст записи', () {
+      final n = UnknownTypeSpec(
+        id: 'x',
+        tag: 't',
+        label: 't',
+        type: 'no-such-type',
+        body: const {'type': 'no-such-type'},
+        rawSource: '{"type":"no-such-type"}',
+      );
+      expect(n.shareUri(), n.rawSource);
+    });
+  });
+
+  test('10. цепочка a|b, литерал и \$label в json_map контейнера JSON', () {
+    final reg = jsonDecode(
+            File('$kVendorRoot/registry/protocols/vmess.json').readAsStringSync())
+        as Map<String, dynamic>;
+    final uri = Map<String, dynamic>.from((reg['mappers'] as Map)['uri'] as Map);
+    uri['emit'] = {
+      ...uri['emit'] as Map,
+      'json_map': {
+        'v': '=2',
+        'ps': r'$label',
+        'add': 'server',
+        'port': 'server_port',
+        'id': 'uuid',
+        'sni': 'tls.server_name|server',
+      },
+    };
+    final section = MapperSection.fromJson('uri', 'vmess', uri);
+    Map<String, dynamic> emitted(Map<String, dynamic> body) {
+      final link = emitViaSection(section, body, 'N')!.uri;
+      final text = link.substring(link.indexOf('://') + 3);
+      return jsonDecode(utf8.decode(base64.decode(base64.normalize(text))))
+          as Map<String, dynamic>;
+    }
+
+    final base = {
+      'type': 'vmess',
+      'server': 'a.example',
+      'server_port': 443,
+      'uuid': '11111111-2222-3333-4444-555555555555',
+    };
+    final plain = emitted(base);
+    expect(plain['sni'], 'a.example');
+    expect(plain['v'], '2');
+    expect(plain['ps'], 'N');
+    final named = emitted({
+      ...base,
+      'tls': {'enabled': true, 'server_name': 'sni.example'},
+    });
+    expect(named['sni'], 'sni.example');
   });
 }

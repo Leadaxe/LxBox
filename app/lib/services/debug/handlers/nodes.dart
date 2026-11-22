@@ -26,7 +26,7 @@ Future<DebugResponse> nodesHandler(DebugRequest req, DebugContext ctx) async {
 }
 
 /// `GET /nodes/link?tag=<tag>` — экспорт узла ссылкой: ровно то, что кладёт в
-/// буфер `Copy link` (`NodeSpec.toUri()`), без экрана и без буфера обмена.
+/// буфер `Copy link` (`NodeSpec.shareUri()`), без экрана и без буфера обмена.
 ///
 /// [tag] принимается и «как в конфиге» (с префиксом подписки), и голым: экран
 /// адресует узлы первым, хранение — вторым, и заставлять проверяющего
@@ -59,7 +59,7 @@ Future<DebugResponse> _link(DebugRequest req, DebugContext ctx) async {
     });
   }
 
-  final uri = hit.toUri();
+  final uri = hit.shareUri();
   if (uri.isEmpty) {
     return JsonResponse({
       'tag': hit.tag,

@@ -40,6 +40,17 @@
 
 ### Added
 
+- **Copy link for a TrustTunnel node from a sing-box config ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md)).**
+  A `trusttunnel` node that came as an `endpoints[]` entry of a config, not as
+  a link, now gives a `tt://` link on Copy link (and in Debug API
+  `GET /nodes/link`) instead of the JSON text of the entry; the node's tag
+  becomes the name in the link. Nodes that came as a link or from a
+  TrustTunnel subscription give their original link, as before.
+  (RU: Copy link у узла TrustTunnel из конфига sing-box: узел `trusttunnel`,
+  пришедший записью `endpoints[]`, а не ссылкой, отдаёт ссылку `tt://` вместо
+  текста записи JSON — и в Debug API `GET /nodes/link`; имя в ссылке — тег
+  узла. Узлы из ссылки и из подписки TrustTunnel отдают исходную ссылку, как
+  раньше.)
 - **TrustTunnel subscriptions ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.176).**
   The address a TrustTunnel server gives out as a subscription
   (`https://user:password@host/path`) is added as any subscription URL: the
