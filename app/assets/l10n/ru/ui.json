@@ -7162,5 +7162,8 @@
   },
   "DNS options apply to these domains on any port and protocol": {
     "value": "DNS-опции действуют на эти домены на любом порту и протоколе"
+  },
+  "DNS options have no effect: the rule has no condition DNS can see": {
+    "value": "DNS-опции не действуют: у правила нет условия, которое видит DNS"
   }
 }

@@ -167,6 +167,17 @@ class CustomRuleTile extends StatelessWidget {
                             fontSize: 12,
                             color: active ? cs.primary : cs.onSurfaceVariant)),
                   ],
+                  // §757 — ⚠: DNS-опция включена, а DNS-зеркало правила
+                  // пустое (опция не действует, маршрут работает).
+                  if (rule.dnsOptionsWithoutEffect) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: getLocalText.s(
+                          "DNS options have no effect: the rule has no condition DNS can see"),
+                      child: Icon(Icons.warning_amber_outlined,
+                          color: cs.error, size: 14),
+                    ),
+                  ],
                   // §231 — чип «DNS» справа на нижней строке, под outbound-пикером.
                   if (touchesDns) ...[
                     const SizedBox(width: 6),

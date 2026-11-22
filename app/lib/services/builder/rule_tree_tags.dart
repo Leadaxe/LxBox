@@ -18,7 +18,7 @@ import '../contract/rule_conditions.dart';
 final class RuleTagInput {
   const RuleTagInput({required this.name, this.root});
 
-  /// Имя правила как есть.
+  /// Имя правила как есть (база считается в [ruleTagBase], §757).
   final String name;
 
   /// Дерево тела; null — запись без дерева (verbatim-JSON): берёт только
@@ -47,8 +47,12 @@ final class RuleTags {
   String? tagOfRef(String ref) => refTags[ref.trim()];
 }
 
-/// §757 — база `B`: имя правила как есть, пустое — `unnamed`.
-String ruleTagBase(String name) => name.trim().isEmpty ? 'unnamed' : name;
+/// §757 — база `B`: имя правила с обрезанными краями, пустое после обрезки
+/// — `unnamed` (§6.13, контракт 1.1.180). Обрезка здесь, а не у вызывающего.
+String ruleTagBase(String name) {
+  final t = name.trim();
+  return t.isEmpty ? 'unnamed' : t;
+}
 
 /// §757 — h8: первые 8 hex sha256 строки ссылки (UTF-8, края обрезаны,
 /// нижний регистр); [length] 16 — при совпадении h8 внутри правила.

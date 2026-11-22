@@ -104,7 +104,8 @@ void main() {
     });
 
     test('список скаляров — «содержит»', () {
-      expect(paths('route.rules[rule_set=Geo sets-2]'), ['route.rules[7]']);
+      // §757 — тег второй ссылки по схеме §6.13: `<имя>:<h8>`.
+      expect(paths('route.rules[rule_set=Geo sets:6765fa2f]'), ['route.rules[7]']);
       expect(paths('route.rules[inbound=mixed-in]'),
           ['route.rules[0]', 'route.rules[2]']);
     });

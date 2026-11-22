@@ -6871,5 +6871,8 @@
   },
   "DNS options apply to these domains on any port and protocol": {
     "value": "DNS 选项对这些域名的任意端口和协议生效"
+  },
+  "DNS options have no effect: the rule has no condition DNS can see": {
+    "value": "DNS 选项无效：该规则没有 DNS 可识别的条件"
   }
 }

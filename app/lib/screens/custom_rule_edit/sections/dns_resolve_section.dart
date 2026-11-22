@@ -231,6 +231,26 @@ class _DnsResolveSectionState extends State<DnsResolveSection> {
               ],
             ),
           ),
+        // §757 — опция включена, зеркало пустое: правило сохраняется, DNS
+        // его не видит.
+        if (c.dnsOptionsWithoutEffect)
+          Padding(
+            padding: const EdgeInsets.only(left: 12, top: 2, bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_outlined, color: cs.error, size: 14),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                      getLocalText.s(
+                          "DNS options have no effect: the rule has no condition DNS can see"),
+                      style:
+                          TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                ),
+              ],
+            ),
+          ),
         if (anyPort)
           _hint(
               getLocalText.s(

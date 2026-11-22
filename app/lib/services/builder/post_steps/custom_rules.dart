@@ -333,9 +333,32 @@ List<String> applyCustomRules(
   return warnings;
 }
 
+/// §757 — теги наборов правил оси так, как их раздаёт сборка
+/// ([applyAllCustomRules]): заняты [takenTags] (теги `route.rule_set`
+/// шаблона) и теги наборов всех пресетов, стоящих в [rules] (включённых и
+/// нет; набор, выключенный гейтом, тоже занимает свой тег). Ключ — id
+/// правила. Тот же расчёт читает резолвер имён правил (список соединений).
+Map<String, RuleTags> customRuleAxisTags(
+  List<CustomRule> rules, {
+  required Iterable<String> takenTags,
+  required List<SelectableRule> presets,
+  RuleConditionTable? table,
+}) {
+  final reserved = {
+    ...takenTags,
+    for (final cr in rules)
+      if (cr is CustomRulePreset)
+        for (final p in presets)
+          if (p.presetId == cr.presetId)
+            for (final rs in p.ruleSets)
+              if (rs['tag'] case final String tag when tag.isNotEmpty) tag,
+  };
+  return _assignAxisTags(rules, reserved, table ?? ruleConditionTable);
+}
+
 /// §757 — теги наборов всех записей оси (§6.13 п. 1–5): базу берёт каждая
 /// запись `inline` | `srs` (включённая и выключенная, verbatim-JSON тоже),
-/// пресеты — нет. Имя для базы — с обрезанными краями. Ключ — id правила.
+/// пресеты — нет. Края имени обрезает [ruleTagBase]. Ключ — id правила.
 Map<String, RuleTags> _assignAxisTags(
   List<CustomRule> rules,
   Set<String> reserved,
@@ -349,7 +372,7 @@ Map<String, RuleTags> _assignAxisTags(
     [
       for (final r in axis)
         RuleTagInput(
-          name: r.name.trim(),
+          name: r.name,
           root: r is CustomRuleTree ? r.root : null,
         ),
     ],
@@ -491,18 +514,13 @@ UnifiedApplyResult applyAllCustomRules(
   final warnings = <String>[];
   final table = ruleConditionTable;
   // §757 (§6.13) — теги раздаются один раз до обхода: заняты теги шаблона
-  // (уже в реестре) и наборов всех пресетов, стоящих в правилах (включённых
-  // и нет; набор, выключенный гейтом, тоже занимает свой тег).
-  final reserved = {
-    ...registry.takenTags,
-    for (final cr in rules)
-      if (cr is CustomRulePreset)
-        for (final p in presets)
-          if (p.presetId == cr.presetId)
-            for (final rs in p.ruleSets)
-              if (rs['tag'] case final String tag when tag.isNotEmpty) tag,
-  };
-  final tags = _assignAxisTags(rules, reserved, table);
+  // (уже в реестре) и наборов всех пресетов, стоящих в правилах.
+  final tags = customRuleAxisTags(
+    rules,
+    takenTags: registry.takenTags,
+    presets: presets,
+    table: table,
+  );
   final trees = <_TreeEmitted>[];
   for (final cr in rules) {
     switch (cr) {

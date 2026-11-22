@@ -338,11 +338,16 @@ RuleTreeMirrors ruleTreeDnsMirrors({
   final blockHttps = dns.blockHttps && hasRefsOrDomain;
   final forceIpv4 = dns.forceIpv4 && !fixed;
   final server = dns.enabled && dns.serverTag.isNotEmpty && !fixed;
-  final composite = mirror[RuleConditionTable.kType] == RuleGroup.kLogical;
+  // §757 (контракт 1.1.180): в обёртку `and` идёт и простое `M` с
+  // `invert` — иначе `query_type` / `ip_version` рядом попали бы под
+  // отрицание (Block HTTPS глушил бы всё, кроме HTTPS доменов правила).
+  final composite =
+      mirror[RuleConditionTable.kType] == RuleGroup.kLogical ||
+      mirror[RuleConditionTable.kInvert] == true;
 
-  // Над составным `M` ключи условия действия — в обёртке `and` (у корня
-  // `logical` ядро не принимает `query_type` / `ip_version`); над простым —
-  // рядом, как у плоских правил.
+  // Над составным `M` (или простым с `invert`) ключи условия действия — в
+  // обёртке `and` (у корня `logical` ядро не принимает `query_type` /
+  // `ip_version`); над простым без `invert` — рядом, как у плоских правил.
   Map<String, dynamic> withCondition(
     Map<String, dynamic> cond,
     Map<String, dynamic> action,

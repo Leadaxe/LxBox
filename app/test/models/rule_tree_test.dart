@@ -38,6 +38,29 @@ void main() {
       final orders = [for (final c in table.conditions) c.order];
       expect(orders, [...orders]..sort());
     });
+
+    test('неизвестные поля ключа (label, placeholder — §184) пропускаются', () {
+      final t = RuleConditionTable.fromJson({
+        'conditions': [
+          {
+            'id': 'destination',
+            'keys': [
+              {
+                'key': 'domain',
+                'field': 'list',
+                'set': true,
+                'dns': true,
+                'label': 'Domains',
+                'placeholder': 'example.com',
+                'future_field': {'x': 1},
+              },
+            ],
+          },
+        ],
+      });
+      expect(t.key('domain')?.set, isTrue);
+      expect(t.key('domain')?.dns, isTrue);
+    });
   });
 
   group('разбор тела', () {
@@ -326,6 +349,17 @@ void main() {
       expect(t[0].base, 'A');
       expect(t[1].base, 'A (3)');
       expect(t[1].inlineTags, {'': 'A (3)'});
+      expect(t[2].base, 'unnamed');
+    });
+
+    test('база — имя с обрезанными краями у любого вызывающего (§183 п. 5)', () {
+      final t = assign([
+        const RuleTagInput(name: '  Ads \t'),
+        const RuleTagInput(name: 'Ads'),
+        const RuleTagInput(name: ' \n '),
+      ], reserved: const {});
+      expect(t[0].base, 'Ads');
+      expect(t[1].base, 'Ads (2)');
       expect(t[2].base, 'unnamed');
     });
 

@@ -295,6 +295,13 @@ class CustomRuleEditController extends ChangeNotifier {
       _protocols.isNotEmpty ||
       _network.isNotEmpty;
 
+  /// §757: DNS-опция включена, а DNS-зеркало правила пустое (ни одного
+  /// условия, видимого DNS-слою) — опция не действует, правило сохраняется
+  /// (⚠ в секции DNS). Live по текущему состоянию формы.
+  bool get dnsOptionsWithoutEffect =>
+      (_kind == CustomRuleKind.inline || _kind == CustomRuleKind.srs) &&
+      snapshot().dnsOptionsWithoutEffect;
+
   /// §692: секция «DNS & Resolve» видна, только когда у правила есть
   /// условие, видимое DNS-слою (зеркало [CustomRule.dnsLayerEligible]):
   /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
