@@ -11,6 +11,7 @@
 // Новый глобальный кэш в lib, который тест может испачкать, — сброс сюда
 // (`@visibleForTesting`-метод в lib, поведение приложения не меняется).
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
@@ -27,7 +28,9 @@ import 'package:lxbox/services/app_log.dart';
 import 'package:lxbox/services/automation/event_emitter.dart';
 import 'package:lxbox/services/builder/core_chain_capability.dart';
 import 'package:lxbox/services/config_dirty_check.dart';
+import 'package:lxbox/models/custom_rule.dart' show debugSetRuleConditionTable;
 import 'package:lxbox/services/contract/registry.dart';
+import 'package:lxbox/services/contract/rule_conditions.dart';
 import 'package:lxbox/services/core_reject/core_reject_runner.dart'
     show resetCoreRejectRunnerForTesting;
 import 'package:lxbox/services/core_reject/core_reject_state.dart';
@@ -90,6 +93,21 @@ void captureTestGlobals() {
   _pathProvider = PathProviderPlatform.instance;
   _bindingHttpOverrides = HttpOverrides.current;
   _captured = true;
+  // §757 — сборка (`test_bundle/`) лежит вне `test/`, пролог
+  // `test/flutter_test_config.dart` на неё не действует.
+  installRuleConditionTable();
+}
+
+/// §757 — таблица условий правила маршрута из ассетов контракта, запасной
+/// копией модели (реестр контракта не грузится и не меняется). Кодек правил
+/// и предикаты модели читают её на любом пути, а большинство тестов реестр
+/// не поднимает. Зовут `test/flutter_test_config.dart` (одиночный прогон) и
+/// [captureTestGlobals] (сборка).
+void installRuleConditionTable() {
+  final f = File('assets/contract/registry/rule_conditions.json');
+  if (!f.existsSync()) return;
+  debugSetRuleConditionTable(RuleConditionTable.fromJson(
+      jsonDecode(f.readAsStringSync()) as Map<String, dynamic>));
 }
 
 /// Вернуть глобальное состояние к состоянию свежего изолята.
