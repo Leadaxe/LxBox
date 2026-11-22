@@ -848,27 +848,28 @@ class CustomRuleTree extends CustomRule {
 
     bool flag(String key) => leaves.any((l) => l.conditions[key] == true);
     final parts = <String>[];
-    void plural(String key, String text) {
-      final n = count(key);
-      if (n > 0) parts.add(getLocalText.plural(text, n));
+    // Ключи словаря — литералами в вызове `getLocalText.plural`: по ним
+    // ui_check находит использование строки.
+    void add(int n, String text) {
+      if (n > 0) parts.add(text);
     }
 
-    plural(kRuleKeyDomain, "%d domains");
-    plural(kRuleKeyDomainSuffix, "%d suffixes");
-    plural(kRuleKeyDomainKeyword, "%d keywords");
-    plural(kRuleKeyDomainRegex, "%d domain regex");
-    plural(kRuleKeyIpCidr, "%d cidrs");
+    add(count(kRuleKeyDomain), getLocalText.plural("%d domains", count(kRuleKeyDomain)));
+    add(count(kRuleKeyDomainSuffix), getLocalText.plural("%d suffixes", count(kRuleKeyDomainSuffix)));
+    add(count(kRuleKeyDomainKeyword), getLocalText.plural("%d keywords", count(kRuleKeyDomainKeyword)));
+    add(count(kRuleKeyDomainRegex), getLocalText.plural("%d domain regex", count(kRuleKeyDomainRegex)));
+    add(count(kRuleKeyIpCidr), getLocalText.plural("%d cidrs", count(kRuleKeyIpCidr)));
     if (flag(kRuleKeyIpIsPrivate)) parts.add(getLocalText.s("private ip"));
-    plural(kRuleKeySourceIpCidr, "%d src");
+    add(count(kRuleKeySourceIpCidr), getLocalText.plural("%d src", count(kRuleKeySourceIpCidr)));
     if (flag(kRuleKeySourceIpIsPrivate)) {
       parts.add(getLocalText.s("private src"));
     }
     final totalPorts = count(kRuleKeyPort) + count(kRuleKeyPortRange);
     if (totalPorts > 0) parts.add(getLocalText.plural("%d ports", totalPorts));
-    plural(kRuleKeyPackageName, "%d apps");
-    plural(kRuleKeyPackageNameRegex, "%d package regex");
-    plural(kRuleKeyProtocol, "%d proto");
-    plural(kRuleKeyNetwork, "%d net");
+    add(count(kRuleKeyPackageName), getLocalText.plural("%d apps", count(kRuleKeyPackageName)));
+    add(count(kRuleKeyPackageNameRegex), getLocalText.plural("%d package regex", count(kRuleKeyPackageNameRegex)));
+    add(count(kRuleKeyProtocol), getLocalText.plural("%d proto", count(kRuleKeyProtocol)));
+    add(count(kRuleKeyNetwork), getLocalText.plural("%d net", count(kRuleKeyNetwork)));
     final inbounds = count(kRuleKeyInbound);
     if (inbounds > 0) parts.add(getLocalText.s("%d in", inbounds));
     final wifi = count(kRuleKeyWifiSsid);
