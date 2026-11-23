@@ -6716,17 +6716,26 @@
   "Devices shared by other users are not counted as yours.": {
     "value": "其他用户共享的设备不算作你的设备。"
   },
-  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
-    "value": "内核：lx.wg.idle_suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
+  "Core: lx.wg.idle.suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "内核：lx.wg.idle.suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
   },
-  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
-    "value": "内核：lx.wg.idle_suspend_reachable。对活动路由上的端点进行同样的休眠，空闲时间更长。"
+  "Core: lx.wg.idle.suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "内核：lx.wg.idle.suspend_reachable。对活动路由上的端点进行同样的休眠，空闲时间更长。"
   },
-  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
-    "value": "内核：lx.wg.lazy_build。端点在首次拨号时构建，而不是在内核启动时。"
+  "Core: lx.wg.idle.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "内核：lx.wg.idle.lazy_build。端点在首次拨号时构建，而不是在内核启动时。"
   },
-  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
-    "value": "内核：lx.wg.build_max。超出上限时，空闲最久的端点会被拆除。"
+  "Core: lx.wg.idle.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "内核：lx.wg.idle.build_max。超出上限时，空闲最久的端点会被拆除。"
+  },
+  "Core: lx.wg.buffers.read_datagram_count. Datagrams one read of a tunnel without a detour takes; below 128 the socket also gives up kernel receive coalescing (UDP GRO). Ignored outside Linux and Android.": {
+    "value": "内核：lx.wg.buffers.read_datagram_count。没有 detour 的隧道一次读取的数据报数量；低于 128 时套接字还会放弃内核接收合并（UDP GRO）。仅在 Linux 和 Android 上生效。"
+  },
+  "Core: lx.wg.buffers.send_by_mtu. Off puts the send buffers back at 64 KiB per packet.": {
+    "value": "内核：lx.wg.buffers.send_by_mtu。关闭后发送缓冲区恢复为每个数据包 64 KiB。"
+  },
+  "Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry.": {
+    "value": "内核：lx.wg.connected_socket。隧道套接字连接到服务器；发送失败或路由变化会断开连接，更换了地址的服务器要到下一次握手重试后才能被听到。"
   },
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"

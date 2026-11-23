@@ -10,6 +10,7 @@ library;
 
 import 'dart:convert';
 
+import '../services/mixins/mixin_legacy_lx_wg.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 
 /// Глагол миксина. Имя в хранилище = [name] enum'а.
@@ -109,19 +110,24 @@ class Mixin {
       };
 
   /// Терпимое чтение: битые поля — дефолты, отсутствующий `id` — новый.
+  /// §758: старые ключи сна `lx.wg.*` переписываются в `lx.wg.idle.*`
+  /// ([migrateLegacyLxWgMixin]) — ядро с lx.36 их не загружает.
   factory Mixin.fromJson(Map<String, dynamic> j) {
     final id = j['id'];
     final name = j['name'];
     final enabled = j['enabled'];
     final target = j['target'];
     final op = j['op'];
+    final opName = op is String ? op : '';
+    final migrated = migrateLegacyLxWgMixin(
+        target is String ? target : '', opName, j['value']);
     return Mixin(
       id: id is String ? id : null,
       name: name is String ? name : '',
       enabled: enabled is bool ? enabled : true,
-      target: target is String ? target : '',
-      op: op is String ? op : '',
-      value: j['value'],
+      target: migrated.target,
+      op: opName,
+      value: migrated.value,
     );
   }
 

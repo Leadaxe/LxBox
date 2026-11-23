@@ -1,10 +1,12 @@
 {
   "lx": {
     "wg": {
-      "idle_suspend": "30s",
-      "lazy_build": true,
-      "build_max": 5,
-      "idle_suspend_reachable": "5m"
+      "idle": {
+        "suspend": "30s",
+        "lazy_build": true,
+        "build_max": 5,
+        "suspend_reachable": "5m"
+      }
     }
   },
   "log": {

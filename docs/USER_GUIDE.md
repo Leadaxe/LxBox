@@ -1739,6 +1739,15 @@ their rows grey out, tunnels do not sleep, and the app does not pass lazy
 build to the core: the core builds tunnels by its own rules. Built tunnels
 limit also requires Lazy tunnel build to be on.
 
+Three more options work whether or not tunnels sleep. They apply to tunnels
+without a detour, on Android (and Linux):
+
+| Option | What it does | Default |
+|---|---|---|
+| **Datagrams per read** | How many datagrams a tunnel reads at once: 128, 32, 8, 2, 1. Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB of memory per tunnel. | 128 |
+| **MTU-sized send buffers** | A diagnostic switch. Off returns 64 KiB send buffers per packet, as in cores before 1.14.4-lx.36. | On |
+| **Connected tunnel socket** | More upload speed for a tunnel with one peer, a fixed server address and no listen port. A server that moves to a new address is heard only after the next handshake retry. Not yet tested on a phone that switches between Wi-Fi and mobile data. | Off |
+
 A direction's auto twin has its own node check. Where: direction editor →
 Include auto (urltest). The group tests the pool's nodes once per Interval
 (`15m` by default). Idle timeout (`30m` by default) is the time without
@@ -1751,7 +1760,8 @@ the group.
 | Situation | What to do |
 |---|---|
 | The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
-| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3 |
+| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3; Datagrams per read → 1 or 2 |
+| A weak device runs short of memory with a few WireGuard nodes | Datagrams per read → 8 |
 | Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
 | Tunnels must not sleep at all | Suspend idle tunnels → Off |
 

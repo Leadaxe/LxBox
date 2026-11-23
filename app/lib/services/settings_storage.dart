@@ -200,9 +200,12 @@ class SettingsStorage {
     'urltest_url',
     'vpn_mode',
     'wg_build_max',
+    'wg_connected_socket',
     'wg_idle_suspend',
     'wg_idle_suspend_reachable',
     'wg_lazy_build',
+    'wg_read_datagram_count',
+    'wg_send_by_mtu',
   };
 
   // ---------------------------------------------------------------------------

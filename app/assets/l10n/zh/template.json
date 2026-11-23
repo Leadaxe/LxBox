@@ -821,6 +821,27 @@
   "0 (no limit)": {
     "value": "0（无上限）"
   },
+  "Datagrams per read": {
+    "value": "每次读取的数据报数"
+  },
+  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB per tunnel. With many WireGuard nodes choose 1 or 2; on a weak device, 8.": {
+    "value": "没有 detour 的隧道一次读取多少个数据报（Linux 和 Android）。每个数据报占用一个 64 KiB 缓冲区，因此 128 每个隧道约占 16 MiB。WireGuard 节点很多时选 1 或 2；设备性能较弱时选 8。"
+  },
+  "128 (default)": {
+    "value": "128（默认）"
+  },
+  "MTU-sized send buffers": {
+    "value": "按 MTU 分配发送缓冲区"
+  },
+  "Diagnostic switch. On: packets read from the tunnel stack get buffers sized for the tunnel MTU. Off: 64 KiB buffers, as in cores before 1.14.4-lx.36.": {
+    "value": "诊断开关。开启：从隧道协议栈读取的数据包按隧道 MTU 分配缓冲区。关闭：使用 64 KiB 缓冲区，与 1.14.4-lx.36 之前的内核相同。"
+  },
+  "Connected tunnel socket": {
+    "value": "已连接的隧道套接字"
+  },
+  "Faster upload for a tunnel with one peer, a fixed server address and no listen port (Linux and Android). Not yet tested on a phone that switches between Wi-Fi and mobile data, so it is off by default.": {
+    "value": "对只有一个对端、服务器地址固定且没有监听端口的隧道提升上传速度（Linux 和 Android）。尚未在 Wi-Fi 与移动数据之间切换的手机上测试，因此默认关闭。"
+  },
   "QUIC": {
     "value": "QUIC"
   },

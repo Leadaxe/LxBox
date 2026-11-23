@@ -7007,17 +7007,26 @@
   "Devices shared by other users are not counted as yours.": {
     "value": "Устройства, которыми поделились другие пользователи, вашими не считаются."
   },
-  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
-    "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
+  "Core: lx.wg.idle.suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "Ядро: lx.wg.idle.suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
   },
-  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
-    "value": "Ядро: lx.wg.idle_suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
+  "Core: lx.wg.idle.suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "Ядро: lx.wg.idle.suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
   },
-  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
-    "value": "Ядро: lx.wg.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
+  "Core: lx.wg.idle.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "Ядро: lx.wg.idle.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
   },
-  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
-    "value": "Ядро: lx.wg.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
+  "Core: lx.wg.idle.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "Ядро: lx.wg.idle.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
+  },
+  "Core: lx.wg.buffers.read_datagram_count. Datagrams one read of a tunnel without a detour takes; below 128 the socket also gives up kernel receive coalescing (UDP GRO). Ignored outside Linux and Android.": {
+    "value": "Ядро: lx.wg.buffers.read_datagram_count. Сколько датаграмм за одно чтение берёт туннель без detour; ниже 128 сокет ещё и отказывается от склейки приёма в ядре (UDP GRO). Вне Linux и Android не действует."
+  },
+  "Core: lx.wg.buffers.send_by_mtu. Off puts the send buffers back at 64 KiB per packet.": {
+    "value": "Ядро: lx.wg.buffers.send_by_mtu. Выключение возвращает буферы отправки по 64 КБ на пакет."
+  },
+  "Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry.": {
+    "value": "Ядро: lx.wg.connected_socket. Сокет туннеля подключается к серверу; неудачная отправка или смена маршрута его отключает, а сервер, сменивший адрес, слышен только после следующего повтора рукопожатия."
   },
   "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
     "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."

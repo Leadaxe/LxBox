@@ -494,6 +494,25 @@
             "8",
             "12"
           ]
+        },
+        { "name": "wg_read_datagram_count", "type": "int",
+          "default_value": "128", "required": true, "wizard_ui": "edit",
+          "title": "Datagrams per read", "tooltip": "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB per tunnel. With many WireGuard nodes choose 1 or 2; on a weak device, 8.",
+          "options": [
+            {"title": "128 (default)", "value": "128"},
+            "32",
+            "8",
+            "2",
+            "1"
+          ]
+        },
+        { "name": "wg_send_by_mtu", "type": "bool",
+          "default_value": "true", "required": true, "wizard_ui": "edit",
+          "title": "MTU-sized send buffers", "tooltip": "Diagnostic switch. On: packets read from the tunnel stack get buffers sized for the tunnel MTU. Off: 64 KiB buffers, as in cores before 1.14.4-lx.36."
+        },
+        { "name": "wg_connected_socket", "type": "bool",
+          "default_value": "false", "required": true, "wizard_ui": "edit",
+          "title": "Connected tunnel socket", "tooltip": "Faster upload for a tunnel with one peer, a fixed server address and no listen port (Linux and Android). Not yet tested on a phone that switches between Wi-Fi and mobile data, so it is off by default."
         }
       ]
     },
@@ -518,15 +537,40 @@
   ],
   "config": {
     "lx": {
-      "#if wg": [{"#not": {"@wg_idle_suspend": "off"}}, {
+      "#if wg": [{"#or": [
+          {"#not": {"@wg_idle_suspend": "off"}},
+          {"#not": {"@wg_read_datagram_count": "128"}},
+          {"#not": "@wg_send_by_mtu"},
+          "@wg_connected_socket"
+        ]}, {
         "wg": {
-          "idle_suspend": "@wg_idle_suspend",
-          "#if reachable": [{"#not": {"@wg_idle_suspend_reachable": "off"}}, {
-            "idle_suspend_reachable": "@wg_idle_suspend_reachable"
+          "#if idle": [{"#not": {"@wg_idle_suspend": "off"}}, {
+            "idle": {
+              "suspend": "@wg_idle_suspend",
+              "#if reachable": [{"#not": {"@wg_idle_suspend_reachable": "off"}}, {
+                "suspend_reachable": "@wg_idle_suspend_reachable"
+              }],
+              "#if lazy": ["@wg_lazy_build", {
+                "lazy_build": true,
+                "build_max": "@wg_build_max"
+              }]
+            }
           }],
-          "#if lazy": ["@wg_lazy_build", {
-            "lazy_build": true,
-            "build_max": "@wg_build_max"
+          "#if buffers": [{"#or": [
+              {"#not": {"@wg_read_datagram_count": "128"}},
+              {"#not": "@wg_send_by_mtu"}
+            ]}, {
+            "buffers": {
+              "#if read": [{"#not": {"@wg_read_datagram_count": "128"}}, {
+                "read_datagram_count": "@wg_read_datagram_count"
+              }],
+              "#if send": [{"#not": "@wg_send_by_mtu"}, {
+                "send_by_mtu": false
+              }]
+            }
+          }],
+          "#if connected": ["@wg_connected_socket", {
+            "connected_socket": true
           }]
         }
       }],

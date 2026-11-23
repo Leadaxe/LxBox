@@ -37,6 +37,8 @@
   `tt_subscription_only` — ссылку, несущую только подписку. Ссылка с адресом подписки не `https://` отвергается. Движок
   умеет собрать ссылку `tt://` обратно из тела узла, байт в байт как энкодер
   AdGuard. Issue #194.)
+- **Core v1.14.4-lx.36 ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** WireGuard and AmneziaWG tunnels without a detour are faster and a queued packet holds about 2 KiB instead of 64 KiB; DNS over a proxied stream no longer loses queries in bursts; an HTTP proxy that never answers no longer piles up connections. The core moved the tunnel sleep keys into `lx.wg.idle`; the app writes the new names, and a mixin with an old name is rewritten when it is read.
+  (RU: ядро v1.14.4-lx.36 — туннели WireGuard и AmneziaWG без detour быстрее, пакет в очереди держит около 2 КБ вместо 64 КБ; DNS через проксированный поток не теряет запросы пачками; молчащий HTTP-прокси не копит соединения. Ключи сна туннелей ядро перенесло в `lx.wg.idle`; приложение пишет новые имена, миксин со старым именем переписывается при чтении.)
 
 ### Added
 
@@ -73,6 +75,8 @@
   при вставке, сканировании или вводе больше не отвергается: по ней
   добавляется эта подписка. Внутри списка ссылок или чужой подписки такая
   ссылка по-прежнему пропускается с `tt_subscription_only`.)
+- **Three new WireGuard / AmneziaWG settings ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (128 by default; 1–2 for dozens of nodes, 8 for a weak device: each datagram costs a 64 KiB buffer per tunnel), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
+  (RU: в Settings → Core → WireGuard три новые опции: Datagrams per read (по умолчанию 128; 1–2 для десятков узлов, 8 для слабого устройства — каждая датаграмма держит буфер 64 КБ на туннель), MTU-sized send buffers (диагностический, включён) и Connected tunnel socket (быстрее отдача у туннеля с одним сервером; выключен — на телефоне со сменой Wi-Fi и мобильной сети не проверен). Действуют на туннели без detour.)
 
 ## [2.25.23] — 2026-11-17
 
