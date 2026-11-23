@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
-import 'package:lxbox/services/builder/rule_tree_tags.dart';
 import 'package:lxbox/services/rule_name_resolver.dart';
 
 // §757 — опознавание правила-дерева в списке соединений. Строки — в форме
@@ -46,15 +45,34 @@ void main() {
       'outbound': 'direct',
     });
     RuleNameResolver.I.setRules([r]);
-    // Ссылка листа — `Video:<h8>`, inline-набор листа 1.1 — `Video:inline:1.1`.
-    final h8 = ruleRefHash('https://example.com/rules/video.srs');
+    // §757 (контракт 1.1.182) — ссылка листа — `Video:<stem>`, inline-набор
+    // листа 1.1 — `Video:inline:1.1`.
     expect(
-      resolve('port=443 && rule_set=Video:$h8 || '
+      resolve('port=443 && rule_set=Video:video || '
           'rule_set=Video:inline:1.1 => route(direct)'),
       'Video',
     );
-    expect(resolve('port=443 && rule_set=Video:$h8'), 'Video');
+    expect(resolve('port=443 && rule_set=Video:video'), 'Video');
     expect(resolve('port=443 && rule_set=Video:inline:1.1'), 'Video');
+  });
+
+  test('srs-правило с inline-набором корня — по `имя:<stem>` и чистому `имя`',
+      () {
+    final r = _tree('Ai', {
+      'refs': [
+        'https://example.com/geosite-category-ai-!cn.srs',
+        'https://example.com/geosite-google.srs',
+      ],
+      'domain_suffix': ['example-9.com'],
+      'outbound': 'proxy',
+    });
+    RuleNameResolver.I.setRules([r]);
+    expect(
+      resolve('rule_set=[Ai:geosite-category-ai-!cn Ai:geosite-google Ai] '
+          '=> route(proxy)'),
+      'Ai',
+    );
+    expect(resolve('rule_set=Ai:geosite-google'), 'Ai');
   });
 
   test('тег с пробелом и разводом: Ads (2) не путается с Ads', () {
@@ -70,8 +88,9 @@ void main() {
     );
     RuleNameResolver.I.setRules([a, b]);
     expect(resolve('rule_set=Ads => route(direct)'), 'Ads');
-    expect(resolve('rule_set=Ads (2) => route(block)'), ' Ads ');
-    expect(resolve('!(rule_set=[Ads (2) other])'), ' Ads ');
+    // Ссылка правила ` Ads ` — `Ads (2):ads` (база после развода + stem).
+    expect(resolve('rule_set=Ads (2):ads => route(block)'), ' Ads ');
+    expect(resolve('!(rule_set=[Ads (2):ads other])'), ' Ads ');
   });
 
   test('тег шаблона занят до правил пользователя — как в сборке', () {

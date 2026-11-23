@@ -173,6 +173,8 @@ class WorkspaceController extends ChangeNotifier {
         t.groupTemplates,
         varDefaults: {for (final v in t.vars) v.name: v.defaultValue},
       );
+      // §757 — слот без маркера несёт ссылки на прежние теги наборов правил.
+      await SettingsStorage.migrateRuleSetTagRefsIfNeeded(t);
     });
     // §605 — гейты + receiver'ы: набор мог принести другой тумблер приёма.
     await _step('automation', syncAutomationFromStorage);

@@ -364,6 +364,10 @@ void main() {
     });
 
     test('одна ссылка в двух узлах — один тег; коллизия h8 — 16 hex', () {
+      // §757 (контракт 1.1.182) — stem `pair` совпал у двух ссылок, их h8
+      // совпали (пара из corpus/rule_tree/h8_collision) — 16 hex у группы.
+      const a = 'https://mirror-19526.example.com/rules/pair.srs';
+      const b = 'https://mirror-99213.example.com/rules/pair.srs';
       final t = assign([
         RuleTagInput(
           name: 'P',
@@ -372,21 +376,19 @@ void main() {
             'mode': 'or',
             'rules': [
               {
-                'refs': [
-                  'https://example.com/rules/set-57516.srs',
-                  'https://example.com/rules/set-119909.srs',
-                ],
+                'refs': [a, b, 'https://example.com/rules/set-57516.srs'],
               },
               {
-                'refs': ['https://example.com/rules/set-57516.srs'],
+                'refs': [a],
               },
             ],
           })!.root,
         ),
       ]).single;
       expect(t.refTags, {
-        'https://example.com/rules/set-57516.srs': 'P:433fb6f0a24ec65a',
-        'https://example.com/rules/set-119909.srs': 'P:433fb6f07c8139b7',
+        a: 'P:pair-e31a3654be43599e',
+        b: 'P:pair-e31a3654aec37891',
+        'https://example.com/rules/set-57516.srs': 'P:set-57516',
       });
     });
 
@@ -400,15 +402,30 @@ void main() {
           })!.root,
         ),
         RuleTagInput(
-          name: 'X:inline',
+          name: 'X:1',
           root: parse({
             'refs': ['https://a/2.srs'],
           })!.root,
         ),
       ]);
-      expect(t[0].refTags.values, ['X']);
-      expect(t[0].inlineTags, {'': 'X:inline (2)'});
-      expect(t[1].refTags.values, ['X:inline']);
+      // Inline-набор корня — чистый `B'` (контракт 1.1.182).
+      expect(t[0].refTags.values, ['X:1 (2)']);
+      expect(t[0].inlineTags, {'': 'X'});
+      expect(t[1].refTags.values, ['X:1:2']);
+    });
+
+    test('stem: query, percent-encoding, только последнее .srs/.json', () {
+      expect(ruleRefStem('https://e.com/r/ads.srs?token=1#x'), 'ads');
+      expect(ruleRefStem('https://e.com/geo.tar.srs'), 'geo.tar');
+      expect(ruleRefStem('https://e.com/list.txt'), 'list.txt');
+      expect(ruleRefStem('https://e.com/LIST.SRS'), 'LIST');
+      expect(ruleRefStem('file:///C:/Rules/a%2Fb.srs'), 'a/b');
+      expect(ruleRefStem('file:///a/My%20Set.json'), 'My Set');
+      expect(ruleRefStem('https://e.com/lists/'), '');
+      expect(ruleRefStem('https://e.com'), '');
+      expect(ruleRefStem('https://e.com/.srs'), '');
+      // Не разбирается как URL — режется вручную по `#`, `?`, `/`.
+      expect(ruleRefStem('http://[bad/x/y.srs?q#f'), 'y');
     });
 
     test('без выбора стороны у узла без refs inline-набора нет', () {
@@ -523,7 +540,7 @@ void main() {
       expect(rule['rewrite_ttl'], 60);
       expect(rule.containsKey('outbound'), isFalse);
       expect((rule['rules'] as List).first, {
-        'rule_set': 'R:${ruleRefHash('https://a/1.srs')}',
+        'rule_set': 'R:1',
       });
     });
 

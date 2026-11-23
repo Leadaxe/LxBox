@@ -152,6 +152,8 @@ Future<DebugResponse> _import(DebugRequest req, DebugContext ctx) async {
         template.groupTemplates,
         varDefaults: {for (final v in template.vars) v.name: v.defaultValue},
       );
+      // §757 — ссылки на прежние теги наборов правил (архив без маркера).
+      await SettingsStorage.migrateRuleSetTagRefsIfNeeded(template);
     } else if (storage != null) {
       throw const BadRequest('storage must be a JSON object');
     }

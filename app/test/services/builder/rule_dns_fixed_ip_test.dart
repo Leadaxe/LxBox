@@ -146,7 +146,7 @@ void main() {
       );
       final m = _apply(r, srsPaths: {CustomRuleTree.cacheIdFor(r.id, r.srsUrl): '/tmp/l.srs'}).dnsMirrors;
       expect(m, hasLength(2));
-      expect(m[0].body['rule_set'], 'lst');
+      expect(m[0].body['rule_set'], 'lst:l');
       expect(m[0].body['package_name'], ['com.app']);
       expect(m[0].body['answer'], ['*. 300 IN A 1.2.3.4']);
     });

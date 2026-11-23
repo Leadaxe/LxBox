@@ -212,8 +212,8 @@
       },
       {
         "rule_set": [
-          "Geo sets",
-          "Geo sets:6765fa2f"
+          "Geo sets:a",
+          "Geo sets:b"
         ],
         "server": "google_udp"
       },
@@ -818,8 +818,8 @@
       },
       {
         "rule_set": [
-          "Geo sets",
-          "Geo sets:6765fa2f"
+          "Geo sets:a",
+          "Geo sets:b"
         ],
         "port": [
           443
@@ -931,13 +931,13 @@
       },
       {
         "type": "local",
-        "tag": "Geo sets",
+        "tag": "Geo sets:a",
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/r-srs-multi~0a7c4584.srs"
       },
       {
         "type": "local",
-        "tag": "Geo sets:6765fa2f",
+        "tag": "Geo sets:b",
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/r-srs-multi~6765fa2f.srs"
       },

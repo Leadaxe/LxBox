@@ -1,5 +1,5 @@
 /// §757 — теги наборов собственных правил (TEMPLATE_LANG §6.13 «Теги
-/// наборов», контракт 1.1.179, D-157): одна схема у LxBox и лаунчера.
+/// наборов», контракт 1.1.179–1.1.182, D-157, D-158): одна схема у LxBox и лаунчера.
 ///
 /// Чистая функция над осью правил: базы раздаются всем записям `inline` |
 /// `srs` (включая verbatim и выключенные) до производных, производные — в
@@ -58,6 +58,47 @@ String ruleTagBase(String name) {
 /// нижний регистр); [length] 16 — при совпадении h8 внутри правила.
 String ruleRefHash(String ref, {int length = 8}) =>
     sha256.convert(utf8.encode(ref.trim())).toString().substring(0, length);
+
+/// §757 — stem ссылки (§6.13 п. 4, TASKS_LXBOX §185 п. 1): последний
+/// сегмент пути (query и fragment отброшены), percent-encoding снят ПОСЛЕ
+/// разбиения на сегменты (`a%2Fb.srs` → `a/b`), снято только последнее
+/// расширение `.srs` / `.json` без учёта регистра; регистр сохраняется.
+/// Пустая строка — пустой stem (тег `B':<h8>`).
+String ruleRefStem(String ref) {
+  final r = ref.trim();
+  String segment;
+  final uri = Uri.tryParse(r);
+  if (uri != null) {
+    // `Uri.path` — в закодированном виде: `%2F` ещё не стал разделителем.
+    segment = uri.path.split('/').last;
+  } else {
+    // Не разбирается как URL — режем вручную: `#`, затем `?`, затем `/`.
+    var s = r;
+    final hash = s.indexOf('#');
+    if (hash >= 0) s = s.substring(0, hash);
+    final q = s.indexOf('?');
+    if (q >= 0) s = s.substring(0, q);
+    final schemeEnd = s.indexOf('://');
+    if (schemeEnd >= 0) {
+      final rest = s.substring(schemeEnd + 3);
+      final slash = rest.indexOf('/');
+      s = slash < 0 ? '' : rest.substring(slash);
+    }
+    segment = s.split('/').last;
+  }
+  try {
+    segment = Uri.decodeComponent(segment);
+  } on Object {
+    // Битая percent-последовательность — сегмент как есть.
+  }
+  final lower = segment.toLowerCase();
+  for (final ext in const ['.srs', '.json']) {
+    if (lower.endsWith(ext)) {
+      return segment.substring(0, segment.length - ext.length);
+    }
+  }
+  return segment;
+}
 
 /// §757 — у узла будет inline-набор: есть ключ `set: true` с ненулевым
 /// значением и (у узла есть `refs` или сторона уводит ключи узла без
@@ -130,43 +171,47 @@ List<RuleTags> assignRuleTags(
       out.add(RuleTags(base: base));
       continue;
     }
-    // Коллизия h8 внутри правила — у обеих ссылок 16 hex.
-    final distinct = ruleTreeRefs(root).map((r) => r.trim()).toList();
-    final h8Count = <String, int>{};
-    for (final r in distinct) {
-      final h = ruleRefHash(r);
-      h8Count[h] = (h8Count[h] ?? 0) + 1;
+    // §757 (контракт 1.1.182, D-158) — каждая ссылка `B':<stem>`; stem
+    // совпал у разных ссылок правила или пуст — с хешем; совпадение h8
+    // внутри группы одного stem — 16 hex у всей группы.
+    final distinct = <String>[];
+    for (final r in ruleTreeRefs(root)) {
+      final t = r.trim();
+      if (!distinct.contains(t)) distinct.add(t);
     }
-    String hashOf(String r) {
-      final h = ruleRefHash(r);
-      return (h8Count[h] ?? 0) > 1 ? ruleRefHash(r, length: 16) : h;
+    final byStem = <String, List<String>>{};
+    for (final r in distinct) {
+      (byStem[ruleRefStem(r)] ??= []).add(r);
+    }
+    final suffixOf = <String, String>{};
+    for (final MapEntry(key: stem, value: group) in byStem.entries) {
+      if (stem.isNotEmpty && group.length == 1) {
+        suffixOf[group.single] = stem;
+        continue;
+      }
+      final h8 = group.map(ruleRefHash).toSet();
+      final len = h8.length < group.length ? 16 : 8;
+      for (final r in group) {
+        final h = ruleRefHash(r, length: len);
+        suffixOf[r] = stem.isEmpty ? h : '$stem-$h';
+      }
     }
 
     final refTags = <String, String>{};
     final inlineTags = <String, String>{};
     final rootIsLeaf = root is RuleLeaf;
-    var firstRootRef = true;
     for (final (path, leaf) in ruleTreeLeaves(root)) {
       final atRoot = rootIsLeaf && path.isEmpty;
       for (final raw in leaf.refs) {
         final r = raw.trim();
         if (refTags.containsKey(r)) continue; // одна ссылка — один тег
-        if (atRoot && firstRootRef) {
-          // Первая ссылка корневого простого правила — сама `B'`.
-          refTags[r] = base;
-        } else {
-          refTags[r] = derive('$base:${hashOf(r)}');
-        }
-        if (atRoot) firstRootRef = false;
+        refTags[r] = derive('$base:${suffixOf[r]}');
       }
       if (ruleLeafHasInlineSet(leaf, table, sideInlineSets: sideInlineSets)) {
         final key = ruleTreePath(path);
-        if (atRoot) {
-          // Корень без ссылок — набор берёт `B'`; со ссылками — `B':inline`.
-          inlineTags[key] = leaf.refs.isEmpty ? base : derive('$base:inline');
-        } else {
-          inlineTags[key] = derive('$base:inline:$key');
-        }
+        // Inline-набор корневого простого правила — чистый `B'` (со
+        // ссылками и без); листа — `B':inline:<путь>`.
+        inlineTags[key] = atRoot ? base : derive('$base:inline:$key');
       }
     }
     out.add(

@@ -161,6 +161,9 @@ void main() async {
     // §143 §9 — one-shot: снятый тумблер interrupt-on-switch → галки
     // Направлений. ПОСЛЕ seed Направлений и ДО первого билда.
     await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
+    // §757 — one-shot: рукописные ссылки rule_set на прежние теги наборов
+    // правил → теги контракта 1.1.182. ПОСЛЕ seed пресетов и ДО первого билда.
+    await SettingsStorage.migrateRuleSetTagRefsIfNeeded(directionsTemplate);
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в

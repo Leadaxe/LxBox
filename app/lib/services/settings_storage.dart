@@ -27,7 +27,9 @@ import 'l10n/app_language_reconcile.dart';
 import 'record_vars.dart';
 import 'selectable_to_custom.dart';
 import 'settings_storage_keys.dart';
+import 'builder/rule_order.dart' show normalizeRuleOrder;
 import 'storage_migration/migrate_storage.dart';
+import 'storage_migration/rule_set_tag_refs.dart';
 import 'subscription/http_cache.dart';
 import 'taildrop_tags_sync.dart' show pushTaildropTags;
 import 'template_loader.dart';
@@ -233,6 +235,7 @@ class SettingsStorage {
     'directions', // §125/§393 — Направления роутинга (template→storage)
     'directions_migrated', // §125/§393 — guard one-shot миграции
     kUrltestModeMigratedKey, // §612 — guard миграции least_test → failover
+    kRuleSetTagsMigratedKey, // §757 — guard перезаписи ссылок на теги наборов
     // §393 A2 — легаси-пары `channels`/`channels_migrated` в allowlist НЕТ
     // намеренно: её переименовывает миграция формы (§439, `migrateStorageDoc`)
     // и в файле на диске, и в снимке `replaceRaw` до allowlist'а.
@@ -660,6 +663,14 @@ class SettingsStorage {
   /// правил изменился.
   static Future<bool> seedLateDefaultPresets([WizardTemplate? template]) =>
       _seedLateDefaultPresets(template);
+
+  /// §757 (контракт 1.1.182) — один раз до первой сборки: рукописные ссылки
+  /// `rule_set` на прежние теги наборов собственных правил (тела правил
+  /// маршрута, свои DNS-правила) переписываются на нынешние
+  /// ([migrateRuleSetTagRefs]); ставится маркер `rule_set_tags_migrated`.
+  /// Зовётся из main() и после восстановления бэкапа / смены слота.
+  static Future<void> migrateRuleSetTagRefsIfNeeded(WizardTemplate template) =>
+      _migrateRuleSetTagRefsIfNeeded(template);
 
   // ---------------------------------------------------------------------------
   // Route final outbound

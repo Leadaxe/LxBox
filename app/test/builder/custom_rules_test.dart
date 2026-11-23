@@ -6,7 +6,6 @@ import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
-import 'package:lxbox/services/builder/rule_tree_tags.dart' show ruleRefHash;
 import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
 
 /// §757 — srsPaths ключуются id кэша набора по ссылке.
@@ -299,13 +298,13 @@ void main() {
       expect(warn, isEmpty);
       final set = reg.getRuleSets().single;
       expect(set['type'], 'local');
-      expect(set['tag'], 'GeoIP CN');
+      expect(set['tag'], 'GeoIP CN:geoip-cn');
       expect(set['format'], 'binary');
       expect(set['path'], '/cache/rule_sets/rule-1.srs');
       expect(set.containsKey('url'), isFalse);
       expect(set.containsKey('update_interval'), isFalse);
       expect(reg.getRules().single,
-          {'rule_set': 'GeoIP CN', 'outbound': 'direct-out'});
+          {'rule_set': 'GeoIP CN:geoip-cn', 'outbound': 'direct-out'});
     });
 
     test('srs без cached path → skip + warning', () {
@@ -339,7 +338,7 @@ void main() {
         CustomRuleTree.cacheIdFor('r3', rule.srsUrl): '/cache/rule_sets/r3.srs',
       });
       final r = reg.getRules().single;
-      expect(r['rule_set'], 'SRS filtered');
+      expect(r['rule_set'], 'SRS filtered:rules');
       expect(r['port'], [443]);
       expect(r['port_range'], ['8000:9000']);
       expect(r['package_name'], ['org.mozilla.firefox']);
@@ -505,7 +504,7 @@ void main() {
       expect(reg.getRuleSets(), hasLength(1));
       expect(reg.getRules(), [
         {
-          'rule_set': 'GeoSite RU on home',
+          'rule_set': 'GeoSite RU on home:geo',
           'wifi_ssid': ['lexRouter'],
           'outbound': 'direct-out',
         },
@@ -533,12 +532,8 @@ void main() {
           'https://x/c.srs': '/cache/m~2.srs',
         }));
         expect(warn, isEmpty);
-        // §757 (§6.13) — вторая и следующие ссылки: `имя:<h8>`.
-        final tags = [
-          'Multi',
-          'Multi:${ruleRefHash('https://x/b.srs')}',
-          'Multi:${ruleRefHash('https://x/c.srs')}',
-        ];
+        // §757 (§6.13, контракт 1.1.182) — каждая ссылка `имя:<stem>`.
+        final tags = ['Multi:a', 'Multi:b', 'Multi:c'];
         expect(reg.getRuleSets().map((s) => s['tag']), tags);
         expect(reg.getRuleSets().map((s) => s['path']),
             ['/cache/m.srs', '/cache/m~1.srs', '/cache/m~2.srs']);
@@ -559,7 +554,7 @@ void main() {
                   id: 's', name: 'S', srsUrl: 'https://x/a.srs', outbound: 'proxy')
             ],
             srsPaths: _paths('s', {'https://x/a.srs': '/cache/s.srs'}));
-        expect(reg.getRules().single['rule_set'], 'S');
+        expect(reg.getRules().single['rule_set'], 'S:a');
       });
 
       test('нет файла хотя бы одного набора → правило пропущено с warning', () {
@@ -585,11 +580,7 @@ void main() {
         final rules = reg.getRules();
         expect(rules, hasLength(2));
         expect(rules.first['action'], 'resolve');
-        final tags = [
-          'Multi',
-          'Multi:${ruleRefHash('https://x/b.srs')}',
-          'Multi:${ruleRefHash('https://x/c.srs')}',
-        ];
+        final tags = ['Multi:a', 'Multi:b', 'Multi:c'];
         expect(rules.first['rule_set'], tags);
         expect(rules.last['rule_set'], tags);
       });
@@ -733,7 +724,7 @@ void main() {
           srsPaths: _paths('srs-1', {srs.srsUrl: '/cache/geo.srs'}));
       expect(reg.getRules(), [
         {
-          'rule_set': 'GeoSite',
+          'rule_set': 'GeoSite:geo',
           'source_ip_cidr': ['192.168.0.0/16'],
           'source_ip_is_private': true,
           'inbound': ['mixed-in'],
@@ -1067,12 +1058,12 @@ void main() {
       );
       expect(reg.getRules(), [
         {
-          'rule_set': 'RU srs',
+          'rule_set': 'RU srs:ru',
           'action': 'resolve',
           'strategy': 'ipv4_only',
           'server': 'yandex_udp',
         },
-        {'rule_set': 'RU srs', 'outbound': 'vpn-1'},
+        {'rule_set': 'RU srs:ru', 'outbound': 'vpn-1'},
       ]);
     });
 
@@ -1254,7 +1245,7 @@ void main() {
           srsPaths: _paths(srs.id, {srs.srsUrl: '/tmp/geo.srs'}));
       expect(reg.getRules(), [
         {
-          'rule_set': 'geo',
+          'rule_set': 'geo:geo',
           'network_type': ['wifi'],
           'network_is_expensive': true,
           'outbound': 'direct-out',
@@ -1328,7 +1319,7 @@ void main() {
       final result = applyAllCustomRules(reg, [srs], const [],
           srsPaths: _paths(srs.id, {srs.srsUrl: '/tmp/geo.srs'}));
       expect(reg.getRules().single, {
-        'rule_set': 'geo',
+        'rule_set': 'geo:geo',
         'package_name_regex': [r'^com\.oplus\.'],
         'outbound': 'vpn-1',
       });

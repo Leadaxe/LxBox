@@ -454,7 +454,7 @@ void main() {
       expect(reg.getRuleSets(), hasLength(1),
           reason: 'no split — только .srs rule_set, без дополнительного');
       final m = result.dnsMirrors.single;
-      expect(m.body['rule_set'], 'cn-list');
+      expect(m.body['rule_set'], 'cn-list:cn');
       expect(m.body['package_name'], ['com.app']);
       expect(m.serverTag, 'cloudflare_udp');
     });
@@ -478,7 +478,7 @@ void main() {
       expect(m.serverless, true);
       expect(m.serverTag, '');
       expect(m.body, {
-        'rule_set': 'cn-list',
+        'rule_set': 'cn-list:cn',
         'ip_version': 6,
         'action': 'predefined',
         'rcode': 'NOERROR',
@@ -599,7 +599,7 @@ void main() {
       );
       final ms = result.dnsMirrors;
       expect(ms.first.blockHttps, true);
-      expect(ms.first.body['rule_set'], 'cf');
+      expect(ms.first.body['rule_set'], 'cf:cf');
       expect(ms.first.body['query_type'], ['HTTPS', 'SVCB']);
       expect(ms.skip(1).every((m) => m.fixedAnswer), true);
     });

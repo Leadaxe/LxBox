@@ -105,6 +105,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ urltest_mode_migrated         bool          §612 — the guard for the one-shot passive_check → failover migration
+├─ rule_set_tags_migrated        bool          §757 — the guard for the one-shot rewrite of rule_set references to old rule set tags
 ├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
@@ -215,6 +216,7 @@ Android SharedPreferences (shared_prefs/):  # three Kotlin files, boxvpn_boot, l
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
   "urltest_mode_migrated": true,   // §612 — the guard for the passive_check → failover migration
+  "rule_set_tags_migrated": true,  // §757 — the guard for the rule_set tag references rewrite
   "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
@@ -1799,6 +1801,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `mixin_target_suggestions` | `bool` | §704 — the autocomplete suggestions under the Target field of the mixin form; the icon at the right of the field toggles them. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getMixinTargetSuggestions` / `setMixinTargetSuggestions`. |
 | `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |
 | `urltest_mode_migrated` | `bool` | §612 — the guard for the one-shot migration from `passive_check` to the `failover` mode. The raw `urltest_passive_check` `true` or absent (the old default) → the Directions' `auto`, the folds' `replace.auto` and the folders' `kind: auto` members (`group.strategy`, not `group_type: selector`) with `least_test` or no `mode` become `failover`; `false` → nothing changes; `round_robin` is never touched. Then `urltest_passive_check` is deleted and this key set to `true`. Exported with Routing (as `directions_migrated`): a backup made before §612 restores without it, and the next start migrates its groups. |
+| `rule_set_tags_migrated` | `bool` | §757 (contract 1.1.182, TASKS_LXBOX §185) — the guard for the one-shot rewrite of hand-written `rule_set` references to the old tags of own rules' sets: in the bodies of route rules (`rules[]`, tree nodes and verbatim JSON) and in own DNS rules (`dns.rules[]`, `user` and `srs`). The first ref of a rule `name` and `name-N` (before §757), `name:<h8>` / `name:inline` (1.1.179–1.1.181) become the tags of contract 1.1.182 (`name:<stem>`; the root inline set is `name`); a bare `name` stays when the rule has its own root inline set. Runs before the first build, after a backup restore and a workspace switch; then this key is set to `true`. Exported with Routing: a backup made before §757 restores without it, and the rewrite runs again. |
 
 > The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
 
