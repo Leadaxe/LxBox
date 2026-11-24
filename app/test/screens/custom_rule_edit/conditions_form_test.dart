@@ -60,6 +60,13 @@ Finder _field(String key) => find.descendant(
       matching: find.byType(TextField),
     );
 
+/// Рамка условия, в label-декорации которой (разрыв рамки) есть [part].
+Finder _frameLabelled(String part) => find.byWidgetPredicate((w) {
+      if (w is! InputDecorator) return false;
+      final l = w.decoration.label;
+      return l is Text && (l.textSpan?.toPlainText() ?? '').contains(part);
+    });
+
 Future<void> _addCondition(WidgetTester tester, String label) async {
   await tester.ensureVisible(find.text('Condition').last);
   await tester.tap(find.text('Condition').last);
@@ -129,6 +136,41 @@ void main() {
 
     final saved = await _save(tester, host);
     expect(saved.ports, isEmpty);
+  });
+
+  testWidgets('название и связка — в разрыве рамки; ✕ рамки удаляет условие',
+      (tester) async {
+    final host = await _open(tester, _domainRule);
+    final dest = _frameLabelled('Destination / Rule sets');
+    expect(dest, findsOneWidget);
+    expect(_frameLabelled('any of'), findsOneWidget);
+
+    await _addCondition(tester, 'Rule group');
+    final group = _frameLabelled('Rule group');
+    expect(group, findsOneWidget);
+    expect(_frameLabelled('all of'), findsOneWidget);
+    await tester.tap(find.text('any of').last);
+    await tester.pump();
+    expect(_frameLabelled('all of'), findsNothing);
+    expect(_frameLabelled('any of'), findsNWidgets(2));
+
+    // ✕ внутри рамки Destination — после подтверждения условие уходит.
+    await tester.tap(find
+        .descendant(of: dest, matching: find.byIcon(Icons.close))
+        .last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove').last);
+    await tester.pumpAndSettle();
+    expect(dest, findsNothing);
+    expect(_field('domain'), findsNothing);
+
+    // Пустая группа — без вопроса.
+    await tester.tap(find
+        .descendant(of: group, matching: find.byIcon(Icons.close))
+        .last);
+    await tester.pumpAndSettle();
+    expect(group, findsNothing);
+    expect(host.closed, isFalse);
   });
 
   testWidgets('группа any of + Not, под-правило отдельным экраном',

@@ -114,7 +114,9 @@ class _AndLabel extends StatelessWidget {
   }
 }
 
-/// Рамка условия или группы: заголовок (подпись, пометки, ✕) и тело.
+/// Рамка условия или группы — как рамка полей Name / Action: название в
+/// разрыве рамки слева, за ним мельче связка (« · any of»), ✕ внутри рамки
+/// справа на уровне первого поля.
 class _Frame extends StatelessWidget {
   const _Frame({
     required this.title,
@@ -131,47 +133,44 @@ class _Frame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: t.colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 4, 4, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return InputDecorator(
+      isEmpty: false,
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        isDense: true,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        contentPadding: const EdgeInsets.fromLTRB(12, 14, 4, 10),
+        label: Text.rich(
+          TextSpan(
+            text: title,
             children: [
-              Flexible(
-                child: Text(
-                  title,
-                  style: t.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: t.colorScheme.primary,
-                  ),
+              if (caption != null)
+                TextSpan(
+                  text: ' · ${caption!}',
+                  style: t.textTheme.bodyMedium
+                      ?.copyWith(color: t.colorScheme.outline),
                 ),
-              ),
-              if (caption != null) ...[
-                const SizedBox(width: 8),
-                Text(caption!,
-                    style: TextStyle(
-                        fontSize: 11, color: t.colorScheme.onSurfaceVariant)),
-              ],
-              const Spacer(),
-              IconButton(
-                tooltip: getLocalText.s("Remove"),
-                icon: const Icon(Icons.close, size: 18),
-                visualDensity: VisualDensity.compact,
-                onPressed: onRemove,
-              ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: children,
             ),
+          ),
+          IconButton(
+            tooltip: getLocalText.s("Remove"),
+            icon: const Icon(Icons.close, size: 18),
+            visualDensity: VisualDensity.compact,
+            onPressed: onRemove,
           ),
         ],
       ),
@@ -456,6 +455,8 @@ class _GroupCard extends StatelessWidget {
     final title = getLocalText.s("Rule group");
     return _Frame(
       title: title,
+      caption:
+          group.any ? getLocalText.s("any of") : getLocalText.s("all of"),
       onRemove: () => _confirmRemove(
         context,
         filled: group.toNode() != null,
