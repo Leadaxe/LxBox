@@ -51,9 +51,6 @@
       "other": "%1$d снимка · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof."
     }
   },
-  "%1$d · %2$d invalid": {
-    "value": "%1$d · %2$d некорректных"
-  },
   "%1$d/%2$d conns": {
     "value": "%1$d/%2$d соед."
   },
@@ -87,14 +84,6 @@
       "few": "%d настройки приложения",
       "many": "%d настроек приложения",
       "other": "%d настройки приложения"
-    }
-  },
-  "%d apps selected — tap to edit": {
-    "value": {
-      "one": "Выбрано %d приложение — нажмите, чтобы изменить",
-      "few": "Выбрано %d приложения — нажмите, чтобы изменить",
-      "many": "Выбрано %d приложений — нажмите, чтобы изменить",
-      "other": "Выбрано %d приложения — нажмите, чтобы изменить"
     }
   },
   "%d chained": {
@@ -465,9 +454,6 @@
   "(optional)": {
     "value": "(необязательно)"
   },
-  "1 app selected — tap to edit": {
-    "value": "Выбрано 1 приложение — нажмите, чтобы изменить"
-  },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
   },
@@ -776,12 +762,6 @@
   "AND": {
     "value": "И"
   },
-  "AND with match. Transport (L4) and L7 sniff.": {
-    "value": "AND с match-условиями. Транспорт (L4) и L7-сниффинг."
-  },
-  "AND. Which interface the packet came in on.": {
-    "value": "AND. Через какой интерфейс пришёл пакет."
-  },
   "About": {
     "value": "О приложении"
   },
@@ -854,12 +834,6 @@
   "Fixed IP": {
     "value": "Фиксированный IP"
   },
-  "Go RE2, matched anywhere in the domain, e.g. %s": {
-    "value": "Go RE2, совпадение в любом месте домена, например %s"
-  },
-  "Go RE2, matched anywhere in the package name, e.g. %s": {
-    "value": "Go RE2, совпадение в любом месте имени пакета, например %s"
-  },
   "How domains matched by this rule are resolved.": {
     "value": "Как резолвятся домены, совпавшие с этим правилом."
   },
@@ -889,9 +863,6 @@
   },
   "Owner": {
     "value": "Владелец"
-  },
-  "Package name regex": {
-    "value": "Regex имени пакета"
   },
   "Relay": {
     "value": "Звено"
@@ -1112,9 +1083,6 @@
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "Пока эта настройка включена, любое приложение на устройстве сможет управлять VPN через broadcast-команды. Включайте, только если пользуетесь Tasker / MacroDroid и понимаете последствия."
-  },
-  "Any — tap Edit to filter by network / L7 protocol": {
-    "value": "Любой — нажмите «Изменить», чтобы фильтровать по сети / L7-протоколу"
   },
   "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
     "value": "Кто получит эту ссылку, сможет воспользоваться ключом. Копируйте её, только чтобы перенести узел на своё устройство."
@@ -2360,9 +2328,6 @@
   "Don't use detour servers": {
     "value": "Не использовать detour-серверы"
   },
-  "Done": {
-    "value": "Готово"
-  },
   "Download": {
     "value": "Загрузка"
   },
@@ -2926,9 +2891,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "Как это работает: Направления, правила, DNS, detour, рецепты"
   },
-  "INBOUND": {
-    "value": "INBOUND"
-  },
   "IP": {
     "value": "IP"
   },
@@ -3070,9 +3032,6 @@
         "value": "К сведению"
       }
     }
-  },
-  "Inline": {
-    "value": "Встроенный"
   },
   "Input is empty": {
     "value": "Поле ввода пусто"
@@ -3326,17 +3285,8 @@
   "Managed by presets automatically": {
     "value": "Управляется пресетами автоматически"
   },
-  "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
-    "value": "Совпадает с RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"
-  },
-  "Match when the packet SOURCE is a private address": {
-    "value": "Совпадает, когда ИСТОЧНИК пакета — приватный адрес"
-  },
   "Matches": {
     "value": "Совпадения"
-  },
-  "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
-    "value": "Совпадает, когда трафик идёт по выбранной сети И соответствует выбранному L7-протоколу."
   },
   "Measuring…": {
     "value": "Замеряю…"
@@ -3406,9 +3356,6 @@
   },
   "Nearby Wi-Fi permission missing": {
     "value": "Нет разрешения «Устройства Wi-Fi поблизости»"
-  },
-  "NETWORK & PROTOCOL": {
-    "value": "СЕТЬ И ПРОТОКОЛ"
   },
   "Name": {
     "value": "Имя"
@@ -3496,21 +3443,6 @@
   },
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
-  },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "Фильтра по SSID нет — правило активно в любой сети Wi-Fi."
-  },
-  "Any": {
-    "value": "Любая"
-  },
-  "Cellular": {
-    "value": "Мобильная"
-  },
-  "Metered networks only": {
-    "value": "Только лимитные сети"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "Мобильные данные и Wi-Fi, отмеченные как лимитные в настройках Android"
   },
   "metered": {
     "value": "лимитная"
@@ -3688,9 +3620,6 @@
       "many": "Маршрутизация — %d правил",
       "other": "Маршрутизация — %d правила"
     }
-  },
-  "Select apps…": {
-    "value": "Выбрать приложения…"
   },
   "Server + %d detours copied": {
     "value": {
@@ -3894,9 +3823,6 @@
   "On update": {
     "value": "При обновлении"
   },
-  "One URL per line — several rule sets in one rule.": {
-    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
-  },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "Один узел ведёт трафик обратно в собственную цепочку. Нажмите на него, чтобы открыть источник, измените или уберите его detour, затем запустите снова."
   },
@@ -3998,9 +3924,6 @@
   },
   "Password (optional)": {
     "value": "Пароль (необязательно)"
-  },
-  "Paste": {
-    "value": "Вставить"
   },
   "Paste JSON": {
     "value": "Вставить JSON"
@@ -4194,12 +4117,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "Пресеты не переносятся — они есть в самом приложении"
   },
-  "Private IP": {
-    "value": "Приватный IP"
-  },
-  "Private source IP": {
-    "value": "Приватный IP источника"
-  },
   "Probe again": {
     "value": "Замерить снова"
   },
@@ -4229,9 +4146,6 @@
   },
   "Protocol and server details": {
     "value": "Протокол и данные сервера"
-  },
-  "Protocol filter": {
-    "value": "Фильтр протоколов"
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "Proxy-ссылка, конфиг WireGuard или JSON исходящего канала"
@@ -4370,9 +4284,6 @@
   },
   "Reload failed: %s": {
     "value": "Не удалось перезагрузить: %s"
-  },
-  "Remote (.srs)": {
-    "value": "Удалённый (.srs)"
   },
   "Remove": {
     "value": "Убрать"
@@ -7168,5 +7079,158 @@
   },
   "DNS options have no effect: the rule has no condition DNS can see": {
     "value": "DNS-опции не действуют: у правила нет условия, которое видит DNS"
+  },
+  "%s Discard returns to the form without the JSON changes.": {
+    "value": "%s «Отменить» вернёт к форме без правок JSON."
+  },
+  "A rule set may hold its own ports and processes. To combine it with other conditions by OR, use a rule group.": {
+    "value": "В наборе могут быть свои порты и процессы. Чтобы связать его с другими условиями через «или», используйте группу правил."
+  },
+  "Add current": {
+    "value": "Текущая сеть"
+  },
+  "Apps": {
+    "value": "Приложения"
+  },
+  "BSSID": {
+    "value": "BSSID"
+  },
+  "Choose apps": {
+    "value": "Выбрать приложения"
+  },
+  "Condition": {
+    "value": "Условие"
+  },
+  "Destination / Rule sets": {
+    "value": "Назначение / наборы правил"
+  },
+  "Domain keywords": {
+    "value": "Ключевые слова домена"
+  },
+  "Domain suffixes": {
+    "value": "Суффиксы доменов"
+  },
+  "Domains": {
+    "value": "Домены"
+  },
+  "Empty": {
+    "value": "Пусто"
+  },
+  "IP addresses / CIDR": {
+    "value": "IP-адреса / CIDR"
+  },
+  "Inbound": {
+    "value": "Вход"
+  },
+  "Inbound tags": {
+    "value": "Теги входов"
+  },
+  "Invalid regex: %s": {
+    "value": "Неверная регулярка: %s"
+  },
+  "Keep editing": {
+    "value": "Продолжить правку"
+  },
+  "Leave JSON?": {
+    "value": "Выйти из JSON?"
+  },
+  "Manual download only. Tap ☁ to fetch the rule-set files.": {
+    "value": "Только ручная загрузка. Нажмите ☁, чтобы скачать файлы наборов."
+  },
+  "Metered network": {
+    "value": "Лимитная сеть"
+  },
+  "Network type": {
+    "value": "Тип сети"
+  },
+  "Network types": {
+    "value": "Типы сети"
+  },
+  "Networks": {
+    "value": "Сети"
+  },
+  "No conditions yet.": {
+    "value": "Условий пока нет."
+  },
+  "Not a URL: %s": {
+    "value": "Не URL: %s"
+  },
+  "Not available on this device": {
+    "value": "На этом устройстве не действует"
+  },
+  "Package regex": {
+    "value": "Регулярка пакета"
+  },
+  "Packages": {
+    "value": "Пакеты"
+  },
+  "Path regex": {
+    "value": "Регулярка пути"
+  },
+  "Pick saved": {
+    "value": "Из сохранённых"
+  },
+  "Port ranges": {
+    "value": "Диапазоны портов"
+  },
+  "Ports": {
+    "value": "Порты"
+  },
+  "Private addresses": {
+    "value": "Частные адреса"
+  },
+  "Private source addresses": {
+    "value": "Частные адреса источника"
+  },
+  "Process": {
+    "value": "Процесс"
+  },
+  "Protocols": {
+    "value": "Протоколы"
+  },
+  "Remove %s?": {
+    "value": "Удалить «%s»?"
+  },
+  "Rule %d": {
+    "value": "Правило %d"
+  },
+  "Rule group": {
+    "value": "Группа правил"
+  },
+  "Rule sets": {
+    "value": "Наборы правил"
+  },
+  "Rule sets in this rule: %d": {
+    "value": "Наборов в правиле: %d"
+  },
+  "Rule sets — URL (one per line)": {
+    "value": "Наборы правил — URL (по одному на строку)"
+  },
+  "Source IP addresses / CIDR": {
+    "value": "IP-адреса источника / CIDR"
+  },
+  "Source port": {
+    "value": "Порт источника"
+  },
+  "Source port ranges": {
+    "value": "Диапазоны портов источника"
+  },
+  "Source ports": {
+    "value": "Порты источника"
+  },
+  "The form cannot show this rule.": {
+    "value": "Форма не может показать это правило."
+  },
+  "The rule has no conditions": {
+    "value": "В правиле нет условий"
+  },
+  "What is filled in here will be lost.": {
+    "value": "Заполненное здесь пропадёт."
+  },
+  "all of": {
+    "value": "все из"
+  },
+  "any of": {
+    "value": "любое из"
   }
 }

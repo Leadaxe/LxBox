@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../models/codec/rule_record.dart' show ruleFromRecord;
 import '../../models/custom_rule.dart';
-import '../../models/rule_tree.dart' show ruleTreeBodyToJson;
+import '../../models/rule_tree.dart';
 import '../../models/parser_config.dart';
 import '../../models/preset_rule_set.dart' show ruleSetsEnabledByVar;
 import '../../services/builder/preset_expand.dart' show PresetNode;
@@ -16,15 +16,15 @@ import '../../services/relative_time.dart';
 import '../../services/rule_set_downloader.dart';
 import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
-import '../../widgets/wifi_entry.dart';
 import '../../models/dns_ref.dart';
 import '../../services/dns/dns_server_resolver.dart'
     show defaultDnsServerTag;
-import 'network_choice.dart';
+import '../../services/contract/rule_conditions.dart';
+import 'cond_labels.dart';
+import 'cond_stack.dart';
 import 'normalizers.dart' as norm;
 import 'sections/srs_section.dart' show SrsDownloadState;
 import 'validators.dart' as val;
-import 'wifi_zip.dart';
 
 export 'sections/srs_section.dart' show SrsDownloadState;
 
@@ -91,19 +91,6 @@ class CustomRuleEditController extends ChangeNotifier {
   // ─── Text controllers ────────────────────────────────────────────────
 
   late final TextEditingController nameCtrl;
-  late final TextEditingController domainCtrl;
-  late final TextEditingController domainSuffixCtrl;
-  late final TextEditingController domainKeywordCtrl;
-
-  /// §712 — `domain_regex` (inline) и `package_name_regex` (inline/srs),
-  /// по регулярке на строку.
-  late final TextEditingController domainRegexCtrl;
-  late final TextEditingController packageRegexCtrl;
-  late final TextEditingController ipCidrCtrl;
-  late final TextEditingController sourceIpCidrCtrl;
-  late final TextEditingController portCtrl;
-  late final TextEditingController portRangeCtrl;
-  late final TextEditingController srsUrlCtrl;
 
   /// §225 — тело raw-JSON правила (kind == json).
   late final TextEditingController jsonCtrl;
@@ -124,19 +111,29 @@ class CustomRuleEditController extends ChangeNotifier {
   // ─── Mutable state ───────────────────────────────────────────────────
 
   late bool _enabled;
-  late bool _ipIsPrivate;
-  late bool _sourceIpIsPrivate;
-  late Set<String> _inbounds;
-  late CustomRuleKind _kind;
   late String _outbound;
-  late Set<String> _protocols;
-  late Set<String> _network;
-  late List<String> _packages;
-  late List<WifiEntry> _wifiNetworks;
-  // §694 — сегмент NETWORK, `network_type` при открытии, лимитность.
-  late NetworkChoice _networkChoice;
-  late List<String> _loadedNetworkTypes;
-  late bool _networkIsExpensive;
+
+  /// §757 волна 4 — тело правила в форме: стопка условий и групп (корень).
+  /// Под-правила групп — вложенные стопки той же модели; правка любой из них
+  /// идёт через мутаторы контроллера ([formChanged]).
+  late CondStack _stack;
+
+  /// §757 — форма открыта в JSON-виде (поле тела вместо стопки условий).
+  late bool _jsonMode;
+
+  /// §757 — форма может показать правило (стопка есть): правило-дерево,
+  /// новое правило или JSON, уже разложенный в форму. У json-правила с
+  /// открытия — нет, «Discard» из JSON тогда некуда возвращать.
+  late bool _formAvailable;
+
+  /// §757 — ключ узла стопки при открытии: неизменённая форма сохраняет
+  /// исходное дерево (нормализация полей и «Not» простого правила группой
+  /// не дают ложной правки).
+  String _initialFormKey = '';
+
+  /// §757 — были ли наборы в форме на прошлой правке (появились без файла —
+  /// правило выключается, как раньше при выборе Remote).
+  bool _hadRefs = false;
   late Map<String, String> _varsValues;
   late RuleDns? _dns;
   late RuleResolve? _resolve;
@@ -195,11 +192,15 @@ class CustomRuleEditController extends ChangeNotifier {
   // ─── Getters ─────────────────────────────────────────────────────────
 
   bool get enabled => _enabled;
-  bool get ipIsPrivate => _ipIsPrivate;
-  bool get sourceIpIsPrivate => _sourceIpIsPrivate;
 
-  /// §030/new_fields — выбранные inbound-теги (`tun-in`/`mixed-in`).
-  Set<String> get inbounds => _inbounds;
+  /// §757 — корневая стопка условий формы.
+  CondStack get stack => _stack;
+
+  /// §757 — таблица условий реестра (условия формы и их порядок).
+  RuleConditionTable get table => ruleConditionTable;
+
+  /// §757 — форма в JSON-виде.
+  bool get jsonMode => _jsonMode;
 
   /// §030/new_fields — доступные inbound-варианты для INBOUND-секции. Лейбл
   /// человекочитаемый, значение = тег билдера (§119). `mixed-in` гейтится по
@@ -211,16 +212,17 @@ class CustomRuleEditController extends ChangeNotifier {
           (tag: 'sysproxy-in', label: 'System proxy interface'),
       ];
 
-  CustomRuleKind get kind => _kind;
-  String get outbound => _outbound;
-  Set<String> get protocols => _protocols;
+  /// Вид правила: пресет; json — форма в JSON-виде; иначе по дереву формы
+  /// (`srs` — есть наборы).
+  CustomRuleKind get kind {
+    if (initial.kind == CustomRuleKind.preset) return CustomRuleKind.preset;
+    if (_jsonMode) return CustomRuleKind.json;
+    return ruleTreeRefs(_formRoot).isEmpty
+        ? CustomRuleKind.inline
+        : CustomRuleKind.srs;
+  }
 
-  /// §240 — выбранные L4-транспорты (`network`: tcp/udp/icmp).
-  Set<String> get network => _network;
-  List<String> get packages => _packages;
-  List<WifiEntry> get wifiNetworks => _wifiNetworks;
-  NetworkChoice get networkChoice => _networkChoice;
-  bool get networkIsExpensive => _networkIsExpensive;
+  String get outbound => _outbound;
   Map<String, String> get varsValues => _varsValues;
   Map<String, String> get presetSrsPaths => _presetSrsPaths;
   SrsDownloadState get srsState => _srsState;
@@ -264,83 +266,73 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §247 — resolve-опция правила (null = обычный outbound).
   RuleResolve? get resolve => _resolve;
 
-  /// §247: live-гейт применимости resolve — по ТЕКУЩЕМУ состоянию формы
-  /// (не по initial). inline: domain-группа непуста (чистый ip/port/proto
-  /// резолвить нечего → ⚙ скрыта); srs: всегда true (домены в `.srs`
-  /// возможны, содержимое не парсим).
-  bool get resolveEligible => switch (_kind) {
-        CustomRuleKind.srs => true,
-        CustomRuleKind.inline =>
-          norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
-              norm
-                  .normalizedDomains(domainSuffixCtrl.text,
-                      stripLeadingDot: true)
-                  .isNotEmpty ||
-              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
-              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty,
-        _ => false,
-      };
+  /// §247 / §757: live-гейт применимости resolve — по ТЕКУЩЕМУ дереву
+  /// формы: наборы или доменный ключ хоть в одном простом узле (чистый
+  /// ip/port/proto резолвить нечего).
+  bool get resolveEligible => _formKind && _hasRefsOrDomain(_formRoot);
+
+  /// Форма редактирует правило-дерево (не пресет и не JSON-вид).
+  bool get _formKind =>
+      !_jsonMode && initial.kind != CustomRuleKind.preset;
+
+  bool _hasRefsOrDomain(RuleNode root) =>
+      ruleTreeHasRefsOrDomain(root, table);
 
   /// §117: теги существующих DNS-серверов для дропдауна (storage-refs ∪
   /// template; правило ссылается по tag, не вводит адрес — решение №2).
   List<String> get dnsServerTags => _dnsServerTags;
 
-  /// §755: у правила есть порт, диапазон, протокол или `network` — DNS-
-  /// опции действуют на домены правила на любом порту и протоколе (у
-  /// DNS-запроса их нет). Раньше (§117) это был гейт, серивший секцию;
-  /// теперь — только повод для подсказки. Live по текущему состоянию формы.
-  bool get dnsAppliesAnyPort =>
-      norm.normalizedPorts(portCtrl.text).isNotEmpty ||
-      norm.normalizedPortRanges(portRangeCtrl.text).isNotEmpty ||
-      _protocols.isNotEmpty ||
-      _network.isNotEmpty;
+  /// §755: у правила есть условие, которого у DNS-запроса нет (порт,
+  /// протокол, `network`: ключ таблицы без `dns`, не адрес и не флаг) — DNS-
+  /// опции действуют на домены правила на любом порту и протоколе. Только
+  /// повод для подсказки. Live по текущему дереву формы.
+  bool get dnsAppliesAnyPort {
+    for (final (_, leaf) in ruleTreeLeaves(_formRoot)) {
+      for (final k in leaf.conditions.keys) {
+        final d = table.key(k);
+        if (d != null && !d.dns && d.group == null && !d.isBool) return true;
+      }
+    }
+    return false;
+  }
 
   /// §757: DNS-опция включена, а DNS-зеркало правила пустое (ни одного
   /// условия, видимого DNS-слою) — опция не действует, правило сохраняется
   /// (⚠ в секции DNS). Live по текущему состоянию формы.
   bool get dnsOptionsWithoutEffect =>
-      (_kind == CustomRuleKind.inline || _kind == CustomRuleKind.srs) &&
-      snapshot().dnsOptionsWithoutEffect;
+      _formKind && snapshot().dnsOptionsWithoutEffect;
 
-  /// §692: секция «DNS & Resolve» видна, только когда у правила есть
-  /// условие, видимое DNS-слою (зеркало [CustomRule.dnsLayerEligible]):
-  /// домен, приложение, источник, wifi, тип/лимитность сети (§694), либо
-  /// `inbound` при пустом `ip_cidr`. Чисто IP-правило — секции нет: ядро отвергает DNS-ссылку на набор
-  /// «только IP», а матчить на DNS-слое там нечего. srs — всегда видна.
-  /// Live по текущему состоянию формы.
-  bool get dnsSectionVisible => switch (_kind) {
-        CustomRuleKind.srs => true,
-        CustomRuleKind.inline =>
-          norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
-              norm
-                  .normalizedDomains(domainSuffixCtrl.text,
-                      stripLeadingDot: true)
-                  .isNotEmpty ||
-              norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
-              norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty ||
-              _packages.isNotEmpty ||
-              norm.normalizedRegexes(packageRegexCtrl.text).isNotEmpty ||
-              norm.normalizedCidrs(sourceIpCidrCtrl.text).isNotEmpty ||
-              _hasNetworkCondition ||
-              (norm.normalizedCidrs(ipCidrCtrl.text).isEmpty &&
-                  _inbounds.isNotEmpty),
-        _ => false,
-      };
+  /// §692 / §757: секция «DNS & Resolve» видна, когда у дерева формы есть
+  /// условие, видимое DNS-слою (зеркало непусто), либо DNS-опция уже
+  /// включена (секция показывает ⚠ «нет эффекта» и даёт её снять).
+  bool get dnsSectionVisible =>
+      _formKind &&
+      (ruleTreeMirrorNonEmpty(_formRoot, table) ||
+          snapshot().dnsOptionsWithoutEffect);
+
+  /// §051 — в дереве формы есть условие Wi-Fi (перед сохранением
+  /// проверяются разрешения чтения SSID).
+  bool get hasWifiCondition {
+    for (final (_, leaf) in ruleTreeLeaves(_formRoot)) {
+      for (final k in leaf.conditions.keys) {
+        if (table.key(k)?.conditionId == kWifiConditionId) return true;
+      }
+    }
+    return false;
+  }
+
+  /// §757 — id условия Wi-Fi в таблице условий.
+  static const kWifiConditionId = 'wifi';
+
+  /// §757 — id условия приложений в таблице условий (поле пакетов с выбором
+  /// из установленных) и условия входа (подсказки — входы текущего режима).
+  static const kAppsConditionId = 'apps';
+  static const kInboundConditionId = 'inbound';
 
   // ─── Init / dispose ──────────────────────────────────────────────────
 
   List<TextEditingController> get _allTextCtrls => [
         nameCtrl,
-        domainCtrl,
-        domainSuffixCtrl,
-        domainKeywordCtrl,
-        domainRegexCtrl,
-        packageRegexCtrl,
-        ipCidrCtrl,
-        sourceIpCidrCtrl,
-        portCtrl,
-        portRangeCtrl,
-        srsUrlCtrl,
         jsonCtrl,
         fixedIpCtrl,
         resolveTtlCtrl,
@@ -351,48 +343,27 @@ class CustomRuleEditController extends ChangeNotifier {
   void _init() {
     final r = initial;
     nameCtrl = TextEditingController(text: r.name);
-    domainCtrl = TextEditingController(text: r.domains.join('\n'));
-    domainSuffixCtrl =
-        TextEditingController(text: r.domainSuffixes.join('\n'));
-    domainKeywordCtrl =
-        TextEditingController(text: r.domainKeywords.join('\n'));
-    domainRegexCtrl = TextEditingController(text: r.domainRegexes.join('\n'));
-    packageRegexCtrl =
-        TextEditingController(text: r.packageRegexes.join('\n'));
-    ipCidrCtrl = TextEditingController(text: r.ipCidrs.join('\n'));
-    sourceIpCidrCtrl = TextEditingController(text: r.sourceIpCidrs.join('\n'));
-    portCtrl = TextEditingController(text: r.ports.join('\n'));
-    portRangeCtrl = TextEditingController(text: r.portRanges.join('\n'));
-    // ## 12 — по одному URL на строку.
-    srsUrlCtrl = TextEditingController(text: r.srsUrls.join('\n'));
     // §366 — TTL наборов (§757 — поле правила-дерева; у inline без
     // наборов в запись не идёт).
     if (r is CustomRuleTree) _srsTtlHours = r.updateIntervalHours;
-    // §757 — правило-дерево, которое поля формы не выражают, открывается в
-    // JSON-режиме: текст — тело записи (`rules[].body`).
-    _openedAsTree = r is CustomRuleTree && !formEditable(r);
-    _initialJsonText = _openedAsTree
-        ? const JsonEncoder.withIndent('  ')
-            .convert(ruleTreeBodyToJson((r as CustomRuleTree).body))
+    // §757 волна 4 — дерево правила раскладывается в стопку условий. Не
+    // ложится (два способа `one_of` сразу) — JSON-вид: текст — тело записи.
+    final stack =
+        r is CustomRuleTree ? CondStack.fromNode(r.root, table) : null;
+    _stack = stack ?? CondStack();
+    _formAvailable = r is CustomRuleTree && stack != null;
+    _jsonMode = r.kind == CustomRuleKind.json || (r is CustomRuleTree && stack == null);
+    _initialFormKey = _nodeKey(_stack.toNode() ?? const RuleLeaf());
+    _initialJsonText = r is CustomRuleTree
+        ? (_jsonMode ? _prettyBody(r) : '')
         : r.json;
     jsonCtrl = TextEditingController(text: _initialJsonText);
     _enabled = r.enabled;
-    _ipIsPrivate = r.ipIsPrivate;
-    _sourceIpIsPrivate = r.sourceIpIsPrivate;
-    _inbounds = r.inbounds.toSet();
-    _kind = _openedAsTree ? CustomRuleKind.json : r.kind;
     _outbound = r.outbound;
-    _protocols = r.protocols.toSet();
-    _network = r.network.toSet();
-    _packages = List.of(r.packages);
-    _wifiNetworks = unzipWifiEntries(r.wifiSsids, r.wifiBssids);
-    _loadedNetworkTypes = List.of(r.networkTypes);
-    _networkChoice =
-        networkChoiceFor(r.networkTypes, hasWifi: _wifiNetworks.isNotEmpty);
-    _networkIsExpensive = r.networkIsExpensive;
+    _hadRefs = r.allRefs.isNotEmpty;
     _varsValues = Map<String, String>.from(r.varsValues);
     _dns = r.dns;
-    _hadDomains = _hasDomainsInForm;
+    _hadDomains = _hasDomainKey(_formRoot);
     _fixedChosen = r.dns?.fixedMode ?? false;
     _resolve = r.resolve;
     if (_resolve != null) _resolveKeep = _resolve!;
@@ -412,7 +383,7 @@ class CustomRuleEditController extends ChangeNotifier {
       c.addListener(_onTextChanged);
     }
 
-    if (_kind == CustomRuleKind.srs) {
+    if (r.allRefs.isNotEmpty) {
       _allSrsCached(r).then((cached) {
         if (_disposed) return;
         _srsState =
@@ -428,43 +399,183 @@ class CustomRuleEditController extends ChangeNotifier {
 
   void _onTextChanged() {
     if (_disposed) return;
-    // §247: сброс resolve при опустении доменных полей НЕ здесь — keystroke
-    // транзиентен (юзер стирает домен, чтобы вписать новый; live-сброс терял
-    // бы настройку безвозвратно). Гейт живёт в snapshot() (Save без доменов
-    // → resolve отпадает) и в билдере (resolveActive); UI прячет ⚙/статус
-    // через resolveEligible.
-    _autoCheckBlockHttps();
     notifyListeners();
   }
 
-  /// §755 — в форме inline-правила заполнено хоть одно доменное поле.
-  bool get _hasDomainsInForm =>
-      norm.normalizedDomains(domainCtrl.text).isNotEmpty ||
-      norm
-          .normalizedDomains(domainSuffixCtrl.text, stripLeadingDot: true)
-          .isNotEmpty ||
-      norm.normalizedKeywords(domainKeywordCtrl.text).isNotEmpty ||
-      norm.normalizedRegexes(domainRegexCtrl.text).isNotEmpty;
+  /// §757 — правка формы условий (поле рамки, рамка, группа, под-правило).
+  /// §247: сброс resolve при опустении доменных полей НЕ здесь — правка
+  /// транзиентна (юзер стирает домен, чтобы вписать новый); гейт живёт в
+  /// snapshot() и в билдере, UI прячет опции через resolveEligible.
+  void formChanged() {
+    if (_disposed) return;
+    final root = _formRoot;
+    _autoCheckBlockHttps(root);
+    // Наборы появились, файлов нет — правило выключается (как раньше при
+    // выборе Remote); правка ссылок снимает красную ☁.
+    final hasRefs = ruleTreeRefs(root).isNotEmpty;
+    if (hasRefs && !_hadRefs && _srsState != SrsDownloadState.cached) {
+      _enabled = false;
+    }
+    _hadRefs = hasRefs;
+    if (_srsState == SrsDownloadState.error) _srsState = SrsDownloadState.none;
+    notifyListeners();
+  }
 
-  /// §755 — автогалка Block HTTPS: домены inline-правила из пустых стали
-  /// непустыми (в том числе повторно — стёрли и ввели заново). Снятая руками
-  /// галка при дальнейшем вводе в непустое поле не возвращается.
-  void _autoCheckBlockHttps() {
-    if (_kind != CustomRuleKind.inline) return;
-    final now = _hasDomainsInForm;
+  /// §757 — узел дерева из формы. Неизменённая форма — исходное дерево.
+  RuleNode get _formRoot {
+    final n = _stack.toNode() ?? const RuleLeaf();
+    final init = initial;
+    if (init is CustomRuleTree && _nodeKey(n) == _initialFormKey) {
+      return init.root;
+    }
+    return n;
+  }
+
+  static String _nodeKey(RuleNode n) =>
+      jsonEncode(ruleTreeBodyToJson(RuleTreeBody(root: n)));
+
+  static String _prettyBody(CustomRuleTree r) =>
+      const JsonEncoder.withIndent('  ').convert(ruleTreeBodyToJson(r.body));
+
+  /// §755 — хоть в одном простом узле есть доменный ключ.
+  bool _hasDomainKey(RuleNode root) {
+    for (final (_, leaf) in ruleTreeLeaves(root)) {
+      for (final k in leaf.conditions.keys) {
+        if (table.key(k)?.isDomain ?? false) return true;
+      }
+    }
+    return false;
+  }
+
+  /// §755 — автогалка Block HTTPS: домены из пустых стали непустыми (в том
+  /// числе повторно — стёрли и ввели заново). Снятая руками галка при
+  /// дальнейшем вводе в непустое поле не возвращается.
+  void _autoCheckBlockHttps(RuleNode root) {
+    final now = _hasDomainKey(root);
     if (now && !_hadDomains && !(_dns?.blockHttps ?? false)) {
       _dns = (_dns ?? const RuleDns()).copyWith(blockHttps: true);
     }
     _hadDomains = now;
   }
 
-  /// §755 — переключатель Block HTTPS доступен: srs — всегда; inline —
-  /// при условии по домену. Live по форме.
-  bool get blockHttpsAvailable => switch (_kind) {
-        CustomRuleKind.srs => true,
-        CustomRuleKind.inline => _hasDomainsInForm,
-        _ => false,
-      };
+  /// §755 / §757 — переключатель Block HTTPS доступен: в дереве формы есть
+  /// наборы или доменный ключ. Live по форме.
+  bool get blockHttpsAvailable => resolveEligible;
+
+  // ─── §757: правка стопки условий ─────────────────────────────────────
+
+  /// Условия меню «+ Condition» для стопки [s]: условия формы LxBox по
+  /// порядку таблицы, кроме уже добавленных.
+  List<RuleCondition> conditionsToAdd(CondStack s) => [
+        for (final c in table.conditions)
+          if (c.shownIn(kRuleCondFormLxbox) && s.frame(c.id) == null) c,
+      ];
+
+  void addCondition(CondStack s, RuleCondition c) {
+    if (s.frame(c.id) != null) return;
+    s.frames.add(CondFrame(c));
+    formChanged();
+  }
+
+  void removeFrame(CondStack s, CondFrame f) {
+    if (s.frames.remove(f)) formChanged();
+  }
+
+  /// Значение поля рамки: текст, выбор чипов или флажок.
+  void setFieldRaw(CondFrame f, String key, Object raw) {
+    f.raw[key] = raw;
+    formChanged();
+  }
+
+  /// Условие `one_of`: выбран другой ключ — значение переезжает к нему.
+  void setOneOfKey(CondFrame f, String key) {
+    if (f.raw.containsKey(key)) return;
+    final old = f.raw.values.firstOrNull;
+    f.raw
+      ..clear()
+      ..[key] = old is String ? old : '';
+    formChanged();
+  }
+
+  /// Группа правил с одним пустым под-правилом.
+  CondGroup addGroup(CondStack s) {
+    final g = CondGroup(rules: [CondStack()]);
+    s.groups.add(g);
+    formChanged();
+    return g;
+  }
+
+  void removeGroup(CondStack s, CondGroup g) {
+    if (s.groups.remove(g)) formChanged();
+  }
+
+  void setGroupAny(CondGroup g, bool any) {
+    if (g.any == any) return;
+    g.any = any;
+    formChanged();
+  }
+
+  void setGroupNot(CondGroup g, bool not) {
+    if (g.not == not) return;
+    g.not = not;
+    formChanged();
+  }
+
+  CondStack addSubRule(CondGroup g) {
+    final r = CondStack();
+    g.rules.add(r);
+    formChanged();
+    return r;
+  }
+
+  void removeSubRule(CondGroup g, CondStack r) {
+    if (g.rules.remove(r)) formChanged();
+  }
+
+  // ─── §757: JSON-вид ⇄ форма ──────────────────────────────────────────
+
+  /// Форма → JSON-вид: текст — тело текущего правила с целью.
+  void enterJsonMode() {
+    if (_jsonMode) return;
+    final snap = snapshot();
+    if (snap is CustomRuleTree) jsonCtrl.text = _prettyBody(snap);
+    _jsonMode = true;
+    notifyListeners();
+  }
+
+  /// JSON-вид → форма: тело раскладывается в стопку, цель — в Direction.
+  /// null — разложено; иначе причина, по которой форма его не покажет
+  /// (вызывающий спрашивает Discard / Keep editing).
+  String? applyJsonToForm() {
+    if (!_jsonMode) return null;
+    final err = jsonError;
+    if (err != null) return err;
+    final tree = _treeFromJsonText(nameCtrl.text.trim());
+    final stack = tree == null ? null : CondStack.fromNode(tree.root, table);
+    if (tree == null || stack == null) {
+      return getLocalText.s("The form cannot show this rule.");
+    }
+    _stack = stack;
+    _outbound = tree.outbound;
+    _jsonMode = false;
+    _formAvailable = true;
+    formChanged();
+    return null;
+  }
+
+  /// «Discard» из JSON-вида: обратно в форму без правок JSON. false — формы
+  /// нет (json-правило с открытия), остаёмся в JSON.
+  bool discardJson() {
+    if (!_jsonMode || !_formAvailable) return false;
+    _jsonMode = false;
+    notifyListeners();
+    return true;
+  }
+
+  bool get formAvailable => _formAvailable;
+
+  /// §757 — все ссылки наборов дерева формы (блок наборов: ☁, период).
+  List<String> get allRefs => ruleTreeRefs(_formRoot);
 
   /// §755: галка Block HTTPS/SVCB records (HTTPS/SVCB-глушилка).
   /// Ортогональна enabled/serverTag, как Force IPv4.
@@ -600,42 +711,6 @@ class CustomRuleEditController extends ChangeNotifier {
     }
   }
 
-  void setIpIsPrivate(bool v) {
-    if (_ipIsPrivate == v) return;
-    _ipIsPrivate = v;
-    notifyListeners();
-  }
-
-  void setSourceIpIsPrivate(bool v) {
-    if (_sourceIpIsPrivate == v) return;
-    _sourceIpIsPrivate = v;
-    notifyListeners();
-  }
-
-  /// §030/new_fields — тоггл inbound-тега (`tun-in`/`mixed-in`).
-  void toggleInbound(String tag, bool checked) {
-    if (checked) {
-      if (!_inbounds.add(tag)) return;
-    } else {
-      if (!_inbounds.remove(tag)) return;
-    }
-    notifyListeners();
-  }
-
-  void setKind(CustomRuleKind v) {
-    if (_kind == v) return;
-    _kind = v;
-    // Переключение на srs без кэша → правило нельзя держать включённым.
-    if (_kind == CustomRuleKind.srs &&
-        _srsState != SrsDownloadState.cached) {
-      _enabled = false;
-    }
-    // §247: resolve при смене kind НЕ сбрасываем — snapshot()-гейт не даст
-    // ему попасть в неприменимый snapshot (json/preset его вообще не несут),
-    // а round-trip inline→json→inline не теряет настройку.
-    notifyListeners();
-  }
-
   void setOutbound(String v) {
     if (_outbound == v) return;
     _outbound = v;
@@ -732,103 +807,6 @@ class CustomRuleEditController extends ChangeNotifier {
   /// нужен явный notify для live-пересчёта jsonError → helper/Save-гейт).
   void notifyJsonChanged() => notifyListeners();
 
-  void toggleProtocol(String p, bool checked) {
-    if (checked) {
-      if (!_protocols.add(p)) return;
-    } else {
-      if (!_protocols.remove(p)) return;
-    }
-    notifyListeners();
-  }
-
-  /// §240 — toggle L4-транспорта (`network`: tcp/udp/icmp).
-  void toggleNetwork(String n, bool checked) {
-    if (checked) {
-      if (!_network.add(n)) return;
-    } else {
-      if (!_network.remove(n)) return;
-    }
-    notifyListeners();
-  }
-
-  /// §240 — сброс обеих осей (network + protocol) из попапа «Clear all».
-  void clearNetworkAndProtocol() {
-    if (_network.isEmpty && _protocols.isEmpty) return;
-    _network.clear();
-    _protocols.clear();
-    notifyListeners();
-  }
-
-  void setPackages(List<String> v) {
-    _packages = v;
-    notifyListeners();
-  }
-
-  void addWifiEntry(WifiEntry e) {
-    if (_wifiNetworks.any((x) => x.ssid == e.ssid && x.bssid == e.bssid)) {
-      return;
-    }
-    _wifiNetworks.add(e);
-    notifyListeners();
-  }
-
-  /// Bulk-add (для Pick saved): возвращает кол-во реально добавленных
-  /// (с учётом дедупа).
-  int addWifiEntries(Iterable<WifiEntry> entries) {
-    var added = 0;
-    for (final e in entries) {
-      if (_wifiNetworks
-          .any((x) => x.ssid == e.ssid && x.bssid == e.bssid)) {
-        continue;
-      }
-      _wifiNetworks.add(e);
-      added++;
-    }
-    if (added > 0) notifyListeners();
-    return added;
-  }
-
-  void removeWifiAt(int i) {
-    _wifiNetworks.removeAt(i);
-    notifyListeners();
-  }
-
-  /// §694 — список SSID при переключении сегментов не теряется, снимается
-  /// только при сохранении ([_networkSnapshot]).
-  void setNetworkChoice(NetworkChoice v) {
-    if (v == _networkChoice) return;
-    _networkChoice = v;
-    notifyListeners();
-  }
-
-  void setNetworkIsExpensive(bool v) {
-    if (v == _networkIsExpensive) return;
-    _networkIsExpensive = v;
-    notifyListeners();
-  }
-
-  /// §694 — у правила будет условие сети: SSID/BSSID, тип или лимитность.
-  bool get _hasNetworkCondition {
-    final n = _networkSnapshot();
-    return n.ssids.isNotEmpty ||
-        n.bssids.isNotEmpty ||
-        n.types.isNotEmpty ||
-        _networkIsExpensive;
-  }
-
-  /// §694 — что уйдёт в правило: `network_type` и SSID/BSSID по сегменту.
-  ({List<String> types, List<String> ssids, List<String> bssids})
-      _networkSnapshot() {
-    final wifi = zipWifiEntries(_wifiNetworks);
-    final t = networkTypesFor(_networkChoice,
-        loaded: _loadedNetworkTypes, hasWifi: _wifiNetworks.isNotEmpty);
-    return (
-      types: t.types,
-      ssids: t.keepWifi ? wifi.ssids : const <String>[],
-      bssids: t.keepWifi ? wifi.bssids : const <String>[],
-    );
-  }
-
   void setVarValue(String name, String val) {
     _putVarValue(name, val);
     notifyListeners();
@@ -910,7 +888,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// Только для kind'ов, где resolve применим (inline/srs; живой гейт по
   /// доменам — в snapshot). Гидрация правила сюда не ходит.
   void _linkResolveToAnswer(String serverTag) {
-    if (_kind != CustomRuleKind.inline && _kind != CustomRuleKind.srs) return;
+    if (!_formKind) return;
     final base = _resolve ?? _resolveKeep.copyWith(only: false);
     _resolve = base.copyWith(serverTag: serverTag);
     _resolveKeep = _resolve!;
@@ -948,8 +926,7 @@ class CustomRuleEditController extends ChangeNotifier {
     ];
     // §755 — без доменов inline-правило Block HTTPS не несёт (переключатель
     // недоступен; стёрли домены — галка не остаётся висеть в хранилище).
-    final blockHttps = (_dns?.blockHttps ?? false) &&
-        (_kind != CustomRuleKind.inline || _hasDomainsInForm);
+    final blockHttps = (_dns?.blockHttps ?? false) && blockHttpsAvailable;
     if (_dns == null && ips.isEmpty) return null;
     return (_dns ?? const RuleDns())
         .copyWith(fixedIps: ips, blockHttps: blockHttps);
@@ -975,7 +952,7 @@ class CustomRuleEditController extends ChangeNotifier {
   // ─── SRS download (used by SrsSection cloud-button) ──────────────────
 
   Future<void> downloadSrs() async {
-    final urls = parseSrsUrlsText(srsUrlCtrl.text);
+    final urls = ruleTreeRefs(_formRoot);
     if (urls.isEmpty) return;
     _srsState = SrsDownloadState.loading;
     notifyListeners();
@@ -1006,7 +983,7 @@ class CustomRuleEditController extends ChangeNotifier {
     // §757 — кэш по ссылке: файлы сохранённых и набранных ссылок.
     final cacheIds = {
       ...initial.cacheIds,
-      for (final u in parseSrsUrlsText(srsUrlCtrl.text))
+      for (final u in ruleTreeRefs(_formRoot))
         CustomRuleTree.cacheIdFor(initial.id, u),
     };
     for (final c in cacheIds) {
@@ -1138,9 +1115,13 @@ class CustomRuleEditController extends ChangeNotifier {
   /// то есть прыгало в начало пользовательской зоны.
   CustomRule snapshot() {
     final name = nameCtrl.text.trim();
-    switch (_kind) {
+    switch (kind) {
       case CustomRuleKind.json:
-        final tree = _openedAsTree ? _treeFromJsonText(name) : null;
+        // §757 — json-правило остаётся json-правилом (verbatim в дерево
+        // само не превращается); правило-дерево и новое — дерево из текста,
+        // если тело им читается.
+        final tree =
+            initial is CustomRuleJson ? null : _treeFromJsonText(name);
         if (tree != null) return tree;
         return CustomRuleJson(
           id: initial.id,
@@ -1159,106 +1140,38 @@ class CustomRuleEditController extends ChangeNotifier {
           presetId: init is CustomRulePreset ? init.presetId : '',
           varsValues: Map<String, String>.from(_varsValues),
         );
-      case CustomRuleKind.srs:
-        final wifi = _networkSnapshot();
-        return CustomRuleTree.flat(
-          id: initial.id,
-          name: name,
-          enabled: _enabled,
-          orderNum: initial.orderNum,
-          srsUrls: parseSrsUrlsText(srsUrlCtrl.text), // ## 12
-          updateIntervalHours: _srsTtlHours, // §366
-          ports: norm.normalizedPorts(portCtrl.text),
-          portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
-          packages: List.of(_packages),
-          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
-          protocols: _protocols.toList()..sort(),
-          network: _network.toList()..sort(),
-          ipIsPrivate: _ipIsPrivate,
-          sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
-          sourceIpIsPrivate: _sourceIpIsPrivate,
-          inbounds: _inbounds.toList()..sort(),
-          wifiSsids: wifi.ssids,
-          wifiBssids: wifi.bssids,
-          networkTypes: wifi.types,
-          networkIsExpensive: _networkIsExpensive,
-          outbound: _outbound,
-          dns: _effectiveDns, // §683 — адреса Fixed IP из поля
-          // §247: гейт на случай snapshot до notify (сброс live в
-          // _onTextChanged, но подстраховка дешёвая).
-          resolve: resolveEligible ? _effectiveResolve : null,
-        );
       case CustomRuleKind.inline:
-        final wifi = _networkSnapshot();
-        return CustomRuleTree.flat(
+      case CustomRuleKind.srs:
+        return CustomRuleTree(
           id: initial.id,
           name: name,
           enabled: _enabled,
           orderNum: initial.orderNum,
-          domains: norm.normalizedDomains(domainCtrl.text),
-          domainSuffixes: norm.normalizedDomains(
-              domainSuffixCtrl.text,
-              stripLeadingDot: true),
-          domainKeywords: norm.normalizedKeywords(domainKeywordCtrl.text),
-          domainRegexes: norm.normalizedRegexes(domainRegexCtrl.text),
-          ipCidrs: norm.normalizedCidrs(ipCidrCtrl.text),
-          ports: norm.normalizedPorts(portCtrl.text),
-          portRanges: norm.normalizedPortRanges(portRangeCtrl.text),
-          packages: List.of(_packages),
-          packageRegexes: norm.normalizedRegexes(packageRegexCtrl.text),
-          protocols: _protocols.toList()..sort(),
-          network: _network.toList()..sort(),
-          ipIsPrivate: _ipIsPrivate,
-          sourceIpCidrs: norm.normalizedCidrs(sourceIpCidrCtrl.text),
-          sourceIpIsPrivate: _sourceIpIsPrivate,
-          inbounds: _inbounds.toList()..sort(),
-          wifiSsids: wifi.ssids,
-          wifiBssids: wifi.bssids,
-          networkTypes: wifi.types,
-          networkIsExpensive: _networkIsExpensive,
+          root: _formRoot,
           outbound: _outbound,
           dns: _effectiveDns, // §683 — адреса Fixed IP из поля
-          resolve: resolveEligible ? _effectiveResolve : null, // §247
-          // §757 — TTL наборов — поле правила; у inline переносится как есть.
+          // §247: гейт на случай snapshot до notify.
+          resolve: resolveEligible ? _effectiveResolve : null,
+          // §366 / §757 — TTL наборов — поле правила.
           updateIntervalHours: _srsTtlHours,
         );
     }
   }
 
   /// Правило вида json равно по содержимому JSON; редактор считает правкой и
-  /// смену форматирования текста.
+  /// смену форматирования текста json-правила.
   bool isDirty() =>
       snapshot() != initial ||
-      (_kind == CustomRuleKind.json && jsonCtrl.text != _initialJsonText);
-
-  /// §757 — правило-дерево открыто в JSON-режиме ([formEditable] — нет).
-  bool _openedAsTree = false;
-  bool get openedAsTree => _openedAsTree;
+      (initial is CustomRuleJson &&
+          _jsonMode &&
+          jsonCtrl.text != _initialJsonText);
 
   /// Исходный текст поля JSON (тело дерева либо текст json-правила).
   String _initialJsonText = '';
 
-  /// §757 — существующая форма редактирует правило-дерево полями, если
-  /// дерево — один простой узел без `invert`, без рукописного `rule_set`,
-  /// без ключей вне формы (`process_*`, `source_port*`), и узел либо без
-  /// `refs` (режим inline), либо с `refs` и без доменных ключей и
-  /// `ip_cidr` (режим srs). Прочее — JSON-режим.
-  static bool formEditable(CustomRuleTree r) {
-    final leaf = r.flatLeaf;
-    if (leaf == null || leaf.invert || leaf.ruleSet.isNotEmpty) return false;
-    if (!leaf.conditions.keys.every(kRuleFormFieldKeys.contains)) return false;
-    if (leaf.refs.isEmpty) return true;
-    return r.domains.isEmpty &&
-        r.domainSuffixes.isEmpty &&
-        r.domainKeywords.isEmpty &&
-        r.domainRegexes.isEmpty &&
-        r.ipCidrs.isEmpty;
-  }
-
-  /// §757 — текст JSON-режима правила-дерева снова разбирается деревом
-  /// (кодек записи, путь хранения): правило остаётся деревом с прежними
-  /// `dns` / `resolve` / TTL наборов. Не дерево — null (сохранится
-  /// json-правилом).
+  /// §757 — текст JSON-вида снова разбирается деревом (кодек записи, путь
+  /// хранения): правило остаётся деревом с целью из текста и DNS / resolve /
+  /// TTL наборов формы. Не дерево — null (сохранится json-правилом).
   CustomRuleTree? _treeFromJsonText(String name) {
     final Object? decoded;
     try {
@@ -1268,7 +1181,6 @@ class CustomRuleEditController extends ChangeNotifier {
     }
     if (decoded is! Map) return null;
     final init = initial;
-    if (init is! CustomRuleTree) return null;
     final read = ruleFromRecord({
       'kind': 'inline',
       'id': init.id,
@@ -1278,6 +1190,7 @@ class CustomRuleEditController extends ChangeNotifier {
     }, unknownAsVerbatim: true);
     final v = read.value;
     if (v is! CustomRuleTree) return null;
+    final eligible = _hasRefsOrDomain(v.root);
     return CustomRuleTree(
       id: init.id,
       name: name,
@@ -1285,9 +1198,9 @@ class CustomRuleEditController extends ChangeNotifier {
       orderNum: init.orderNum,
       root: v.root,
       outbound: v.outbound,
-      dns: init.dns,
-      resolve: init.resolve,
-      updateIntervalHours: init.updateIntervalHours,
+      dns: _dns,
+      resolve: eligible ? _resolve : null,
+      updateIntervalHours: _srsTtlHours,
     );
   }
 
@@ -1298,8 +1211,12 @@ class CustomRuleEditController extends ChangeNotifier {
   String? get saveBlockReason =>
       jsonError ??
       regexError ??
+      // §757 — правило без условий (как у формы лаунчера).
+      (_formKind && _stack.toNode() == null
+          ? getLocalText.s("The rule has no conditions")
+          : null) ??
       // §683 — поле Fixed IP и Advanced-поля резолва.
-      (_kind == CustomRuleKind.inline || _kind == CustomRuleKind.srs
+      (_formKind
           ? (fixedIpError ??
               (_resolve != null && resolveEligible
                   ? (resolveTtlError ??
@@ -1308,27 +1225,25 @@ class CustomRuleEditController extends ChangeNotifier {
                   : null))
           : null);
 
-  /// §712 — первая невалидная регулярка в полях Package name regex /
-  /// Domain regex (поле, видимое у текущего вида правила). Ядро на битой
-  /// регулярке не стартует — Save блокируется.
+  /// §712 / §757 — первая невалидная регулярка в полях-регулярках всех
+  /// условий дерева формы. Ядро на битой регулярке не стартует — Save
+  /// блокируется.
   String? get regexError {
-    String? check(String label, TextEditingController ctrl) {
-      final bad = norm
-          .normalizedRegexes(ctrl.text)
-          .where((r) => !val.isValidRegex(r))
-          .firstOrNull;
-      if (bad == null) return null;
-      return getLocalText.s("%1\$s: invalid regex %2\$s", label, bad);
+    if (!_formKind) return null;
+    for (final f in _stack.allFrames) {
+      for (final k in f.cond.keys) {
+        if (!norm.isRegexConditionKey(k.key)) continue;
+        final bad = norm
+            .normalizedRegexes(f.text(k.key))
+            .where((r) => !val.isValidRegex(r))
+            .firstOrNull;
+        if (bad != null) {
+          return getLocalText.s(
+              "%1\$s: invalid regex %2\$s", condKeyLabel(k), bad);
+        }
+      }
     }
-
-    return switch (_kind) {
-      CustomRuleKind.inline =>
-        check(getLocalText.s("Package name regex"), packageRegexCtrl) ??
-            check(getLocalText.s("Domain regex"), domainRegexCtrl),
-      CustomRuleKind.srs =>
-        check(getLocalText.s("Package name regex"), packageRegexCtrl),
-      _ => null,
-    };
+    return null;
   }
 
   /// §225 — валиден ли текущий текст json-правила (для inline-хелпера в
@@ -1339,7 +1254,7 @@ class CustomRuleEditController extends ChangeNotifier {
   /// §439 В2 — массив не сохраняется: запись правила держит один объект
   /// sing-box, несколько правил заводятся отдельно.
   String? get jsonError {
-    if (_kind != CustomRuleKind.json) return null;
+    if (kind != CustomRuleKind.json) return null;
     final text = jsonCtrl.text.trim();
     if (text.isEmpty) return 'Enter a JSON object.';
     final dynamic decoded;

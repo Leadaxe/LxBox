@@ -36,9 +36,6 @@
       "other": "%1$d 个快照 · %2$s。点击查看，分享以获取 pprof 性能文件。"
     }
   },
-  "%1$d · %2$d invalid": {
-    "value": "%1$d · %2$d 个无效"
-  },
   "%1$d/%2$d conns": {
     "value": "%1$d/%2$d 连接"
   },
@@ -69,11 +66,6 @@
   "%d app settings": {
     "value": {
       "other": "%d 项应用设置"
-    }
-  },
-  "%d apps selected — tap to edit": {
-    "value": {
-      "other": "已选 %d 个应用 — 点按编辑"
     }
   },
   "%d chained": {
@@ -314,9 +306,6 @@
   },
   "(optional)": {
     "value": "（可选）"
-  },
-  "1 app selected — tap to edit": {
-    "value": "已选 1 个应用 — 点按编辑"
   },
   "1 server disabled": {
     "value": "已关闭 1 个服务器"
@@ -590,12 +579,6 @@
   "AND": {
     "value": "AND"
   },
-  "AND with match. Transport (L4) and L7 sniff.": {
-    "value": "与 match 同时满足。传输层（L4）与 L7 嗅探。"
-  },
-  "AND. Which interface the packet came in on.": {
-    "value": "AND。数据包从哪个接口进入。"
-  },
   "About": {
     "value": "关于"
   },
@@ -668,12 +651,6 @@
   "Fixed IP": {
     "value": "固定 IP"
   },
-  "Go RE2, matched anywhere in the domain, e.g. %s": {
-    "value": "Go RE2，匹配域名中的任意位置，例如 %s"
-  },
-  "Go RE2, matched anywhere in the package name, e.g. %s": {
-    "value": "Go RE2，匹配包名中的任意位置，例如 %s"
-  },
   "How domains matched by this rule are resolved.": {
     "value": "如何解析与此规则匹配的域名。"
   },
@@ -703,9 +680,6 @@
   },
   "Owner": {
     "value": "主节点"
-  },
-  "Package name regex": {
-    "value": "包名正则"
   },
   "Relay": {
     "value": "中继节点"
@@ -920,9 +894,6 @@
   },
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "开启后，本机任意应用都能通过广播指令控制 VPN。仅当你使用 Tasker / MacroDroid 并了解其影响时才开启。"
-  },
-  "Any — tap Edit to filter by network / L7 protocol": {
-    "value": "任意 — 点「编辑」可按网络 / L7 协议筛选"
   },
   "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
     "value": "拿到这条链接的人都能使用该私钥。仅在把节点迁移到自己的设备时才复制它。"
@@ -2129,9 +2100,6 @@
   "Don't use detour servers": {
     "value": "不使用 detour 服务器"
   },
-  "Done": {
-    "value": "完成"
-  },
   "Download": {
     "value": "下载"
   },
@@ -2686,9 +2654,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "工作原理：方向、规则、DNS、detour、示例"
   },
-  "INBOUND": {
-    "value": "INBOUND"
-  },
   "IP": {
     "value": "IP"
   },
@@ -2821,9 +2786,6 @@
         "value": "供参考"
       }
     }
-  },
-  "Inline": {
-    "value": "内联"
   },
   "Input is empty": {
     "value": "输入为空"
@@ -3077,17 +3039,8 @@
   "Managed by presets automatically": {
     "value": "由预设自动管理"
   },
-  "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
-    "value": "匹配 RFC1918（10/8、172.16/12、192.168/16）+ 回环 + 链路本地"
-  },
-  "Match when the packet SOURCE is a private address": {
-    "value": "当数据包来源为私有地址时匹配"
-  },
   "Matches": {
     "value": "匹配项"
-  },
-  "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
-    "value": "当流量位于所选网络且匹配所选 L7 协议时命中。"
   },
   "Measuring…": {
     "value": "正在测量…"
@@ -3157,9 +3110,6 @@
   },
   "Nearby Wi-Fi permission missing": {
     "value": "缺少“附近的 Wi-Fi 设备”权限"
-  },
-  "NETWORK & PROTOCOL": {
-    "value": "网络与协议"
   },
   "Name": {
     "value": "名称"
@@ -3247,21 +3197,6 @@
   },
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
-  },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "没有 SSID 过滤——规则在任何 Wi-Fi 网络都生效。"
-  },
-  "Any": {
-    "value": "任意"
-  },
-  "Cellular": {
-    "value": "移动网络"
-  },
-  "Metered networks only": {
-    "value": "仅限计费网络"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "移动数据，以及在 Android 设置中标记为计费的 Wi-Fi"
   },
   "metered": {
     "value": "计费"
@@ -3430,9 +3365,6 @@
     "value": {
       "other": "路由 — %d 条规则"
     }
-  },
-  "Select apps…": {
-    "value": "选择应用…"
   },
   "Server + %d detours copied": {
     "value": {
@@ -3633,9 +3565,6 @@
   "On update": {
     "value": "更新时"
   },
-  "One URL per line — several rule sets in one rule.": {
-    "value": "每行一个 URL——一条规则可含多个规则集。"
-  },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "有一个节点的流量回环到自身链路。点击它打开来源，修改或删除其 detour，然后重新启动。"
   },
@@ -3737,9 +3666,6 @@
   },
   "Password (optional)": {
     "value": "密码（可选）"
-  },
-  "Paste": {
-    "value": "粘贴"
   },
   "Paste JSON": {
     "value": "粘贴 JSON"
@@ -3933,12 +3859,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "预设无法迁移——本应用自带"
   },
-  "Private IP": {
-    "value": "私有 IP"
-  },
-  "Private source IP": {
-    "value": "私有源 IP"
-  },
   "Probe again": {
     "value": "重新测量"
   },
@@ -3968,9 +3888,6 @@
   },
   "Protocol and server details": {
     "value": "协议与服务器信息"
-  },
-  "Protocol filter": {
-    "value": "协议筛选"
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "代理链接、WireGuard 配置或出站 JSON"
@@ -4109,9 +4026,6 @@
   },
   "Reload failed: %s": {
     "value": "重新加载失败：%s"
-  },
-  "Remote (.srs)": {
-    "value": "远程（.srs）"
   },
   "Remove": {
     "value": "移除"
@@ -6877,5 +6791,158 @@
   },
   "DNS options have no effect: the rule has no condition DNS can see": {
     "value": "DNS 选项无效：该规则没有 DNS 可识别的条件"
+  },
+  "%s Discard returns to the form without the JSON changes.": {
+    "value": "%s「放弃」将返回表单，不保留 JSON 的修改。"
+  },
+  "A rule set may hold its own ports and processes. To combine it with other conditions by OR, use a rule group.": {
+    "value": "规则集可能自带端口和进程条件。若要与其他条件按「或」组合，请使用规则组。"
+  },
+  "Add current": {
+    "value": "当前网络"
+  },
+  "Apps": {
+    "value": "应用"
+  },
+  "BSSID": {
+    "value": "BSSID"
+  },
+  "Choose apps": {
+    "value": "选择应用"
+  },
+  "Condition": {
+    "value": "条件"
+  },
+  "Destination / Rule sets": {
+    "value": "目标 / 规则集"
+  },
+  "Domain keywords": {
+    "value": "域名关键词"
+  },
+  "Domain suffixes": {
+    "value": "域名后缀"
+  },
+  "Domains": {
+    "value": "域名"
+  },
+  "Empty": {
+    "value": "空"
+  },
+  "IP addresses / CIDR": {
+    "value": "IP 地址 / CIDR"
+  },
+  "Inbound": {
+    "value": "入站"
+  },
+  "Inbound tags": {
+    "value": "入站标签"
+  },
+  "Invalid regex: %s": {
+    "value": "无效的正则表达式：%s"
+  },
+  "Keep editing": {
+    "value": "继续编辑"
+  },
+  "Leave JSON?": {
+    "value": "离开 JSON？"
+  },
+  "Manual download only. Tap ☁ to fetch the rule-set files.": {
+    "value": "仅手动下载。点击 ☁ 获取规则集文件。"
+  },
+  "Metered network": {
+    "value": "按流量计费的网络"
+  },
+  "Network type": {
+    "value": "网络类型"
+  },
+  "Network types": {
+    "value": "网络类型"
+  },
+  "Networks": {
+    "value": "网络"
+  },
+  "No conditions yet.": {
+    "value": "暂无条件。"
+  },
+  "Not a URL: %s": {
+    "value": "不是 URL：%s"
+  },
+  "Not available on this device": {
+    "value": "在此设备上无效"
+  },
+  "Package regex": {
+    "value": "包名正则"
+  },
+  "Packages": {
+    "value": "包名"
+  },
+  "Path regex": {
+    "value": "路径正则"
+  },
+  "Pick saved": {
+    "value": "从已保存中选择"
+  },
+  "Port ranges": {
+    "value": "端口范围"
+  },
+  "Ports": {
+    "value": "端口"
+  },
+  "Private addresses": {
+    "value": "私有地址"
+  },
+  "Private source addresses": {
+    "value": "私有源地址"
+  },
+  "Process": {
+    "value": "进程"
+  },
+  "Protocols": {
+    "value": "协议"
+  },
+  "Remove %s?": {
+    "value": "删除「%s」？"
+  },
+  "Rule %d": {
+    "value": "规则 %d"
+  },
+  "Rule group": {
+    "value": "规则组"
+  },
+  "Rule sets": {
+    "value": "规则集"
+  },
+  "Rule sets in this rule: %d": {
+    "value": "本规则中的规则集：%d"
+  },
+  "Rule sets — URL (one per line)": {
+    "value": "规则集 — URL（每行一个）"
+  },
+  "Source IP addresses / CIDR": {
+    "value": "源 IP 地址 / CIDR"
+  },
+  "Source port": {
+    "value": "源端口"
+  },
+  "Source port ranges": {
+    "value": "源端口范围"
+  },
+  "Source ports": {
+    "value": "源端口"
+  },
+  "The form cannot show this rule.": {
+    "value": "表单无法显示此规则。"
+  },
+  "The rule has no conditions": {
+    "value": "该规则没有条件"
+  },
+  "What is filled in here will be lost.": {
+    "value": "此处填写的内容将丢失。"
+  },
+  "all of": {
+    "value": "全部满足"
+  },
+  "any of": {
+    "value": "任一满足"
   }
 }

@@ -8,6 +8,14 @@
 /// каждая функция документирует своё поведение.
 library;
 
+import '../../models/custom_rule.dart'
+    show
+        kRuleKeyDomain,
+        kRuleKeyDomainKeyword,
+        kRuleKeyDomainRegex,
+        kRuleKeyDomainSuffix,
+        kRuleKeyPackageNameRegex,
+        kRuleKeyWifiBssid;
 import 'punycode.dart';
 
 /// Split по `\n` и `,` — оба разделителя поддерживаются, чтобы юзер мог
@@ -67,3 +75,24 @@ List<String> normalizedCidrs(String raw) => splitRaw(raw).map((s) {
 /// validators.isValidPort / isValidPortRange).
 List<String> normalizedPorts(String raw) => splitRaw(raw);
 List<String> normalizedPortRanges(String raw) => splitRaw(raw);
+
+// ─── §757: значение поля условия ─────────────────────────────────────
+
+/// §757 — приведение текста поля условия (вид `lines` / `processes` таблицы
+/// условий) к значению ключа: у доменных ключей — те же нормализаторы, что
+/// у прежних полей формы (punycode, срез схемы, ведущей точки суффикса),
+/// регулярки — по строке без смены регистра, BSSID — в нижнем регистре.
+/// Остальные — по строке, пустые отбрасываются. Это приведение значения
+/// ключа, не выбор условий: какие условия и поля показывать, решает таблица.
+List<String> normalizedConditionLines(String key, String text) =>
+    switch (key) {
+      kRuleKeyDomain => normalizedDomains(text),
+      kRuleKeyDomainSuffix => normalizedDomains(text, stripLeadingDot: true),
+      kRuleKeyDomainKeyword => normalizedKeywords(text),
+      kRuleKeyWifiBssid => [for (final l in splitLines(text)) l.toLowerCase()],
+      _ => splitLines(text),
+    };
+
+/// §757 — значение ключа — регулярки (ядро на битой не стартует).
+bool isRegexConditionKey(String key) =>
+    key == kRuleKeyDomainRegex || key == kRuleKeyPackageNameRegex;

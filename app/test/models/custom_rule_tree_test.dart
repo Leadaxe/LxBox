@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/parser_config.dart';
-import 'package:lxbox/screens/custom_rule_edit/edit_controller.dart';
+import 'package:lxbox/screens/custom_rule_edit/cond_stack.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 
@@ -132,26 +132,28 @@ void main() {
   });
 
   group('форма', () {
-    test('редактирует плоское правило; прочее — JSON-режим', () {
+    test('форма условий открывает дерево; JSON — только два способа one_of',
+        () {
+      CondStack? open(CustomRuleTree r) =>
+          CondStack.fromNode(r.root, ruleConditionTable);
+      expect(open(CustomRuleTree.flat(name: 'a', domains: ['a.com'])),
+          isNotNull);
       expect(
-          CustomRuleEditController.formEditable(
-              CustomRuleTree.flat(name: 'a', domains: ['a.com'])),
-          isTrue);
-      expect(
-          CustomRuleEditController.formEditable(
-              CustomRuleTree.flat(name: 'a', srsUrl: 'https://x/a.srs')),
-          isTrue);
-      expect(
-          CustomRuleEditController.formEditable(CustomRuleTree.flat(
+          open(CustomRuleTree.flat(
               name: 'a', srsUrl: 'https://x/a.srs', domains: ['a.com'])),
-          isFalse);
+          isNotNull);
       expect(
-          CustomRuleEditController.formEditable(CustomRuleTree.flat(
-              name: 'a', extraConditions: const {
+          open(CustomRuleTree.flat(name: 'a', extraConditions: const {
             'process_name': ['x'],
           })),
-          isFalse);
-      expect(CustomRuleEditController.formEditable(_groups()), isFalse);
+          isNotNull);
+      expect(open(_groups()), isNotNull);
+      expect(
+          open(CustomRuleTree.flat(name: 'a', extraConditions: const {
+            'process_name': ['x'],
+            'process_path': ['/y'],
+          })),
+          isNull);
     });
   });
 

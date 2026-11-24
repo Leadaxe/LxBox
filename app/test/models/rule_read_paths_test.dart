@@ -323,7 +323,7 @@ void main() {
       expect(ctrl.isDirty(), isFalse);
     });
 
-    test('ссылки и домены в одном узле — JSON-режим без потерь', () {
+    test('ссылки и домены в одном узле — форма без потерь', () {
       final r = CustomRuleTree.flat(
         id: 'r1',
         name: 'S',
@@ -333,8 +333,9 @@ void main() {
       );
       final ctrl = open(r);
       addTearDown(ctrl.dispose);
-      expect(ctrl.openedAsTree, isTrue);
+      expect(ctrl.jsonMode, isFalse);
       expect(ctrl.snapshot(), r);
+      expect(ctrl.isDirty(), isFalse);
     });
 
     test('srs без единой ссылки: сохраняется как inline, данные целы, '
@@ -349,7 +350,7 @@ void main() {
       );
       final ctrl = open(r);
       addTearDown(ctrl.dispose);
-      ctrl.srsUrlCtrl.text = '';
+      ctrl.setFieldRaw(ctrl.stack.frame('destination')!, 'refs', '');
       final saved = _saveRead(ctrl.snapshot());
       expect(saved.kind, CustomRuleKind.inline);
       expect(saved.allRefs, isEmpty);
@@ -379,7 +380,7 @@ void main() {
       expect(r.dnsOptionsWithoutEffect, isFalse);
       expect(ctrl.dnsOptionsWithoutEffect, isFalse);
       // Без ссылок остался только порт — DNS его не видит.
-      ctrl.srsUrlCtrl.text = '';
+      ctrl.setFieldRaw(ctrl.stack.frame('destination')!, 'refs', '');
       expect(ctrl.dnsOptionsWithoutEffect, isTrue);
       final saved = _saveRead(ctrl.snapshot());
       expect(saved.dnsOptionsWithoutEffect, isTrue);

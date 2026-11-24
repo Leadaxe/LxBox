@@ -21,7 +21,14 @@ final class RuleConditionKey {
     this.conflicts = const [],
     this.values = const [],
     this.open = false,
+    this.label = '',
+    this.placeholder = '',
   });
+
+  /// Подпись поля и подсказка в пустом поле (английский текст таблицы;
+  /// форма LxBox переводит их своими строками, пустые — справочно нет).
+  final String label;
+  final String placeholder;
 
   /// Ключ тела (ключ ядра; у `refs` — поле записи-источника наборов).
   final String key;
@@ -183,6 +190,9 @@ final class RuleConditionTable {
           conflicts: _strings(k['conflicts']),
           values: _strings(k['values']),
           open: k['open'] == true,
+          label: k['label'] is String ? k['label'] as String : '',
+          placeholder:
+              k['placeholder'] is String ? k['placeholder'] as String : '',
         );
         keys.add(entry);
         byKey[name] = entry;

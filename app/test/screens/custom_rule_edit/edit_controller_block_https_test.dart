@@ -13,6 +13,16 @@ CustomRuleEditController _ctrl(CustomRule initial) => CustomRuleEditController(
       existingNames: const {},
     );
 
+/// §757 — поле условия формы (рамка добавляется при первой правке).
+void _set(CustomRuleEditController c, String cond, String key, String text) {
+  var f = c.stack.frame(cond);
+  if (f == null) {
+    c.addCondition(c.stack, c.table.condition(cond)!);
+    f = c.stack.frame(cond)!;
+  }
+  c.setFieldRaw(f, key, text);
+}
+
 CustomRuleEditController _empty() =>
     _ctrl(CustomRuleTree.flat(id: 'r1', name: 'r', outbound: 'vpn-1'));
 
@@ -28,25 +38,25 @@ void main() {
 
     test('ввод домена в пустое поле ставит галку', () {
       final c = _empty();
-      c.domainSuffixCtrl.text = 'rutracker.org';
+      _set(c, 'destination', 'domain_suffix', 'rutracker.org');
       expect(c.blockHttpsAvailable, isTrue);
       expect(c.dns!.blockHttps, isTrue);
     });
 
     test('снятая руками галка при дальнейшем вводе не возвращается', () {
       final c = _empty();
-      c.domainCtrl.text = 'a.com';
+      _set(c, 'destination', 'domain', 'a.com');
       c.setBlockHttps(false);
-      c.domainCtrl.text = 'a.com\nb.com';
+      _set(c, 'destination', 'domain', 'a.com\nb.com');
       expect(c.dns?.blockHttps ?? false, isFalse);
     });
 
     test('стёрли домены и ввели заново — галка ставится снова', () {
       final c = _empty();
-      c.domainCtrl.text = 'a.com';
+      _set(c, 'destination', 'domain', 'a.com');
       c.setBlockHttps(false);
-      c.domainCtrl.text = '';
-      c.domainCtrl.text = 'b.com';
+      _set(c, 'destination', 'domain', '');
+      _set(c, 'destination', 'domain', 'b.com');
       expect(c.dns!.blockHttps, isTrue);
     });
 
@@ -57,15 +67,15 @@ void main() {
         domains: const ['a.com'],
         outbound: 'vpn-1',
       ));
-      c.domainCtrl.text = 'a.com\nb.com';
+      _set(c, 'destination', 'domain', 'a.com\nb.com');
       expect(c.dns?.blockHttps ?? false, isFalse);
       expect(c.blockHttpsAvailable, isTrue);
     });
 
     test('Save без доменов не несёт blockHttps', () {
       final c = _empty();
-      c.domainCtrl.text = 'a.com';
-      c.domainCtrl.text = '';
+      _set(c, 'destination', 'domain', 'a.com');
+      _set(c, 'destination', 'domain', '');
       expect(c.snapshot().dns?.blockHttps ?? false, isFalse);
     });
 
@@ -78,9 +88,9 @@ void main() {
 
     test('порт или network — подсказка «на любом порту», не гейт', () {
       final c = _empty();
-      c.domainCtrl.text = 'a.com';
+      _set(c, 'destination', 'domain', 'a.com');
       expect(c.dnsAppliesAnyPort, isFalse);
-      c.portCtrl.text = '443';
+      _set(c, 'port', 'port', '443');
       expect(c.dnsAppliesAnyPort, isTrue);
       expect(c.blockHttpsAvailable, isTrue);
     });

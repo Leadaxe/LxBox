@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/custom_rule.dart';
-import 'package:lxbox/screens/custom_rule_edit/widgets/items_field.dart';
 import 'package:lxbox/screens/custom_rule_edit_screen.dart';
 
-// §712 — поле Package name regex в редакторе правила: регулярки по строке
-// уходят в packageRegexes, битая регулярка блокирует Save. Проверяется
-// поведение (результат сохранения, гейт кнопки), не текст сообщений.
+// §712 / §757 — поле Package regex условия Apps в редакторе правила:
+// регулярки по строке уходят в packageRegexes, битая регулярка блокирует
+// Save. Проверяется поведение (результат сохранения, гейт кнопки, ошибка
+// поля), не текст сообщений.
 
 class _Host {
   CustomRuleEditResult? result;
@@ -47,10 +47,17 @@ Finder get _appBarSave => find.descendant(
     );
 
 Finder _regexField() => find.descendant(
-      of: find.byWidgetPredicate((w) =>
-          w is ItemsField && w.label == 'Package name regex (one per line)'),
+      of: find.byKey(const ValueKey('package_name_regex#field')),
       matching: find.byType(TextField),
     );
+
+/// §757 — условие Apps добавляется из меню «+ Condition».
+Future<void> _addApps(WidgetTester tester) async {
+  await tester.tap(find.text('Condition'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Apps').last);
+  await tester.pumpAndSettle();
+}
 
 void main() {
   final initial = CustomRuleTree.flat(
@@ -63,6 +70,7 @@ void main() {
   testWidgets('две регулярки по строке → два элемента в правиле',
       (tester) async {
     final host = await _open(tester, initial);
+    await _addApps(tester);
     await tester.ensureVisible(_regexField());
     // Запятая внутри регулярки не делит её на две.
     await tester.enterText(_regexField(), '^com\\.oplus\\.\n^a{1,3}\\.b\n');
@@ -81,21 +89,15 @@ void main() {
   testWidgets('битая регулярка: Save заблокирован, поле в ошибке',
       (tester) async {
     final host = await _open(tester, initial);
+    await _addApps(tester);
     await tester.ensureVisible(_regexField());
     await tester.enterText(_regexField(), '^com\\.oplus\\.\n(unclosed');
     await tester.pump();
 
     expect(tester.widget<IconButton>(_appBarSave).onPressed, isNull);
-    // Счётчик поля показывает невалидную строку цветом ошибки.
-    final errorColor =
-        Theme.of(tester.element(_regexField())).colorScheme.error;
-    final counter = find.descendant(
-      of: find.byWidgetPredicate((w) =>
-          w is ItemsField && w.label == 'Package name regex (one per line)'),
-      matching: find.byWidgetPredicate(
-          (w) => w is Text && w.style?.color == errorColor),
-    );
-    expect(counter, findsOneWidget);
+    // Поле показывает ошибку.
+    expect(tester.widget<TextField>(_regexField()).decoration?.errorText,
+        isNotNull);
     await tester.tap(_appBarSave, warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(host.closed, isFalse);

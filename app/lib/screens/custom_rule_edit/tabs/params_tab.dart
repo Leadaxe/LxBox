@@ -1,17 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../models/custom_rule.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
-import '../sections/apps_section.dart';
 import '../sections/dns_resolve_section.dart';
-import '../sections/inbound_section.dart';
 import '../sections/json_section.dart';
-import '../sections/match_section.dart';
-import '../sections/network_protocol_section.dart';
-import '../sections/port_section.dart';
 import '../sections/srs_section.dart';
-import '../sections/wifi_section.dart';
+import '../sections/conditions_section.dart';
 import 'preset_params_tab.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../widgets/dpad_radio_group.dart';
@@ -89,24 +86,21 @@ class ParamsTab extends StatelessWidget {
             dense: false,
             label: 'Action',
           ),
-          const SizedBox(height: 16),
-          const Divider(),
-          AppsSection(
-            packages: c.packages,
-            onTap: actions.onPickApps,
-            onClear: () => c.setPackages(const []),
-            packageRegexCtrl: c.packageRegexCtrl,
-          ),
           const SizedBox(height: 8),
         ],
         const Divider(),
-        Text(getLocalText.s("Source"), style: theme.textTheme.titleSmall),
-        const SizedBox(height: 4),
-        DpadRadioGroup<CustomRuleKind>(
-          groupValue: c.kind,
+        // §757 — правило правится условиями формы либо телом JSON. Уход из
+        // JSON раскладывает тело в форму (цель — в Action); не раскладывается
+        // — вопрос Discard / Keep editing.
+        DpadRadioGroup<bool>(
+          groupValue: c.jsonMode,
           onChanged: (v) {
             if (v == null) return;
-            c.setKind(v);
+            if (v) {
+              c.enterJsonMode();
+            } else {
+              unawaited(leaveJsonMode(context, c));
+            }
           },
           child: Row(
             children: [
@@ -114,23 +108,15 @@ class ParamsTab extends StatelessWidget {
                 child: RadioListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  value: CustomRuleKind.inline,
-                  title: Text(getLocalText.s("Inline")),
+                  value: false,
+                  title: Text(getLocalText.s("Conditions")),
                 ),
               ),
               Expanded(
                 child: RadioListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  value: CustomRuleKind.srs,
-                  title: Text(getLocalText.s("Remote (.srs)")),
-                ),
-              ),
-              Expanded(
-                child: RadioListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  value: CustomRuleKind.json,
+                  value: true,
                   title: Text(getLocalText.s("Raw JSON")),
                 ),
               ),
@@ -145,75 +131,51 @@ class ParamsTab extends StatelessWidget {
             errorText: c.jsonError,
             onChanged: c.notifyJsonChanged,
           ),
-        if (c.kind == CustomRuleKind.inline)
-          MatchSection(
-            domainCtrl: c.domainCtrl,
-            domainSuffixCtrl: c.domainSuffixCtrl,
-            domainKeywordCtrl: c.domainKeywordCtrl,
-            domainRegexCtrl: c.domainRegexCtrl,
-            ipCidrCtrl: c.ipCidrCtrl,
-            ipIsPrivate: c.ipIsPrivate,
-            onIpIsPrivateChanged: c.setIpIsPrivate,
-            sourceIpCidrCtrl: c.sourceIpCidrCtrl,
-            sourceIpIsPrivate: c.sourceIpIsPrivate,
-            onSourceIpIsPrivateChanged: c.setSourceIpIsPrivate,
-          ),
-        if (c.kind == CustomRuleKind.srs)
-          SrsSection(
-            urlCtrl: c.srsUrlCtrl,
-            state: c.srsState,
-            onDownload: c.downloadSrs,
-            onShowCloudMenu: actions.onShowCloudMenu,
-            onUrlChanged: c.resetSrsErrorIfAny,
-            // §366 — TTL кэша и время последней проверки.
-            ttlHours: c.srsTtlHours,
-            onTtlChanged: (v) => c.srsTtlHours = v,
-            lastUpdatedText: c.srsLastUpdatedText,
-          ),
-        // §225 — match-фильтры (port/protocol/network/inbound/dns) не применимы
-        // к raw-JSON правилу: всё выражается в самом теле.
         if (c.kind != CustomRuleKind.json) ...[
-          PortSection(
-            portCtrl: c.portCtrl,
-            portRangeCtrl: c.portRangeCtrl,
-          ),
-          NetworkProtocolSection(
-            networks: c.network,
-            protocols: c.protocols,
-            onToggleNetwork: c.toggleNetwork,
-            onToggleProtocol: c.toggleProtocol,
-            onClearAll: c.clearNetworkAndProtocol,
-          ),
-          if (c.kind == CustomRuleKind.inline ||
-              c.kind == CustomRuleKind.srs)
-            WifiSection(
-              choice: c.networkChoice,
-              onChoiceChanged: c.setNetworkChoice,
-              metered: c.networkIsExpensive,
-              onMeteredChanged: c.setNetworkIsExpensive,
-              networks: c.wifiNetworks,
-              onRemoveAt: c.removeWifiAt,
-              onAddCurrent: actions.onAddCurrentWifi,
-              onPickSaved: actions.onPickSavedWifi,
-              onManual: actions.onManualAddWifi,
-              onTapPermissionsHint: actions.onOpenWifiPermissions,
-              hint: actions.wifiHint,
+          ConditionsSection(stack: c.stack, assist: actions.assist),
+          // §757 — наборы всего дерева: скачивание, период проверки.
+          if (c.kind == CustomRuleKind.srs) ...[
+            const Divider(),
+            SrsSection(
+              urls: c.allRefs,
+              state: c.srsState,
+              onDownload: c.downloadSrs,
+              onShowCloudMenu: actions.onShowCloudMenu,
+              // §366 — TTL кэша и время последней проверки.
+              ttlHours: c.srsTtlHours,
+              onTtlChanged: (v) => c.srsTtlHours = v,
+              lastUpdatedText: c.srsLastUpdatedText,
             ),
-          // §030/new_fields — INBOUND фильтр (tun-in / mixed-in). inline + srs.
-          if (c.kind == CustomRuleKind.inline ||
-              c.kind == CustomRuleKind.srs)
-            InboundSection(
-              selected: c.inbounds,
-              choices: c.inboundChoices,
-              onToggle: c.toggleInbound,
-            ),
-          // §117 задача 3 / §683 — DNS & Resolve (только inline/srs).
+          ],
+          // §117 задача 3 / §683 — DNS & Resolve.
           // §692 — только при условии, видимом DNS-слою (чисто IP — нет).
-          if (c.dnsSectionVisible) DnsResolveSection(controller: c),
+          if (c.dnsSectionVisible) ...[
+            const Divider(),
+            DnsResolveSection(controller: c),
+          ],
         ],
         const SizedBox(height: 24),
         const Divider(),
         const SizedBox(height: 12),
+        // §757 — почему Save недоступен (как у окна правила лаунчера).
+        if (c.saveBlockReason case final reason?)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.warning_amber_outlined,
+                    size: 16, color: theme.colorScheme.error),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(reason,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant)),
+                ),
+              ],
+            ),
+          ),
         FilledButton.icon(
           icon: const Icon(Icons.save, size: 18),
           label: Text(getLocalText.s("Save")),
@@ -225,6 +187,42 @@ class ParamsTab extends StatelessWidget {
   }
 }
 
+/// §757 — уход из JSON-вида в форму условий. Тело не раскладывается —
+/// вопрос: Discard (в форму без правок JSON) / Keep editing. У json-правила
+/// без формы — только причина.
+Future<void> leaveJsonMode(
+    BuildContext context, CustomRuleEditController c) async {
+  final reason = c.applyJsonToForm();
+  if (reason == null) return;
+  if (!c.formAvailable) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(reason)));
+    return;
+  }
+  final discard = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(getLocalText.s("Leave JSON?")),
+      content: Text(getLocalText.s(
+          "%s Discard returns to the form without the JSON changes.",
+          reason)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error),
+          child: Text(getLocalText.s("Discard")),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(getLocalText.s("Keep editing")),
+        ),
+      ],
+    ),
+  );
+  if (discard == true) c.discardJson();
+}
+
 /// Бундл UI-actions для Params/Preset tab'ов. Эти действия требуют
 /// BuildContext (dialog'и, navigation, snackbar'ы) — живут на screen
 /// State и передаются вниз как props.
@@ -232,27 +230,17 @@ class ParamsTabActions {
   const ParamsTabActions({
     required this.onSave,
     required this.onDelete,
-    required this.onPickApps,
-    required this.onAddCurrentWifi,
-    required this.onPickSavedWifi,
-    required this.onManualAddWifi,
-    required this.onOpenWifiPermissions,
+    required this.assist,
     required this.onShowCloudMenu,
     required this.onBoolVarFailed,
-    this.wifiHint,
   });
 
   final VoidCallback onSave;
   final VoidCallback onDelete;
-  final VoidCallback onPickApps;
-  final VoidCallback onAddCurrentWifi;
-  final VoidCallback onPickSavedWifi;
-  final VoidCallback onManualAddWifi;
-  final VoidCallback onOpenWifiPermissions;
 
-  /// §567 — текущая причина, по которой SSID не читается (null — всё в
-  /// порядке); экран проверяет один раз при открытии и после возврата.
-  final WifiHint? wifiHint;
+  /// §757 — действия полей условий (приложения, Wi-Fi, подсказка
+  /// разрешений): нужны и экранам под-правил.
+  final ConditionAssist assist;
   final void Function(Offset globalPos) onShowCloudMenu;
 
   /// Bool-var toggle закончился ошибкой — caller показывает snackbar.
