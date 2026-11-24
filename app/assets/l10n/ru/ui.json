@@ -7080,6 +7080,12 @@
   "DNS options have no effect: the rule has no condition DNS can see": {
     "value": "DNS-опции не действуют: у правила нет условия, которое видит DNS"
   },
+  "DNS options are set in the form. This rule can only be edited as JSON.": {
+    "value": "DNS-опции задаются в форме. Это правило можно править только как JSON."
+  },
+  "DNS options do not apply to this rule: it has no condition DNS queries can match, such as domains, apps or a rule set.": {
+    "value": "DNS-опции к этому правилу не применяются: у него нет условия, по которому можно сопоставить DNS-запрос, — доменов, приложений или набора правил."
+  },
   "%s Discard returns to the form without the JSON changes.": {
     "value": "%s «Отменить» вернёт к форме без правок JSON."
   },

@@ -60,12 +60,19 @@ CustomRuleTree _rule({List<String> ips = const ['192.168.1.10']}) =>
       dns: RuleDns(serverTag: 'google_udp', fixedIps: ips),
     );
 
+/// §757 — блок DNS & Resolve живёт на вкладке DNS.
+Future<void> _toDns(WidgetTester tester) async {
+  await tester.tap(find.widgetWithText(Tab, 'DNS'));
+  await tester.pumpAndSettle();
+}
+
 Finder get _fixedField => find.byWidgetPredicate((w) =>
     w is TextField && w.decoration?.hintText == '192.168.1.10');
 
 void main() {
   testWidgets('битая строка Fixed IP блокирует Save', (tester) async {
     final host = await _open(tester, _rule());
+    await _toDns(tester);
     await tester.enterText(_fixedField, '192.168.1.10\nnot-an-ip');
     await tester.pump();
 
@@ -77,6 +84,7 @@ void main() {
 
   testWidgets('годные адреса сохраняются в fixedIps', (tester) async {
     final host = await _open(tester, _rule());
+    await _toDns(tester);
     await tester.enterText(_fixedField, '10.0.0.1\n\nfd00::1');
     await tester.pump();
 
@@ -91,6 +99,7 @@ void main() {
   testWidgets('переключение на Dedicated стирает адреса Fixed IP',
       (tester) async {
     final host = await _open(tester, _rule());
+    await _toDns(tester);
     expect(_fixedField, findsOneWidget);
     Finder radio(DnsAnswerMode m) => find.byWidgetPredicate(
         (w) => w is RadioListTile<DnsAnswerMode> && w.value == m);

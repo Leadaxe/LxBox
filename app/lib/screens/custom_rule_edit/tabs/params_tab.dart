@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../../models/custom_rule.dart';
 import '../../../widgets/outbound_picker.dart';
 import '../edit_controller.dart';
-import '../sections/dns_resolve_section.dart';
 import '../sections/json_section.dart';
 import '../sections/srs_section.dart';
 import '../sections/conditions_section.dart';
@@ -147,12 +146,7 @@ class ParamsTab extends StatelessWidget {
               lastUpdatedText: c.srsLastUpdatedText,
             ),
           ],
-          // §117 задача 3 / §683 — DNS & Resolve.
-          // §692 — только при условии, видимом DNS-слою (чисто IP — нет).
-          if (c.dnsSectionVisible) ...[
-            const Divider(),
-            DnsResolveSection(controller: c),
-          ],
+          // §757 — DNS & Resolve — на своей вкладке DNS (DnsTab).
         ],
         const SizedBox(height: 24),
         const Divider(),
@@ -199,6 +193,12 @@ Future<void> leaveJsonMode(
         .showSnackBar(SnackBar(content: Text(reason)));
     return;
   }
+  if (await askDiscardJson(context, reason)) c.discardJson();
+}
+
+/// §757 — вопрос при уходе из JSON-вида, тело которого не раскладывается в
+/// форму (смена режима или переход на вкладку DNS / View): true — Discard.
+Future<bool> askDiscardJson(BuildContext context, String reason) async {
   final discard = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -220,7 +220,7 @@ Future<void> leaveJsonMode(
       ],
     ),
   );
-  if (discard == true) c.discardJson();
+  return discard == true;
 }
 
 /// Бундл UI-actions для Params/Preset tab'ов. Эти действия требуют

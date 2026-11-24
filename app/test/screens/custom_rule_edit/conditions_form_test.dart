@@ -8,6 +8,8 @@ import 'package:lxbox/screens/custom_rule_edit/cond_stack.dart';
 import 'package:lxbox/screens/custom_rule_edit/edit_controller.dart';
 import 'package:lxbox/screens/custom_rule_edit/sections/conditions_section.dart'
     show SubRuleScreen;
+import 'package:lxbox/screens/custom_rule_edit/sections/dns_resolve_section.dart';
+import 'package:lxbox/screens/custom_rule_edit/sections/json_section.dart';
 import 'package:lxbox/screens/custom_rule_edit_screen.dart';
 
 // §757 волна 4 — форма правила из условий: «+ Condition», удаление рамки,
@@ -320,6 +322,63 @@ void main() {
       expect(c.discardJson(), isFalse, reason: 'формы нет');
       expect(c.applyJsonToForm(), isNull);
       expect(c.snapshot(), isA<CustomRuleTree>());
+    });
+  });
+
+  group('вкладка DNS', () {
+    Finder tab(String t) => find.widgetWithText(Tab, t);
+
+    testWidgets('блок DNS & Resolve — на вкладке DNS, в Params его нет',
+        (tester) async {
+      await _open(tester, _domainRule);
+      expect(find.byType(DnsResolveSection), findsNothing);
+      await tester.tap(tab('DNS'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DnsResolveSection), findsOneWidget);
+    });
+
+    testWidgets('из Raw JSON с ошибкой — Discard / Keep editing',
+        (tester) async {
+      await _open(tester, _domainRule);
+      await tester.tap(find.text('Raw JSON'));
+      await tester.pumpAndSettle();
+      final json = tester.widget<JsonSection>(find.byType(JsonSection));
+      json.controller.text = '{bad';
+      json.onChanged();
+      await tester.pump();
+
+      await tester.tap(tab('DNS'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(find.byType(JsonSection), findsOneWidget,
+          reason: 'назад на Params, JSON не тронут');
+      expect(json.controller.text, '{bad');
+
+      await tester.tap(tab('DNS'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DnsResolveSection), findsOneWidget);
+    });
+
+    testWidgets('корректный JSON раскладывается до перехода на DNS',
+        (tester) async {
+      await _open(tester, CustomRuleTree.flat(
+          id: 'n', name: 'N', ports: ['443'], outbound: 'direct-out'));
+      await tester.tap(find.text('Raw JSON'));
+      await tester.pumpAndSettle();
+      final json = tester.widget<JsonSection>(find.byType(JsonSection));
+      json.controller.text = '{"domain_suffix": ["a.test"]}';
+      json.onChanged();
+      await tester.pump();
+
+      await tester.tap(tab('DNS'));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard'), findsNothing);
+      expect(find.byType(DnsResolveSection), findsOneWidget,
+          reason: 'домен из JSON виден DNS-вкладке');
     });
   });
 }

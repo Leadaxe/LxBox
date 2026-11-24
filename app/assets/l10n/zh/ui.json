@@ -6792,6 +6792,12 @@
   "DNS options have no effect: the rule has no condition DNS can see": {
     "value": "DNS 选项无效：该规则没有 DNS 可识别的条件"
   },
+  "DNS options are set in the form. This rule can only be edited as JSON.": {
+    "value": "DNS 选项在表单中设置。此规则只能以 JSON 编辑。"
+  },
+  "DNS options do not apply to this rule: it has no condition DNS queries can match, such as domains, apps or a rule set.": {
+    "value": "DNS 选项不适用于此规则：它没有 DNS 查询可匹配的条件，例如域名、应用或规则集。"
+  },
   "%s Discard returns to the form without the JSON changes.": {
     "value": "%s「放弃」将返回表单，不保留 JSON 的修改。"
   },

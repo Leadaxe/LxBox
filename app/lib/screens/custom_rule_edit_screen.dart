@@ -18,6 +18,7 @@ import 'custom_rule_edit/edit_controller.dart';
 import 'custom_rule_edit/sections/conditions_section.dart'
     show ConditionAssist;
 import 'custom_rule_edit/sections/wifi_section.dart' show WifiHint, wifiHintFromError;
+import 'custom_rule_edit/tabs/dns_tab.dart';
 import 'custom_rule_edit/tabs/params_tab.dart';
 import 'custom_rule_edit/tabs/view_tab.dart';
 import '../services/l10n/locale_controller.dart';
@@ -72,8 +73,12 @@ class CustomRuleEditScreen extends StatefulWidget {
 }
 
 class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final CustomRuleEditController _ctrl;
+
+  /// §757 — вкладки Params | DNS | View (у пресета — Params | View).
+  late final TabController _tabs;
+  int _tabIndex = 0;
 
   /// §567 — почему SSID сейчас не читается (null — всё в порядке или
   /// причина без подсказки). Проверяется при открытии экрана и при
@@ -91,13 +96,38 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
       displayName: widget.displayName,
       presetNodes: widget.presetNodes,
     );
+    _tabs = TabController(
+        length: _ctrl.kind == CustomRuleKind.preset ? 2 : 3, vsync: this)
+      ..addListener(_onTabChanged);
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshWifiHint());
+  }
+
+  /// §757 — уход с Params на DNS / View из JSON-вида (как у окна правила
+  /// лаунчера): тело раскладывается в форму, чтобы DNS видел актуальные
+  /// условия; не раскладывается — Discard (остаться на выбранной вкладке
+  /// без правок JSON) / Keep editing (назад на Params). У json-правила без
+  /// формы вопроса нет — вкладки показывают то, что есть.
+  void _onTabChanged() {
+    final from = _tabIndex;
+    if (_tabs.index == from) return;
+    _tabIndex = _tabs.index;
+    if (from != 0 || !_ctrl.jsonMode) return;
+    final reason = _ctrl.applyJsonToForm();
+    if (reason == null || !_ctrl.formAvailable) return;
+    unawaited(() async {
+      if (await askDiscardJson(context, reason)) {
+        _ctrl.discardJson();
+      } else if (mounted) {
+        _tabs.animateTo(0);
+      }
+    }());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabs.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -409,43 +439,44 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
           if (didPop) return;
           unawaited(_handleBack());
         },
-        child: DefaultTabController(
-          length: 2,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(getLocalText.s("Edit rule")),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _handleBack,
-              ),
-              actions: [
-                // §264 — locked-пресет (traffic-processing) нельзя удалить:
-                // delete-иконку скрываем.
-                if (!(_ctrl.preset?.locked ?? false))
-                  IconButton(
-                    tooltip: getLocalText.s("Delete rule"),
-                    icon: Icon(Icons.delete_outline,
-                        color: Theme.of(context).colorScheme.error),
-                    onPressed: _delete,
-                  ),
-                _SaveIconButton(controller: _ctrl, onPressed: _save),
-              ],
-              bottom: TabBar(
-                tabs: [
-                  Tab(text: getLocalText.s("Params")),
-                  Tab(text: getLocalText.s(1, "View")),
-                ],
-              ),
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(getLocalText.s("Edit rule")),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _handleBack,
             ),
-            body: FocusSafeTabBarView(
-              children: [
-                ParamsTab(
-                  outboundOptions: widget.outboundOptions,
-                  actions: actions,
+            actions: [
+              // §264 — locked-пресет (traffic-processing) нельзя удалить:
+              // delete-иконку скрываем.
+              if (!(_ctrl.preset?.locked ?? false))
+                IconButton(
+                  tooltip: getLocalText.s("Delete rule"),
+                  icon: Icon(Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error),
+                  onPressed: _delete,
                 ),
-                const ViewTab(),
+              _SaveIconButton(controller: _ctrl, onPressed: _save),
+            ],
+            bottom: TabBar(
+              controller: _tabs,
+              tabs: [
+                Tab(text: getLocalText.s("Params")),
+                if (_tabs.length == 3) Tab(text: getLocalText.s("DNS")),
+                Tab(text: getLocalText.s(1, "View")),
               ],
             ),
+          ),
+          body: FocusSafeTabBarView(
+            controller: _tabs,
+            children: [
+              ParamsTab(
+                outboundOptions: widget.outboundOptions,
+                actions: actions,
+              ),
+              if (_tabs.length == 3) const DnsTab(),
+              const ViewTab(),
+            ],
           ),
         ),
       ),
