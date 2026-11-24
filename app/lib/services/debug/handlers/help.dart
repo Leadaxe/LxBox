@@ -179,7 +179,6 @@ POST /warp[?rebuild=true]                      Registers a WARP node (same path 
                                                    "endpoint":"IP:port",     // default engage.cloudflareclient.com:2408
                                                    "obfuscate":true,         // QUIC masquerade
                                                    "forceNew":false,         // ignore cache, re-register
-                                                   "includeReserved":false,  // null → default by obfuscate
                                                    "quicParams":{"sni":"www.google.com","ip":"quic",
                                                                  "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
                                                   ?rebuild=true → regenerate config + reload core.
@@ -811,7 +810,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
     {'method': 'POST', 'path': '/action/pathmtu', 'params': {'target': 'host or IP (default 8.8.8.8)'}, 'description': '§725: Path MTU past the tunnel (ICMP echo with DF on the physical network, binary search up to the interface MTU). Sync, up to ~25 s → {target,ip,iface,transport,iface_mtu,vpn_running,path_mtu,status:ok|unreachable|no_network|below_floor|cancelled|error,recommend:{wireguard,masque}|null,probes:[{size,status,rtt_ms}]}'},
     // WARP
-    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
+    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
     // Rules
     {'method': 'GET', 'path': '/rules', 'description': 'Alias /state/rules'},
     {'method': 'GET', 'path': '/rules/{id}', 'description': 'Single rule'},

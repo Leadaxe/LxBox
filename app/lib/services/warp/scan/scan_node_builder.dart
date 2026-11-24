@@ -52,14 +52,11 @@ class ScanNodeBuilder {
       jmax: p?.jmax ?? 70,
     ));
     final tuned = acc.copyWith(endpoint: c.endpoint, awg: awg);
-    // reserved опускаем: рабочие AWG-конфиги идут без client_id (§142).
+    // reserved генератор не пишет (§142: DPI режет WARP по client_id).
     // §313 — keepalive из пула: без него пир молчит при простое, NAT-маппинг
     // оператора закрывается и узел деградирует до `err` (гейт `> 0` внутри).
     final spec = parseWireguardIni(
-      tuned.toWireguardConf(
-        includeReserved: false,
-        persistentKeepalive: wgKeepalive,
-      ),
+      tuned.toWireguardConf(persistentKeepalive: wgKeepalive),
       nameHint: c.nodeTitle,
     );
     return spec?.toUri();

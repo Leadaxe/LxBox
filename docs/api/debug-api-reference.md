@@ -1295,7 +1295,6 @@ Body (все поля опциональны):
   "endpoint": "IP:port",      // default engage.cloudflareclient.com:2408
   "obfuscate": false,         // QUIC masquerade (AmneziaWG-обфускация)
   "forceNew": false,          // игнор кэша, повторная регистрация
-  "includeReserved": false,   // null → default по obfuscate
   "quicParams": {             // только при obfuscate
     "sni": "www.google.com",
     "ip": "quic",             // quic|...

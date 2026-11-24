@@ -85,9 +85,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
 
   // §126/§136 — AmneziaWG обфускация (default off — обычный WARP).
   bool _obfuscate = false;
-  // §142 — reserved (client_id): null = дефолт по галке (обфускация → off).
-  // Юзер может переопределить чекбоксом в Advanced.
-  bool? _includeReserved;
 
   WarpEndpointPicker? _picker; // §136 — для рандома endpoint/SNI
   // §136 — endpoint в поле = наше авто-значение (стартовый дефолт или
@@ -248,7 +245,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         _lastAutoEndpoint = WarpAccount.defaultEndpoint;
         _endpoint.text = WarpAccount.defaultEndpoint;
       }
-      _includeReserved = null; // §142 — вернуть к дефолту по галке
       _sni.text = _picker?.randomSni() ?? ''; // свежий случайный домен
       _masqIp = 'quic'; // §143
       _masqIb = 'chrome';
@@ -366,7 +362,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
         forceNew: _forceNew,
         obfuscate: _obfuscate,
         quicParams: _buildQuicParams(),
-        includeReserved: _includeReserved,
         // §304 — пусто/битое → null (keepalive не пишется); 0 явно выключает.
         persistentKeepalive: int.tryParse(_keepalive.text.trim()),
       );
@@ -875,18 +870,6 @@ class _WarpWizardScreenState extends State<WarpWizardScreen> with SnackHelper {
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
-                        ),
-                        // §142 — reserved (client_id) опция. Дефолт по галке:
-                        // обфускация → off (привязка к устройству режется).
-                        CheckboxListTile(
-                          contentPadding: EdgeInsets.zero,
-                          value: _includeReserved ?? !_obfuscate,
-                          onChanged: _busy
-                              ? null
-                              : (v) =>
-                                  setState(() => _includeReserved = v),
-                          title: Text(getLocalText.s("Bind to this device (reserved)")),
-                          subtitle: Text(getLocalText.s("Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).")),
                         ),
                         // §143 — masquerade id/ip/ib (ядро 009 генерит i1).
                         if (_obfuscate) ...[

@@ -88,7 +88,7 @@ void main() {
   });
 
   group('WarpAccount.toWireguardConf', () {
-    test('plain (awg==null): валидный .conf, reserved в [Peer], без AWG', () {
+    test('plain (awg==null): валидный .conf, без reserved, без AWG', () {
       final conf = account().toWireguardConf();
       expect(conf.contains('[Interface]'), isTrue);
       expect(conf.contains('[Peer]'), isTrue);
@@ -96,7 +96,7 @@ void main() {
           conf.contains(
               'PrivateKey = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA='),
           isTrue);
-      expect(conf.contains('Reserved = 1,2,3'), isTrue);
+      expect(conf.contains('Reserved'), isFalse); // §142
       expect(conf.contains('MTU = 1280'), isTrue);
       expect(conf.contains('Jc'), isFalse);
     });
@@ -112,20 +112,17 @@ void main() {
       expect(conf.contains('I1 ='), isFalse); // i1 не пишем (конфликт)
     });
 
-    test('§142 includeReserved=false → НЕТ Reserved (conf и uri)', () {
-      final acc = account();
-      expect(acc.toWireguardConf(includeReserved: false).contains('Reserved'),
-          isFalse);
-      expect(acc.toWireguardUri(includeReserved: false).contains('reserved'),
-          isFalse);
-      // дефолт (true) — reserved есть (backward-compat).
-      expect(acc.toWireguardConf().contains('Reserved = 1,2,3'), isTrue);
-      expect(acc.toWireguardUri().contains('reserved'), isTrue);
+    test('§142 генератор не пишет reserved (conf и uri, plain и AWG)', () {
+      final awg = WarpClient.buildAmneziaAwg(const QuicParams());
+      for (final acc in [account(), account(awg: awg)]) {
+        expect(acc.toWireguardConf().contains('Reserved'), isFalse);
+        expect(acc.toWireguardUri().contains('reserved'), isFalse);
+      }
     });
   });
 
   group('.conf → parseWireguardIni round-trip', () {
-    test('§143 obfuscated: AWG + id/ip/ib + reserved доходят до spec', () {
+    test('§143 obfuscated: AWG + id/ip/ib доходят до spec, reserved — нет', () {
       final awg = WarpClient.buildAmneziaAwg(
           const QuicParams(sni: 'ozon.ru', ip: 'dns'));
       final conf = account(awg: awg).toWireguardConf();
@@ -139,16 +136,17 @@ void main() {
       expect(spec.awg!.fields['h4'], 4);
       expect(spec.awg!.fields['ip'], 'dns');
       expect(spec.awg!.fields['id'], 'ozon.ru');
-      // reserved (WARP client_id) долетел в peer.
+      // §142 — reserved (WARP client_id) генератор не пишет (DPI режет WARP
+      // по client_id).
       expect(spec.peers, isNotEmpty);
-      expect(spec.peers.first.reserved, [1, 2, 3]);
+      expect(spec.peers.first.reserved, isNull);
     });
 
-    test('plain .conf тоже несёт reserved (regression для §126 ini-фикса)', () {
+    test('plain .conf парсится (regression для §126 ini-фикса), без reserved', () {
       final spec = parseWireguardIni(account().toWireguardConf());
       expect(spec, isNotNull);
       expect(spec!.awg, isNull);
-      expect(spec.peers.first.reserved, [1, 2, 3]);
+      expect(spec.peers.first.reserved, isNull);
     });
   });
 

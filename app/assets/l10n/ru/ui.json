@@ -1301,9 +1301,6 @@
   "Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb": {
     "value": "Бинарные профили (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb"
   },
-  "Bind to this device (reserved)": {
-    "value": "Привязать к этому устройству (reserved)"
-  },
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить."
   },
@@ -4751,9 +4748,6 @@
   },
   "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.": {
     "value": "Отправлять x-hwid и заголовки устройства при каждой загрузке подписки — для панелей с лимитом устройств по HWID (Remnawave). По умолчанию включено."
-  },
-  "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
-    "value": "Отправляет client_id Cloudflare. При обфускации отключено — привязку к устройству часто блокируют."
   },
   "Server": {
     "value": "Сервер"
