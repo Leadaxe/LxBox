@@ -872,7 +872,7 @@ The **Outbound** parameter sets the exit for matching traffic: direct, block
 or a direction. Ru internet segment, Russia-only services, BitTorrent,
 Private IPs, VoWiFi and Google push have it, with direct as the default. On
 Unknown traffic the parameter label is lowercase — `outbound` — and the
-default is reject. The same exit changes right in the preset's row on the
+default is direct too; Reject is the strict option. The same exit changes right in the preset's row on the
 Rules tab, without opening the editor.
 
 The other parameters:

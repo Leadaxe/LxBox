@@ -868,7 +868,7 @@ Routing → Rules → тап по пресету → Params. Вверху — п
 Параметр **Outbound** — выход для совпавшего трафика: direct, block или
 Направление. Он есть у Ru internet segment, Russia-only services, BitTorrent,
 Private IPs, VoWiFi и Google push с умолчанием direct. У Unknown traffic
-параметр подписан строчными — `outbound` — и по умолчанию равен reject. Тот же выход меняется прямо в строке пресета на вкладке
+параметр подписан строчными — `outbound` — и по умолчанию тоже равен direct; Reject — строгий вариант. Тот же выход меняется прямо в строке пресета на вкладке
 Rules, без открытия редактора.
 
 Остальные параметры:
