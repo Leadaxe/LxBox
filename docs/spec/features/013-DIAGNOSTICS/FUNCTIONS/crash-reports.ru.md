@@ -41,7 +41,7 @@
 - экран Debug, вкладка **Crashes**: список (время, размер, версия ядра или
   «current session»), просмотр трейса с копированием, share;
 - вкладка **OOM**: список (время, размер, RSS), сводка «N snapshots · размер»,
-  просмотр полей памяти и журнала ядра на момент снимка, share, «Delete all
+  просмотр полей памяти и лога ядра на момент снимка, share, «Delete all
   OOM reports» с подтверждением;
 - Debug API: `/files/crash/list`, `/files/crash?name=`, `/files/local?name=
   CrashReport-lxbox.log[.old]`, `/files/oom/list`, `/files/oom?name=[&file=]`,

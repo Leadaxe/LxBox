@@ -242,7 +242,7 @@
   API; событие автоматизации «доступна новая версия»; шаг плитки в первом
   запуске.
 - [013-DIAGNOSTICS](../013-DIAGNOSTICS/FEATURE.ru.md) — вкладка Diagnostics в
-  App Settings (System setup, журналы, Developer) и Debug API.
+  App Settings (System setup, логи, Developer) и Debug API.
 - [001-SUBSCRIPTIONS](../001-SUBSCRIPTIONS/FEATURE.ru.md) — вкладка
   Subscriptions в App Settings; обновления подписок питают вибрацию.
 - [015-WARP](../015-WARP/FEATURE.ru.md) — раздел Region на вкладке General.

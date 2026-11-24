@@ -31,7 +31,7 @@
 | | Backup & restore | 017 |
 | Appearance | тема, Layout, Language | эта ([appearance](appearance.ru.md)); механизм языка — [029-LOCALIZATION](../../029-LOCALIZATION/FUNCTIONS/language-selection.ru.md) |
 | Subscriptions | автообновление, идентичность запроса | 001 |
-| Diagnostics | System setup, журналы, Developer | 013 |
+| Diagnostics | System setup, логи, Developer | 013 |
 | Automation | Intent API | 014 |
 
 ## Входы / Выходы
