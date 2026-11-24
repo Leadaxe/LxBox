@@ -6954,8 +6954,8 @@
   "quarantine": {
     "value": "隔离"
   },
-  "connections %d · failures %d": {
-    "value": "连接 %d · 失败 %d"
+  "%d conn · %d fail": {
+    "value": "%d 连接 · %d 失败"
   },
   "shifted keys: %d": {
     "value": "已偏移的键：%d"

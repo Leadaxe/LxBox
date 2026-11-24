@@ -7242,8 +7242,8 @@
   "quarantine": {
     "value": "карантин"
   },
-  "connections %d · failures %d": {
-    "value": "соединений %d · отказов %d"
+  "%d conn · %d fail": {
+    "value": "%d соед. · %d отк."
   },
   "shifted keys: %d": {
     "value": "сдвинутых ключей: %d"

@@ -20,7 +20,7 @@ Color poolDelayColor(BuildContext context, int delay) {
 }
 
 /// §759 (ядро SPEC 138) — вторая строка слота: карантин и счётчики
-/// «соединения / подтверждённые отказы». `null`, когда показывать нечего —
+/// «соединения / подтверждённые отказы» (коротко: попап шириной 320). `null`, когда показывать нечего —
 /// строка слота тогда выглядит как до §759.
 Widget? _slotNote(BuildContext context, CcPoolSlot slot) {
   final cs = Theme.of(context).colorScheme;
@@ -38,7 +38,7 @@ Widget? _slotNote(BuildContext context, CcPoolSlot slot) {
           const TextSpan(text: ' · '), // l10n-exempt: separator
         if (hasCounters)
           TextSpan(
-              text: getLocalText.s("connections %d · failures %d",
+              text: getLocalText.s("%d conn · %d fail",
                   slot.connections, slot.confirmedFailures)),
       ],
     ),

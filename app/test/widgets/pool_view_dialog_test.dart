@@ -32,7 +32,7 @@ void main() {
     expect(find.text('node-de'), findsOneWidget);
     expect(find.byKey(const ValueKey('pool-state-header')), findsNothing);
     expect(find.textContaining('quarantine'), findsNothing);
-    expect(find.textContaining('connections'), findsNothing);
+    expect(find.textContaining('conn'), findsNothing);
   });
 
   testWidgets('карантин, счётчики и шапка с остатком заморозки',
@@ -58,9 +58,9 @@ void main() {
     expect(
         find.text('shifted keys: 3 · address problems: 1 · frozen for 12 s'),
         findsOneWidget);
-    expect(find.text('quarantine · connections 40 · failures 6'),
+    expect(find.text('quarantine · 40 conn · 6 fail'),
         findsOneWidget);
-    expect(find.text('connections 7 · failures 0'), findsOneWidget);
+    expect(find.text('7 conn · 0 fail'), findsOneWidget);
     // Задержка узла в карантине остаётся на месте.
     expect(find.text('87 ms'), findsOneWidget);
   });
