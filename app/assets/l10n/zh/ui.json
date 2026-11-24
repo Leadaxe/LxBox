@@ -6972,7 +6972,7 @@
   "frozen for %d s": {
     "value": "冻结 %d 秒"
   },
-  "frozen until the network check ends": {
-    "value": "冻结至网络检查结束"
+  "frozen": {
+    "value": "冻结"
   }
 }

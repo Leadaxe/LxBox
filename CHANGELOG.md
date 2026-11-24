@@ -10,6 +10,14 @@
 
 ### Changed
 
+- **Core `v1.14.4-lx.37-rc.1`.** `round_robin` repairs itself on a failed
+  connection instead of waiting for the next check: a retry through another
+  slot, a dead node replaced from a reserve of live nodes, a node that fails
+  more than the rest set aside until the next check. A manual group test now
+  clears the latency of nodes that did not answer. Also: a `tls.fragment`
+  hang fixed, `least_test` and `failover` leave a node whose server refuses
+  connections, SOCKS and ShadowTLS handshakes limited to 15 s.
+
 - **TrustTunnel `tt://` links by the registry ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.175).**
   The link is now read by a table: the binary container is described in the
   protocol record of the registry, and the application no longer carries a
@@ -62,8 +70,7 @@
   of sticky keys moved to another slot, the number of addresses marked as the
   problem, and a freeze with the seconds left. A healthy pool looks as before.
   The traffic profiler records the node a connection actually went through
-  when the core reports it after the connection was opened. Works with the
-  core that has `GetPoolState`; the pin is raised separately.
+  when the core reports it after the connection was opened.
 
 - **Copy link for a TrustTunnel node from a sing-box config ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md)).**
   A `trusttunnel` node that came as an `endpoints[]` entry of a config, not as

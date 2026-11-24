@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress — Dart-часть в develop (6a02ad80, 38dbfae4); Kotlin-коммит в ветке `claude/759-pool-self-heal-state`, ждёт релиза ядра с `GetPoolState` и поднятия пина; на устройстве не проверено |
+| **Статус** | In progress — в develop вместе с пином ядра `v1.14.4-lx.37-rc.1`; эмулятор — см. «Верификация»; на телефоне не проверено |
 | **Дата** | 2026-11-25 |
 | **Повод** | Ядро sing-box-lx получило самовосстановление группы `urltest` в режиме `round_robin` (SPEC 138 §3) и отдаёт его состояние через выдачу пула |
 | **Связанные** | 208 (пул round_robin, View pool), 209 (unary RPC через pingClient), 344 (экран группы), 322 (узел автовыбора); ядро: SPEC 138 §3.9, SPEC 019 v2 |
@@ -80,8 +80,10 @@
   оба счётчика нулевые. Задержка узла в карантине остаётся, но без цвета.
 - Шапка пула (`poolStateHeader`): одна строка над слотами из ненулевых
   частей — `shifted keys: N`, `address problems: N`, `frozen for N s`;
-  при `frozen` и `frozenSeconds == 0` — `frozen until the network check
-  ends`. Все части нулевые — шапки нет.
+  при `frozen` и `frozenSeconds == 0` — просто `frozen`. В ядре
+  lx.37-rc.1 заморозка — 15 с после пробуждения, смены сети или скачка
+  часов, остаток округлён вверх, так что ноль при `frozen` не приходит;
+  ветка запасная. Все части нулевые — шапки нет.
 - Здоровый пул, `least_test` / `failover` и ядро без новых полей выглядят
   как до задачи. Исключение: у работающего пула на новом ядре счётчик
   соединений ненулевой, вторая строка слота есть.
@@ -120,20 +122,23 @@
   второй `tcpOpen` не появляется, `tcpClose` несёт последний узел и тип.
 - `tool/l10n/ui_check.dart --strict`, `hardcoded_check.dart --strict`,
   `flutter analyze` по затронутым файлам — чисто (25.11).
-- Не проверено: сборка Kotlin (нужен AAR с `GetPoolState`), экран на
-  эмуляторе и телефоне с новым ядром.
+- Kotlin: `javap` релизного AAR rc.1 сходится с вызовами (26.11); сборка —
+  CI на коммите бампа.
+- Не проверено: телефон.
+
+## Pin bump (25–26.11)
+
+Пин поднят на `v1.14.4-lx.37-rc.1` (пререлиз ядра) одним коммитом с
+Kotlin-частью: `app/android/libbox.version`, `kCoreBuildTagsPin`,
+`with_lx_impair` в `kCoreBuildTags` и в блоке тегов `docs/KERNEL.md`
+(SPEC 164 ядра), история версий в `docs/KERNEL.md`. `javap` по
+`classes.jar` релизного AAR: `CommandClient.getPoolState(String)`,
+`PoolState.slots()`, `getShiftedKeys/getMarkedKeys/getFrozen/getFrozenSeconds`,
+`PoolSlot.getQuarantined/getConnections/getConfirmedFailures` — как в
+`BoxCommandClient.getPool`. Публичный API libbox lx.36 → rc.1 только
+дополнен (diff `experimental/libbox` — один файл, пул).
 
 ## Unresolved / follow-up
 
-При поднятии пина ядра на релиз с SPEC 138:
-
-1. `app/android/libbox.version` — новый тег; `scripts/fetch-libbox.sh`
-   сверит SHA256 сам.
-2. `kCoreBuildTagsPin` в `lib/services/builder/core_chain_capability.dart`
-   — тот же тег, даже при тех же тегах сборки (`node_core_gate_test`).
-3. `javap` по `PoolState` / `PoolSlot` из AAR: имена геттеров против
-   `BoxCommandClient.getPool` (`getPoolState`, `slots()`, `shiftedKeys`,
-   `markedKeys`, `frozen`, `frozenSeconds`, `quarantined`, `connections`,
-   `confirmedFailures`).
-4. `docs/KERNEL.md` — пин и история версий.
-5. Эмулятор: View pool у `round_robin`-группы под отказами узла.
+- Карантин и шапку пула на живом ядре можно вызвать только отказами узлов
+  (outbound `impair` ядра, SPEC 164); на эмуляторе без него не проверены.

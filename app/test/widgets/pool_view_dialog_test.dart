@@ -65,13 +65,13 @@ void main() {
     expect(find.text('87 ms'), findsOneWidget);
   });
 
-  testWidgets('заморозка без остатка — до конца проверки сети',
+  testWidgets('заморозка без остатка — просто frozen',
       (tester) async {
     await open(
         tester,
         const CcPoolState(frozen: true, slots: [
           CcPoolSlot(slot: 0, tag: 'node-de', delay: 12),
         ]));
-    expect(find.text('frozen until the network check ends'), findsOneWidget);
+    expect(find.text('frozen'), findsOneWidget);
   });
 }

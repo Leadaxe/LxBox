@@ -7260,7 +7260,7 @@
   "frozen for %d s": {
     "value": "заморозка %d с"
   },
-  "frozen until the network check ends": {
-    "value": "заморозка до конца проверки сети"
+  "frozen": {
+    "value": "заморозка"
   }
 }

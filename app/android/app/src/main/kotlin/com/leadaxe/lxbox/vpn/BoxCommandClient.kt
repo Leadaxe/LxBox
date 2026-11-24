@@ -983,23 +983,37 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
         }
     }
 
-    fun getPool(tag: String): List<Map<String, Any>>? {
+    /// §759 — пул вместе с состоянием самовосстановления группы (ядро SPEC 138,
+    /// `GetPoolState`): у слота карантин и счётчики, у группы сдвинутые ключи,
+    /// «проблемы в адресе» и заморозка. Вне round_robin всё нулевое. Dart
+    /// (`CcPoolState.fromWire`) принимает и прежний список слотов.
+    fun getPool(tag: String): Map<String, Any>? {
         val client = ensurePingClient() ?: run {
             Log.w(TAG, "getPool: no command client (paused/down)")
             return null
         }
         return runCatching {
-            val out = ArrayList<Map<String, Any>>()
-            val it: PoolSlotIterator = client.getPool(tag)
+            val state = client.getPoolState(tag)
+            val slots = ArrayList<Map<String, Any>>()
+            val it: PoolSlotIterator = state.slots()
             while (it.hasNext()) {
                 val s = it.next()
-                out.add(mapOf(
+                slots.add(mapOf(
                     "slot" to s.slot,
                     "tag" to s.tag,
                     "delay" to s.delay,
+                    "quarantined" to s.quarantined,
+                    "connections" to s.connections,
+                    "confirmedFailures" to s.confirmedFailures,
                 ))
             }
-            out
+            mapOf(
+                "slots" to slots,
+                "shiftedKeys" to state.shiftedKeys,
+                "markedKeys" to state.markedKeys,
+                "frozen" to state.frozen,
+                "frozenSeconds" to state.frozenSeconds,
+            )
         }.getOrElse {
             Log.w(TAG, "getPool RPC failed: ${it.message}")
             null

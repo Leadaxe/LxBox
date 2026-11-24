@@ -59,7 +59,9 @@ List<String> poolStateParts(CcPoolState state) => [
       if (state.frozen)
         state.frozenSeconds > 0
             ? getLocalText.s("frozen for %d s", state.frozenSeconds)
-            : getLocalText.s("frozen until the network check ends"),
+            // Ядро округляет остаток вверх: ноль при `frozen` — запасная
+            // ветка на случай, если ядро начнёт так отвечать.
+            : getLocalText.s("frozen"),
     ];
 
 /// §759 — шапка пула одной строкой вторичного текста; `null` — показывать
