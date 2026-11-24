@@ -824,11 +824,11 @@
   "Datagrams per read": {
     "value": "Датаграмм за одно чтение"
   },
-  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB per tunnel. With many WireGuard nodes choose 1 or 2; on a weak device, 8.": {
-    "value": "Сколько датаграмм туннель без detour читает за раз (Linux и Android). Под каждую держится буфер 64 КБ, поэтому 128 стоят около 16 МБ на туннель. Если узлов WireGuard много — 1 или 2, на слабом устройстве — 8."
+  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer: 8 costs about 1 MiB per tunnel, 128 (the core's own default) about 16 MiB. With many WireGuard nodes choose 1 or 2.": {
+    "value": "Сколько датаграмм туннель без detour читает за раз (Linux и Android). Под каждую держится буфер 64 КБ: 8 стоят около 1 МБ на туннель, 128 (умолчание самого ядра) — около 16 МБ. Если узлов WireGuard много — 1 или 2."
   },
-  "128 (default)": {
-    "value": "128 (по умолчанию)"
+  "8 (default)": {
+    "value": "8 (по умолчанию)"
   },
   "MTU-sized send buffers": {
     "value": "Буферы отправки по MTU"

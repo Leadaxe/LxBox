@@ -1,6 +1,9 @@
 {
   "lx": {
     "wg": {
+      "buffers": {
+        "read_datagram_count": 8
+      },
       "idle": {
         "suspend": "30s",
         "lazy_build": true,

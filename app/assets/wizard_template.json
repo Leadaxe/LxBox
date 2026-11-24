@@ -496,12 +496,12 @@
           ]
         },
         { "name": "wg_read_datagram_count", "type": "int",
-          "default_value": "128", "required": true, "wizard_ui": "edit",
-          "title": "Datagrams per read", "tooltip": "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB per tunnel. With many WireGuard nodes choose 1 or 2; on a weak device, 8.",
+          "default_value": "8", "required": true, "wizard_ui": "edit",
+          "title": "Datagrams per read", "tooltip": "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer: 8 costs about 1 MiB per tunnel, 128 (the core's own default) about 16 MiB. With many WireGuard nodes choose 1 or 2.",
           "options": [
-            {"title": "128 (default)", "value": "128"},
+            "128",
             "32",
-            "8",
+            {"title": "8 (default)", "value": "8"},
             "2",
             "1"
           ]

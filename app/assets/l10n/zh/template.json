@@ -824,11 +824,11 @@
   "Datagrams per read": {
     "value": "每次读取的数据报数"
   },
-  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB per tunnel. With many WireGuard nodes choose 1 or 2; on a weak device, 8.": {
-    "value": "没有 detour 的隧道一次读取多少个数据报（Linux 和 Android）。每个数据报占用一个 64 KiB 缓冲区，因此 128 每个隧道约占 16 MiB。WireGuard 节点很多时选 1 或 2；设备性能较弱时选 8。"
+  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer: 8 costs about 1 MiB per tunnel, 128 (the core's own default) about 16 MiB. With many WireGuard nodes choose 1 or 2.": {
+    "value": "没有 detour 的隧道一次读取多少个数据报（Linux 和 Android）。每个数据报占用一个 64 KiB 缓冲区：8 每个隧道约占 1 MiB，128（内核自身的默认值）约占 16 MiB。WireGuard 节点很多时选 1 或 2。"
   },
-  "128 (default)": {
-    "value": "128（默认）"
+  "8 (default)": {
+    "value": "8（默认）"
   },
   "MTU-sized send buffers": {
     "value": "按 MTU 分配发送缓冲区"

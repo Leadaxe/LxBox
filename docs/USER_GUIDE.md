@@ -1744,7 +1744,7 @@ without a detour, on Android (and Linux):
 
 | Option | What it does | Default |
 |---|---|---|
-| **Datagrams per read** | How many datagrams a tunnel reads at once: 128, 32, 8, 2, 1. Each one keeps a 64 KiB buffer, so 128 costs about 16 MiB of memory per tunnel. | 128 |
+| **Datagrams per read** | How many datagrams a tunnel reads at once: 128, 32, 8, 2, 1. Each one keeps a 64 KiB buffer: 8 costs about 1 MiB of memory per tunnel, 128 (the core's own default) about 16 MiB. | 8 |
 | **MTU-sized send buffers** | A diagnostic switch. Off returns 64 KiB send buffers per packet, as in cores before 1.14.4-lx.36. | On |
 | **Connected tunnel socket** | More upload speed for a tunnel with one peer, a fixed server address and no listen port. A server that moves to a new address is heard only after the next handshake retry. Not yet tested on a phone that switches between Wi-Fi and mobile data. | Off |
 
@@ -1761,7 +1761,6 @@ the group.
 |---|---|
 | The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
 | There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3; Datagrams per read → 1 or 2 |
-| A weak device runs short of memory with a few WireGuard nodes | Datagrams per read → 8 |
 | Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
 | Tunnels must not sleep at all | Suspend idle tunnels → Off |
 

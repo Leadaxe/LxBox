@@ -75,8 +75,8 @@
   при вставке, сканировании или вводе больше не отвергается: по ней
   добавляется эта подписка. Внутри списка ссылок или чужой подписки такая
   ссылка по-прежнему пропускается с `tt_subscription_only`.)
-- **Three new WireGuard / AmneziaWG settings ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (128 by default; 1–2 for dozens of nodes, 8 for a weak device: each datagram costs a 64 KiB buffer per tunnel), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
-  (RU: в Settings → Core → WireGuard три новые опции: Datagrams per read (по умолчанию 128; 1–2 для десятков узлов, 8 для слабого устройства — каждая датаграмма держит буфер 64 КБ на туннель), MTU-sized send buffers (диагностический, включён) и Connected tunnel socket (быстрее отдача у туннеля с одним сервером; выключен — на телефоне со сменой Wi-Fi и мобильной сети не проверен). Действуют на туннели без detour.)
+- **Three new WireGuard / AmneziaWG settings ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (8 by default, about 1 MiB per tunnel; the core's own default 128 costs about 16 MiB, and 1–2 suit dozens of nodes), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
+  (RU: в Settings → Core → WireGuard три новые опции: Datagrams per read (по умолчанию 8 — около 1 МБ на туннель; умолчание самого ядра 128 стоит около 16 МБ, 1–2 — для десятков узлов), MTU-sized send buffers (диагностический, включён) и Connected tunnel socket (быстрее отдача у туннеля с одним сервером; выключен — на телефоне со сменой Wi-Fi и мобильной сети не проверен). Действуют на туннели без detour.)
 
 ## [2.25.23] — 2026-11-17
 

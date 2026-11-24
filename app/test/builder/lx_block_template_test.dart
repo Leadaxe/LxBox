@@ -23,7 +23,7 @@ void main() {
     return walk(fragment, makeResolver(vars, byName));
   }
 
-  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5 в lx.wg.idle, sniff_guard; buffers/connected_socket, clamp и masque off не пишутся', () {
+  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5 в lx.wg.idle, read_datagram_count 8, sniff_guard; send_by_mtu/connected_socket, clamp и masque off не пишутся', () {
     expect(lx({}), {
       'sniff_guard': {
         'nodes': {'sni_mismatch': true},
@@ -40,6 +40,7 @@ void main() {
           'lazy_build': true,
           'build_max': 5,
         },
+        'buffers': {'read_datagram_count': 8},
       },
     });
   });
@@ -147,8 +148,13 @@ void main() {
     }
   });
 
-  test('сон off — блока wg нет, reachable и lazy не пишутся', () {
-    final r = lx({'wg_idle_suspend': 'off', 'sniff_guard_tls': 'off', 'sniff_guard_quic': 'off'});
+  test('сон off и буферы как у ядра (128) — блока wg нет, reachable и lazy не пишутся', () {
+    final r = lx({
+      'wg_idle_suspend': 'off',
+      'wg_read_datagram_count': '128',
+      'sniff_guard_tls': 'off',
+      'sniff_guard_quic': 'off',
+    });
     expect(r, isEmpty);
   });
 
@@ -159,6 +165,7 @@ void main() {
     }) as Map;
     expect(r['wg'], {
       'idle': {'suspend': '30s'},
+      'buffers': {'read_datagram_count': 8},
     });
   });
 
@@ -196,15 +203,26 @@ void main() {
     expect((r['wg'] as Map)['connected_socket'], true);
     expect(((lx({'wg_read_datagram_count': '1'}) as Map)['wg'] as Map)['buffers'],
         {'read_datagram_count': 1});
-    expect(((lx({'wg_send_by_mtu': 'false'}) as Map)['wg'] as Map)['buffers'],
+    expect(
+        ((lx({'wg_read_datagram_count': '128', 'wg_send_by_mtu': 'false'}) as Map)['wg']
+            as Map)['buffers'],
         {'send_by_mtu': false});
+    // Умолчание LxBox — 8 (решение владельца 24.11): ключ пишется всегда,
+    // кроме выбранного 128 — умолчания самого ядра.
     final def = (lx({}) as Map)['wg'] as Map;
-    expect(def.containsKey('buffers'), isFalse);
+    expect(def['buffers'], {'read_datagram_count': 8});
     expect(def.containsKey('connected_socket'), isFalse);
+    final core = (lx({'wg_read_datagram_count': '128'}) as Map)['wg'] as Map;
+    expect(core.containsKey('buffers'), isFalse);
   });
 
   test('758 — сон off: buffers и connected_socket живут без idle', () {
-    final off = {'wg_idle_suspend': 'off', 'sniff_guard_tls': 'off', 'sniff_guard_quic': 'off'};
+    final off = {
+      'wg_idle_suspend': 'off',
+      'wg_read_datagram_count': '128',
+      'sniff_guard_tls': 'off',
+      'sniff_guard_quic': 'off',
+    };
     expect(lx({...off, 'wg_connected_socket': 'true'}), {
       'wg': {'connected_socket': true},
     });
