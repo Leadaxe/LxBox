@@ -78,6 +78,11 @@
 - **Three new WireGuard / AmneziaWG settings ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (8 by default, about 1 MiB per tunnel; the core's own default 128 costs about 16 MiB, and 1–2 suit dozens of nodes), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
   (RU: в Settings → Core → WireGuard три новые опции: Datagrams per read (по умолчанию 8 — около 1 МБ на туннель; умолчание самого ядра 128 стоит около 16 МБ, 1–2 — для десятков узлов), MTU-sized send buffers (диагностический, включён) и Connected tunnel socket (быстрее отдача у туннеля с одним сервером; выключен — на телефоне со сменой Wi-Fi и мобильной сети не проверен). Действуют на туннели без detour.)
 
+### Fixed
+
+- **WARP: the generator no longer writes `reserved`.** The WARP node generator put the registration's `client_id` into the peer as `reserved`; from Russian networks DPI recognises WARP by it and cuts an AmneziaWG tunnel after about 20 packets. The node is now built without `reserved`, the **Bind to this device (reserved)** option is removed from the WARP wizard, and the Debug API `POST /warp` no longer takes `includeReserved`. A node you already have keeps its `reserved` until you recreate it; imported links with `reserved` are read as before.
+  (RU: генератор WARP больше не пишет `reserved`: из российских сетей DPI узнаёт WARP по `client_id` и рвёт туннель AmneziaWG примерно после 20 пакетов. Узел строится без `reserved`, опция Bind to this device (reserved) убрана из мастера WARP, Debug API `POST /warp` больше не принимает `includeReserved`. Уже созданный узел сохраняет `reserved` до пересоздания; импортируемые ссылки с `reserved` читаются как раньше.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Added
