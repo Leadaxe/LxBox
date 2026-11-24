@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress — код, пин и тесты готовы; ветка не запушена; на устройстве не проверено |
+| **Статус** | In progress — в develop (997aeabf); эмулятор проверен 24.11; на телефоне не проверено |
 | **Дата** | 2026-11-24 |
 | **Повод** | Релиз ядра `v1.14.4-lx.36` (sing-box-lx): раскладка `lx.wg` изменена без периода совместимости, две новые группы настроек; владелец хочет видеть их в приложении |
 | **Связанные** | 709 (корневой блок `lx` из шаблона), 536 / 542 (lazy_build, build_max), 704 (миксины), 729 (прошлый пин lx.35); ядро: SPEC 098 §2.1–§3, SPEC 158 §9, SPEC 160 §3 |
@@ -123,11 +123,26 @@
 - Теги сборки AAR lx.36 = lx.35 (`build_libbox/main.go`: правка только в
   комментарии), исходники `experimental/libbox` идентичны; AAR не
   скачивался, javap не прогонялся.
-- На устройстве и эмуляторе не проверено.
+- Эмулятор 24.11 (AVD `LxBox_a161`, Android 36.1, headless; CI `build-fast`
+  run 45320272525 с 997aeabf, `2.25.23-rc.2-dev.19`, `libbox.so` =
+  `1.14.4-lx.36`; установка `install -r` поверх 2.25.22-dev.83, через Debug API):
+  - по умолчанию собранный и работающий (`/config/running`) конфиг —
+    `lx.wg {idle {suspend, suspend_reachable, lazy_build, build_max},
+    buffers {read_datagram_count: 8}}`, `check-config` — ok, VPN стартует,
+    все WG/Tailscale endpoint'ы `up`; ядро собирает WARP по требованию
+    (`lx idle: lazy … rebuild by=dial`) — ключи сна в `idle` действуют;
+  - `wg_read_datagram_count = 128` → `buffers` нет ни в собранном, ни в
+    работающем конфиге;
+  - `wg_connected_socket = true` → старт без ошибки, в работающем конфиге
+    `connected_socket: true`; возвращено в `false`;
+  - трафик через WireGuard на стенде не проверен: WARP (WireGuard) и домашний
+    WireGuard-узел не отвечают на urltest одинаково при 8 и при 128
+    (соединения уходят в туннель, ответа нет — сеть стенда), WARP MASQUE
+    через тот же туннель отвечает (209–331 мс).
 
 ## Unresolved / follow-up
 
 - Синк контракта 1.1.183 (реестр `vars.json`, `core_config.json`) — после
   коммита лаунчера.
-- Прогон на устройстве: старт VPN с умолчаниями (уже с `read_datagram_count: 8`), скорость против 128,
+- Прогон на телефоне: трафик и скорость WireGuard с `read_datagram_count: 8` против 128,
   `Connected tunnel socket` при смене Wi-Fi ↔ LTE.
