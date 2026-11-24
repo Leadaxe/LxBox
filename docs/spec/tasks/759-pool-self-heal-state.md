@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | In progress — ветка `claude/759-pool-self-heal-state`; ждёт релиза ядра с `GetPoolState` и поднятия пина; на устройстве не проверено |
+| **Статус** | In progress — Dart-часть в develop (6a02ad80, 38dbfae4); Kotlin-коммит в ветке `claude/759-pool-self-heal-state`, ждёт релиза ядра с `GetPoolState` и поднятия пина; на устройстве не проверено |
 | **Дата** | 2026-11-25 |
 | **Повод** | Ядро sing-box-lx получило самовосстановление группы `urltest` в режиме `round_robin` (SPEC 138 §3) и отдаёт его состояние через выдачу пула |
 | **Связанные** | 208 (пул round_robin, View pool), 209 (unary RPC через pingClient), 344 (экран группы), 322 (узел автовыбора); ядро: SPEC 138 §3.9, SPEC 019 v2 |
