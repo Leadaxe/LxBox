@@ -871,12 +871,20 @@ class CcChannel {
   /// поднялся) — НЕ путать с пустым пулом. `[]` = пул пуст (группа не
   /// round_robin / нет данных). Идёт через незасыпающий pingClient (native), так
   /// что в фоне отдаёт данные, а не молчит.
-  Future<List<CcPoolSlot>?> getPool(String tag) async {
-    final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetPool, {
+  Future<List<CcPoolSlot>?> getPool(String tag) async =>
+      (await getPoolState(tag))?.slots;
+
+  /// §759 — тот же снапшот вместе с состоянием самовосстановления группы
+  /// (ядро SPEC 138: сдвинутые ключи, «проблемы в адресе», заморозка; у слота
+  /// — карантин и счётчики). Контракт `null` / пустой пул — как у [getPool].
+  /// Нативная часть на ядре без `GetPoolState` отдаёт список слотов — тогда
+  /// состояние нулевое.
+  Future<CcPoolState?> getPoolState(String tag) async {
+    final r = await _methods.invokeMethod<Object?>(_CcMethods.ccGetPool, {
       'tag': tag,
     });
     if (r == null) return null; // клиент недоступен (§209)
-    return r.map((m) => CcPoolSlot.fromMap(_asMap(m))).toList();
+    return CcPoolState.fromWire(r);
   }
 
   /// §312 — unary снапшот состояния DNS-групп (kernel SPEC 035

@@ -1320,10 +1320,11 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 | Endpoint | Метод | Query |
 |---|---|---|
-| `/pool` | GET | `tag=<autoTag>` (обязателен) → `{tag, count, slots:[{slot,tag,delay,alive}]}` |
+| `/pool` | GET | `tag=<autoTag>` (обязателен) → `{tag, count, shiftedKeys, markedKeys, frozen, frozenSeconds, slots:[{slot,tag,delay,alive,quarantined,connections,confirmedFailures}]}` |
 
 - `tag` — auto-двойник round_robin-Направления (напр. `vpn-1-auto`).
 - `delay==0` → нода мёртвая / не измерена.
+- §759 (ядро SPEC 138) — самовосстановление: у слота `quarantined` (узел выведен из ротации; `delay` при этом не нулевой), `connections` / `confirmedFailures` (счётчики слота); у группы `shiftedKeys` (сдвинутые ключи закрепления), `markedKeys` (ключи с пометкой «проблема в адресе»), `frozen` и `frozenSeconds` (остаток заморозки; `0` при `frozen: true` — до конца прогона после смены сети). Вне round_robin и на ядре без `GetPoolState` — нули.
 - Не-round_robin группа / пул не готов → `slots: []` (не ошибка).
 - CC-клиент недоступен (туннель down) → **409** `conflict` (§209 — раньше тихо отдавал `count:0`, что путало диагностику).
 

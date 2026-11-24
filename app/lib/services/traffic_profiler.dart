@@ -749,6 +749,14 @@ class TrafficProfiler extends ChangeNotifier {
         // Update bytes — снапшот latest values, не emit'им event.
         prev.upBytes = up;
         prev.downBytes = down;
+        // §759 — фактический узел. Ядро (SPEC 138) повторяет NEW с тем же
+        // id, когда round_robin выбрал узел или сменил его после повтора:
+        // первое NEW ушло до выбора и несло только группу. Без обновления
+        // tcpClose записывал бы цепочку без узла.
+        prev.chains = routeChain;
+        prev.detours = detourChain;
+        prev.outboundType =
+            c.outboundType.isNotEmpty ? c.outboundType : null;
       }
       // §353 — kernel-closed дельта несёт момент закрытия по часам ядра;
       // запоминаем для diff-блока ниже (duration и tcpReset-эвристика).

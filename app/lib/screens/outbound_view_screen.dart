@@ -98,7 +98,10 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// §344 — живой пул round_robin-группы (§208 `getPool`). `null` = ещё не
   /// спросили / клиент недоступен (туннель down, §209) — НЕ пустой пул.
   /// Снимается один раз при открытии: unary-RPC, дёргать на ребилд нельзя.
-  List<CcPoolSlot>? _pool;
+  List<CcPoolSlot>? get _pool => _poolState?.slots;
+
+  /// §759 — пул вместе с состоянием самовосстановления (ядро SPEC 138).
+  CcPoolState? _poolState;
 
   /// §344 — режим группы (§322 §6.1: round_robin-Направление или `balancer{}` в
   /// конфиге). Не-группа — всегда false.
@@ -251,9 +254,9 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     // §344 — живой состав пула. Только для round_robin: у least_test пул
     // пуст по контракту ядра, спрашивать нечего.
     if (!_isBalancer) return;
-    final pool = await widget.homeController.getPool(widget.tag);
+    final pool = await widget.homeController.getPoolState(widget.tag);
     if (!mounted) return;
-    setState(() => _pool = pool);
+    setState(() => _poolState = pool);
   }
 
   void _onHopTap(RuntimeHop hop) => _onTagTap(hop.tag);
@@ -859,6 +862,8 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
         ),
         children: [
+          // §759 — сдвинутые ключи, «проблемы в адресе», заморозка.
+          if (_poolState != null) ?poolStateHeader(context, _poolState!),
           for (final s in slots ?? const <CcPoolSlot>[])
             poolSlotRow(context, s, onTap: () => _onTagTap(s.tag)),
         ],

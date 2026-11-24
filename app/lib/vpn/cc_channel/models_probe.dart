@@ -87,25 +87,99 @@ class CcGetUrlResult {
 /// §208 (SPEC 019 V2) — один слот пула round_robin-группы (`getPool`). Слоты
 /// фиксированы по `slot`; нода в слоте может меняться (дотест). `delay`==0 →
 /// мёртвая / не измерена (живая всегда ≥1 — ядро клампит на чтении).
+///
+/// §759 (ядро SPEC 138 §3.9) — состояние самовосстановления узла в слоте:
+/// [quarantined], [connections], [confirmedFailures]. У узла в карантине
+/// `delay` НЕ нулевой (история пробы не стирается), поэтому карантин —
+/// отдельный признак, а не «мёртвый слот». От ядра без этих полей и вне
+/// round_robin все три нулевые.
 class CcPoolSlot {
   const CcPoolSlot({
     required this.slot,
     required this.tag,
     required this.delay,
+    this.quarantined = false,
+    this.connections = 0,
+    this.confirmedFailures = 0,
   });
 
   final int slot;
   final String tag;
   final int delay; // мс, 0 = мёртвая/не измерена
 
+  /// §759 — узел выведен из ротации до следующего прогона / смены сети.
+  final bool quarantined;
+
+  /// §759 — счётчики слота с момента, как узел его занял (ядро делит оба
+  /// пополам на 256 соединениях — это доля, а не итог за всё время).
+  final int connections;
+  final int confirmedFailures;
+
   /// true → нода в слоте жива (есть замер). false → мёртвая/не измерена.
+  /// Карантин сюда не входит: см. [quarantined].
   bool get alive => delay > 0;
 
   factory CcPoolSlot.fromMap(Map<String, dynamic> m) => CcPoolSlot(
     slot: _int(m['slot']),
     tag: m['tag']?.toString() ?? '',
     delay: _int(m['delay']),
+    quarantined: m['quarantined'] == true,
+    connections: _int(m['connections']),
+    confirmedFailures: _int(m['confirmedFailures']),
   );
+}
+
+/// §759 (ядро SPEC 138 §3.9) — пул round_robin-группы вместе с состоянием
+/// самовосстановления группы (`GetPoolState`). От ядра без этих полей и вне
+/// round_robin всё, кроме [slots], нулевое — [hasSelfHealState] == false.
+class CcPoolState {
+  const CcPoolState({
+    this.slots = const [],
+    this.shiftedKeys = 0,
+    this.markedKeys = 0,
+    this.frozen = false,
+    this.frozenSeconds = 0,
+  });
+
+  final List<CcPoolSlot> slots;
+
+  /// Ключи закрепления, сдвинутые со своего слота.
+  final int shiftedKeys;
+
+  /// Ключи с пометкой «проблема в адресе».
+  final int markedKeys;
+
+  /// Самовосстановление заморожено (своя сеть легла / смена сети / пробуждение).
+  final bool frozen;
+
+  /// Остаток заморозки, с. 0 при [frozen] — «до конца прогона после смены сети».
+  final int frozenSeconds;
+
+  /// Есть что показать в шапке пула.
+  bool get hasSelfHealState => shiftedKeys > 0 || markedKeys > 0 || frozen;
+
+  /// Разбор ответа канала. Две формы: список слотов (нативная часть на ядре
+  /// без `GetPoolState`) и карта `{slots, shiftedKeys, markedKeys, frozen,
+  /// frozenSeconds}`.
+  factory CcPoolState.fromWire(Object? wire) {
+    if (wire is List) {
+      return CcPoolState(slots: _slots(wire));
+    }
+    if (wire is Map) {
+      final rawSlots = wire['slots'];
+      return CcPoolState(
+        slots: rawSlots is List ? _slots(rawSlots) : const [],
+        shiftedKeys: _int(wire['shiftedKeys']),
+        markedKeys: _int(wire['markedKeys']),
+        frozen: wire['frozen'] == true,
+        frozenSeconds: _int(wire['frozenSeconds']),
+      );
+    }
+    return const CcPoolState();
+  }
+
+  static List<CcPoolSlot> _slots(List<dynamic> raw) =>
+      [for (final m in raw) CcPoolSlot.fromMap(CcChannel._asMap(m))];
 }
 
 /// §312 — член DNS-группы из `getDNSGroups` (kernel SPEC 035, схема v3).

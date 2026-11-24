@@ -19,6 +19,66 @@ Color poolDelayColor(BuildContext context, int delay) {
   return cs.error;
 }
 
+/// §759 (ядро SPEC 138) — вторая строка слота: карантин и счётчики
+/// «соединения / подтверждённые отказы». `null`, когда показывать нечего —
+/// строка слота тогда выглядит как до §759.
+Widget? _slotNote(BuildContext context, CcPoolSlot slot) {
+  final cs = Theme.of(context).colorScheme;
+  final hasCounters = slot.connections > 0 || slot.confirmedFailures > 0;
+  if (!slot.quarantined && !hasCounters) return null;
+  final style = TextStyle(fontSize: 11, color: cs.onSurfaceVariant);
+  return Text.rich(
+    TextSpan(
+      children: [
+        if (slot.quarantined)
+          TextSpan(
+              text: getLocalText.s("quarantine"),
+              style: TextStyle(color: cs.error)),
+        if (slot.quarantined && hasCounters)
+          const TextSpan(text: ' · '), // l10n-exempt: separator
+        if (hasCounters)
+          TextSpan(
+              text: getLocalText.s("connections %d · failures %d",
+                  slot.connections, slot.confirmedFailures)),
+      ],
+    ),
+    style: style,
+    overflow: TextOverflow.ellipsis,
+  );
+}
+
+/// §759 (ядро SPEC 138) — части шапки пула: сдвинутые ключи закрепления,
+/// «проблемы в адресе», заморозка. Нулевые части не попадают в список;
+/// пустой список — у здорового пула, у least_test / failover и у ядра без
+/// этих полей.
+List<String> poolStateParts(CcPoolState state) => [
+      if (state.shiftedKeys > 0)
+        getLocalText.s("shifted keys: %d", state.shiftedKeys),
+      if (state.markedKeys > 0)
+        getLocalText.s("address problems: %d", state.markedKeys),
+      if (state.frozen)
+        state.frozenSeconds > 0
+            ? getLocalText.s("frozen for %d s", state.frozenSeconds)
+            : getLocalText.s("frozen until the network check ends"),
+    ];
+
+/// §759 — шапка пула одной строкой вторичного текста; `null` — показывать
+/// нечего (см. [poolStateParts]).
+Widget? poolStateHeader(BuildContext context, CcPoolState state) {
+  final parts = poolStateParts(state);
+  if (parts.isEmpty) return null;
+  final cs = Theme.of(context).colorScheme;
+  return Padding(
+    key: const ValueKey('pool-state-header'),
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(parts.join(' · '), // l10n-exempt: separator
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+    ),
+  );
+}
+
 /// §208/§344 — строка слота пула (`slot N · тег · delay`). Общий рендер для
 /// попапа «View pool» и раздела Members/Route экрана деталей (§344): формат
 /// слотов один, второй копии не заводим.
@@ -33,6 +93,7 @@ Widget poolSlotRow(
   final cs = Theme.of(context).colorScheme;
   final delayText =
       slot.delay > 0 ? '${slot.delay} ms' : '—'; // l10n-exempt: unit
+  final note = _slotNote(context, slot);
   final row = Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
@@ -48,16 +109,27 @@ Widget poolSlotRow(
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: Text(slot.tag,
-              style: const TextStyle(fontSize: 13),
-              overflow: TextOverflow.ellipsis),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(slot.tag,
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis),
+              ?note,
+            ],
+          ),
         ),
         const SizedBox(width: 8),
         Text(delayText,
             style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: poolDelayColor(context, slot.delay))),
+                // §759 — узел в карантине не в ротации: его задержка —
+                // история, а не рабочее значение, поэтому без цвета.
+                color: slot.quarantined
+                    ? cs.onSurfaceVariant
+                    : poolDelayColor(context, slot.delay))),
       ],
     ),
   );
@@ -69,7 +141,7 @@ Future<void> showPoolDialog(
   BuildContext context, {
   required String autoTag,
   required String title,
-  required Future<List<CcPoolSlot>?> Function(String autoTag) fetch,
+  required Future<CcPoolState?> Function(String autoTag) fetch,
 }) {
   return showDialog<void>(
     context: context,
@@ -86,14 +158,14 @@ class _PoolDialog extends StatefulWidget {
 
   final String autoTag;
   final String title;
-  final Future<List<CcPoolSlot>?> Function(String autoTag) fetch;
+  final Future<CcPoolState?> Function(String autoTag) fetch;
 
   @override
   State<_PoolDialog> createState() => _PoolDialogState();
 }
 
 class _PoolDialogState extends State<_PoolDialog> {
-  late Future<List<CcPoolSlot>?> _future;
+  late Future<CcPoolState?> _future;
 
   @override
   void initState() {
@@ -127,7 +199,7 @@ class _PoolDialogState extends State<_PoolDialog> {
       contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
       content: SizedBox(
         width: 320,
-        child: FutureBuilder<List<CcPoolSlot>?>(
+        child: FutureBuilder<CcPoolState?>(
           future: _future,
           builder: (ctx, snap) {
             if (snap.connectionState != ConnectionState.done) {
@@ -142,14 +214,15 @@ class _PoolDialogState extends State<_PoolDialog> {
             }
             // §209 — null = CC-клиент недоступен (сервис/туннель down). НЕ
             // путать с пустым пулом ([] = пул пуст / не round_robin).
-            final slots = snap.data;
-            if (slots == null) {
+            final state = snap.data;
+            if (state == null) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Text(getLocalText.s("Pool unavailable — tunnel not connected"),
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
               );
             }
+            final slots = state.slots;
             if (slots.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
@@ -160,6 +233,7 @@ class _PoolDialogState extends State<_PoolDialog> {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                ?poolStateHeader(context, state),
                 for (final s in slots) poolSlotRow(context, s),
               ],
             );

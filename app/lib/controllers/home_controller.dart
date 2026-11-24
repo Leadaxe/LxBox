@@ -387,6 +387,11 @@ class HomeController extends ChangeNotifier
   /// работает и в фоне (§209).
   Future<List<CcPoolSlot>?> getPool(String autoTag) => _cc.getPool(autoTag);
 
+  /// §759 — пул вместе с состоянием самовосстановления (ядро SPEC 138).
+  /// Контракт `null` / пустой пул — как у [getPool].
+  Future<CcPoolState?> getPoolState(String autoTag) =>
+      _cc.getPoolState(autoTag);
+
   @override
   void dispose() {
     _disposed = true; // §141 P1.9a — до super.dispose, гейтит async-колбэки

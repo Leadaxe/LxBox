@@ -42,6 +42,16 @@
 
 ### Added
 
+- **Load balance: the pool's self-repair is visible ([task 759](docs/spec/tasks/759-pool-self-heal-state.md), core SPEC 138).**
+  View pool and the pool section of the group screen show what the core does
+  when connections fail: `quarantine` on a node taken out of rotation, the
+  slot's connections and confirmed failures, and above the slots — the number
+  of sticky keys moved to another slot, the number of addresses marked as the
+  problem, and a freeze with the seconds left. A healthy pool looks as before.
+  The traffic profiler records the node a connection actually went through
+  when the core reports it after the connection was opened. Works with the
+  core that has `GetPoolState`; the pin is raised separately.
+
 - **Copy link for a TrustTunnel node from a sing-box config ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md)).**
   A `trusttunnel` node that came as an `endpoints[]` entry of a config, not as
   a link, now gives a `tt://` link on Copy link (and in Debug API

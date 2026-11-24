@@ -121,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       context,
       autoTag: autoTag,
       title: label,
-      fetch: _controller.getPool,
+      fetch: _controller.getPoolState,
     ));
   }
 

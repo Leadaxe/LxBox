@@ -37,9 +37,12 @@ class _ConnSnapshot {
   final String ip;
   final int port;
   final String network;
-  final List<String> chains; // §174 — маршрут [node, …selectors]
-  final List<String> detours; // §181 — detour-ось [detour, …наружу]
-  final String? outboundType; // §204 — тип финального outbound (для detail 1:1)
+  // §759 — цепочка и тип НЕ final: ядро (SPEC 138) повторно присылает NEW с
+  // тем же id, когда у соединения через round_robin стал известен или
+  // сменился фактический узел.
+  List<String> chains; // §174 — маршрут [node, …selectors]
+  List<String> detours; // §181 — detour-ось [detour, …наружу]
+  String? outboundType; // §204 — тип финального outbound (для detail 1:1)
   int upBytes;
   int downBytes;
   final DateTime startedAt;

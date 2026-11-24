@@ -6950,5 +6950,23 @@
   },
   "any of": {
     "value": "任一满足"
+  },
+  "quarantine": {
+    "value": "隔离"
+  },
+  "connections %d · failures %d": {
+    "value": "连接 %d · 失败 %d"
+  },
+  "shifted keys: %d": {
+    "value": "已偏移的键：%d"
+  },
+  "address problems: %d": {
+    "value": "地址问题：%d"
+  },
+  "frozen for %d s": {
+    "value": "冻结 %d 秒"
+  },
+  "frozen until the network check ends": {
+    "value": "冻结至网络检查结束"
   }
 }
