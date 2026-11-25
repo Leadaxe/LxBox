@@ -681,14 +681,29 @@ class CcChannel {
     // слот. Дедлайн = таймаут замера + запас; истёк — узел получает ошибку,
     // а в лог идёт строка. Сам вызов в ядре не трогаем: `cancelPing` рвёт
     // общий pingClient вместе с чужими замерами.
+    return _urlTestWithReplyDeadline(
+      tag,
+      timeoutMs,
+      _methods.invokeMethod<Map<dynamic, dynamic>>(
+        _CcMethods.ccUrlTestOutbound,
+        {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+      ),
+    );
+  }
+
+  /// §731 — ждёт ответ замера не дольше «таймаут замера + [urlTestReplyGrace]»
+  /// (при `timeoutMs == 0` — [_urlTestCoreDefaultMs] + запас). Общий для
+  /// боевого замера и замера probe-сессии.
+  Future<CcDelayResult> _urlTestWithReplyDeadline(
+    String tag,
+    int timeoutMs,
+    Future<Map<dynamic, dynamic>?> reply,
+  ) async {
     final budget = Duration(
             milliseconds: timeoutMs > 0 ? timeoutMs : _urlTestCoreDefaultMs) +
         urlTestReplyGrace;
     try {
-      final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-        _CcMethods.ccUrlTestOutbound,
-        {'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
-      ).timeout(budget);
+      final r = await reply.timeout(budget);
       return CcDelayResult.fromMap(_asMap(r ?? const {}));
     } on TimeoutException {
       AppLog.I.warning('URLTest $tag: no reply from core in '
@@ -741,12 +756,19 @@ class CcChannel {
     required int runId,
     String link = '',
     int timeoutMs = 0,
-  }) async {
-    final r = await _methods.invokeMethod<Map<dynamic, dynamic>>(
-      _CcMethods.probeUrlTest,
-      {'runId': runId, 'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+  }) {
+    // §731 — тот же страховочный дедлайн, что у [urlTestOutbound]: замер с
+    // TLS fragment ядро держит, пока узел не подтвердит данные, мимо таймаута
+    // замера; без дедлайна такой узел навсегда занимал слот пула пробы, и
+    // тест подписки вставал. Вызов в ядре гасит `probeStop` в конце батча.
+    return _urlTestWithReplyDeadline(
+      tag,
+      timeoutMs,
+      _methods.invokeMethod<Map<dynamic, dynamic>>(
+        _CcMethods.probeUrlTest,
+        {'runId': runId, 'tag': tag, 'link': link, 'timeoutMs': timeoutMs},
+      ),
     );
-    return CcDelayResult.fromMap(_asMap(r ?? const {}));
   }
 
   /// §669 — обрыв начатых замеров прогона [runId] (как [cancelPing] §175:

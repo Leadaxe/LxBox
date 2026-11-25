@@ -93,6 +93,11 @@
 - **WARP: the generator no longer writes `reserved`.** The WARP node generator put the registration's `client_id` into the peer as `reserved`; from Russian networks DPI recognises WARP by it and cuts an AmneziaWG tunnel after about 20 packets. The node is now built without `reserved`, the **Bind to this device (reserved)** option is removed from the WARP wizard, and the Debug API `POST /warp` no longer takes `includeReserved`. A node you already have keeps its `reserved` until you recreate it; imported links with `reserved` are read as before.
   (RU: генератор WARP больше не пишет `reserved`: из российских сетей DPI узнаёт WARP по `client_id` и рвёт туннель AmneziaWG примерно после 20 пакетов. Узел строится без `reserved`, опция Bind to this device (reserved) убрана из мастера WARP, Debug API `POST /warp` больше не принимает `includeReserved`. Уже созданный узел сохраняет `reserved` до пересоздания; импортируемые ссылки с `reserved` читаются как раньше.)
 
+### Fixed
+
+- **The server test of a subscription stopped at the same node with TLS Fragment on ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).** With fragmentation the core waits for the server to acknowledge each piece of the handshake and does not apply the test timeout to that wait, so a server that accepts the connection and then stays silent never got a result. Ten such servers took all test slots, and the counter stopped. The app now stops waiting 3 s after the test timeout, as it already did for the ping with the VPN on, and marks the server as failed.
+  (RU: тест серверов подписки вставал на одном и том же числе при включённом TLS Fragment: ядро ждало от молчащего сервера подтверждения куска рукопожатия мимо таймаута замера, десять таких серверов занимали все слоты теста. Теперь приложение перестаёт ждать через 3 с после таймаута замера, как уже делал пинг при включённом VPN, и отмечает сервер недоступным.)
+
 ## [2.25.23] — 2026-11-17
 
 ### Added
