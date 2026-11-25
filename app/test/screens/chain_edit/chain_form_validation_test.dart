@@ -40,12 +40,12 @@ ChainHopCandidate _node(String tag,
         detour: detour,
         outboundType: 'vless');
 
-ChainHopCandidate _wg(String tag, {ChainHopKind kind = ChainHopKind.node}) =>
+ChainHopCandidate _tunnel(String tag, {ChainHopKind kind = ChainHopKind.node}) =>
     ChainHopCandidate(
         tag: tag,
         kind: kind,
         outboundType: kind == ChainHopKind.node ? 'wireguard' : '',
-        wireguardInside: true);
+        tunnelInside: true);
 
 ChainHopCandidate _chain(String tag, {bool below = false}) =>
     ChainHopCandidate(tag: tag, kind: ChainHopKind.chain, below: below);
@@ -275,17 +275,17 @@ void main() {
     });
   });
 
-  group('WireGuard на позиции ≥1 (§760)', () {
+  group('туннель на позиции ≥1 (§760)', () {
     test('WG-группа второй позицией — warning, сохранение разрешено', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'via-de', hops: ['direct-out', 'o-proton']),
         _ctx([
           const ChainHopCandidate(
               tag: 'direct-out', kind: ChainHopKind.builtin),
-          _wg('o-proton', kind: ChainHopKind.direction),
+          _tunnel('o-proton', kind: ChainHopKind.direction),
         ]),
       );
-      final n = _find(issues, ChainIssueCode.wireguardOnLink);
+      final n = _find(issues, ChainIssueCode.tunnelOnLink);
       expect(n, isNotNull);
       expect(n!.level, ChainIssueLevel.warning);
       expect(n.hops, ['o-proton']);
@@ -295,18 +295,18 @@ void main() {
     test('WG первой позицией — тишина: позицию 0 ядро не копирует', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'via-de', hops: ['wg-home', 'de-exit']),
-        _ctx([_wg('wg-home'), _node('de-exit')]),
+        _ctx([_tunnel('wg-home'), _node('de-exit')]),
       );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.wireguardOnLink)));
+      expect(_codes(issues), isNot(contains(ChainIssueCode.tunnelOnLink)));
     });
 
     test('несколько WG-позиций — одна находка со всеми тегами', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'via-de', hops: ['home', 'wg-a', 'wg-b']),
-        _ctx([_node('home'), _wg('wg-a'), _wg('wg-b')]),
+        _ctx([_node('home'), _tunnel('wg-a'), _tunnel('wg-b')]),
       );
       final found =
-          issues.where((i) => i.code == ChainIssueCode.wireguardOnLink);
+          issues.where((i) => i.code == ChainIssueCode.tunnelOnLink);
       expect(found, hasLength(1));
       expect(found.single.hops, ['wg-a', 'wg-b']);
     });

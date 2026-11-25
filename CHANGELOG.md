@@ -42,16 +42,18 @@
 
 ### Added
 
-- **Chain editor warns about WireGuard after the first position ([task 760](docs/spec/tasks/760-chain-wireguard-hop-warning.md)).**
-  A WireGuard node, or a group or direction with WireGuard nodes, at a chain
-  position after the first gets a warning. There the chain dials a copy of the
-  node, and the server keeps one session per WireGuard key: while the node
-  itself is in use, for example by a group check, the copy's handshakes fail,
-  and the group still shows the node as working. Saving is not blocked. Issue #233.
-  (RU: Редактор цепочки предупреждает о WireGuard после первой позиции: там
-  цепочка ходит через копию узла, а сервер держит одну сессию на ключ
-  WireGuard — пока сам узел в работе, хендшейки копии не проходят, а группа
-  показывает узел рабочим. Сохранение не запрещено.)
+- **Chain editor warns about tunnels after the first position ([task 760](docs/spec/tasks/760-chain-tunnel-hop-warning.md)).**
+  WireGuard (AmneziaWG included), MASQUE, Tailscale, OpenVPN and OpenConnect
+  at a chain position after the first, as a node or inside a group or
+  direction, get a warning, and the list of positions to add marks them. There
+  the chain dials a copy of the node with the same keys, and a tunnel server
+  keeps one session per key: while the node itself is in use, for example by a
+  group check, the copy and the node knock each other off, and the group still
+  shows the node as working. Saving is not blocked. Issue #233.
+  (RU: Редактор цепочки предупреждает о туннелях после первой позиции —
+  WireGuard, MASQUE, Tailscale, OpenVPN, OpenConnect — и помечает их в списке
+  добавления: там цепочка ходит через копию узла с теми же ключами, а сервер
+  держит одну сессию на ключ. Сохранение не запрещено.)
 
 - **Load balance: the pool's self-repair is visible ([task 759](docs/spec/tasks/759-pool-self-heal-state.md), core SPEC 138).**
   View pool and the pool section of the group screen show what the core does
