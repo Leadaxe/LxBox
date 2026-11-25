@@ -90,6 +90,9 @@
 
 ### Fixed
 
+- **The VPN notification comes back after it is swiped away ([task 223](docs/spec/tasks/223-notification-live-labels.md)).** On Android 14 and later the notification of a running VPN can be swiped away or cleared with the rest of the shade (HyperOS does it on "clear all"). The tunnel kept working, but the notification stayed gone until the next connect or node change. It now returns at once while the VPN is on; after Stop it does not come back.
+  (RU: уведомление VPN возвращается, если его смахнуть: на Android 14+ его можно убрать свайпом или очисткой шторки (HyperOS убирает его кнопкой «очистить всё»), туннель продолжал работать, а уведомление не появлялось до переподключения или смены узла. Теперь оно сразу возвращается, пока VPN включён; после Stop не появляется.)
+
 - **WARP: the generator no longer writes `reserved`.** The WARP node generator put the registration's `client_id` into the peer as `reserved`; from Russian networks DPI recognises WARP by it and cuts an AmneziaWG tunnel after about 20 packets. The node is now built without `reserved`, the **Bind to this device (reserved)** option is removed from the WARP wizard, and the Debug API `POST /warp` no longer takes `includeReserved`. A node you already have keeps its `reserved` until you recreate it; imported links with `reserved` are read as before.
   (RU: генератор WARP больше не пишет `reserved`: из российских сетей DPI узнаёт WARP по `client_id` и рвёт туннель AmneziaWG примерно после 20 пакетов. Узел строится без `reserved`, опция Bind to this device (reserved) убрана из мастера WARP, Debug API `POST /warp` больше не принимает `includeReserved`. Уже созданный узел сохраняет `reserved` до пересоздания; импортируемые ссылки с `reserved` читаются как раньше.)
 

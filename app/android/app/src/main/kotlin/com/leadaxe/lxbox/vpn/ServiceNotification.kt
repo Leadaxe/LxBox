@@ -181,6 +181,13 @@ class ServiceNotification(private val service: Service) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
+            // §223 — на Android 14+ (HyperOS 3 и др.) уведомление FGS смахивается
+            // несмотря на setOngoing, а периодического notify у нас нет: без
+            // deleteIntent оно не вернулось бы до переподключения. Смахнули →
+            // тот же ACTION_UPDATE_NOTIFICATION, ресивер перерисует только в
+            // Started. Снятие самим приложением (stopForeground) deleteIntent
+            // не шлёт.
+            .setDeleteIntent(broadcastPI(BoxVpnService.ACTION_UPDATE_NOTIFICATION, 4))
 
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
 

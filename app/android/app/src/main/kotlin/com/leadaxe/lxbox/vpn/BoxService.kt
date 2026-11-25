@@ -261,6 +261,8 @@ class BoxService(
                     // не стекаются). СТРОГО в Started: в Starting держим
                     // "Starting..." (connect-рендер сам подхватит кэш), а после
                     // notification.stop() повторный show() воскресил бы шторку.
+                    // Источники: Dart (смена лейбла), Taildrop, deleteIntent
+                    // уведомления (юзер смахнул его на Android 14+).
                     if (status == VpnStatus.Started) {
                         runCatching {
                             notification.show(
