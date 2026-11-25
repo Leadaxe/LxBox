@@ -40,6 +40,13 @@ ChainHopCandidate _node(String tag,
         detour: detour,
         outboundType: 'vless');
 
+ChainHopCandidate _wg(String tag, {ChainHopKind kind = ChainHopKind.node}) =>
+    ChainHopCandidate(
+        tag: tag,
+        kind: kind,
+        outboundType: kind == ChainHopKind.node ? 'wireguard' : '',
+        wireguardInside: true);
+
 ChainHopCandidate _chain(String tag, {bool below = false}) =>
     ChainHopCandidate(tag: tag, kind: ChainHopKind.chain, below: below);
 
@@ -265,6 +272,43 @@ void main() {
         ChainIssueCode.detourIgnoredOnLink,
       ]));
       expect(chainFormCanSave(issues), isTrue);
+    });
+  });
+
+  group('WireGuard на позиции ≥1 (§760)', () {
+    test('WG-группа второй позицией — warning, сохранение разрешено', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'via-de', hops: ['direct-out', 'o-proton']),
+        _ctx([
+          const ChainHopCandidate(
+              tag: 'direct-out', kind: ChainHopKind.builtin),
+          _wg('o-proton', kind: ChainHopKind.direction),
+        ]),
+      );
+      final n = _find(issues, ChainIssueCode.wireguardOnLink);
+      expect(n, isNotNull);
+      expect(n!.level, ChainIssueLevel.warning);
+      expect(n.hops, ['o-proton']);
+      expect(chainFormCanSave(issues), isTrue);
+    });
+
+    test('WG первой позицией — тишина: позицию 0 ядро не копирует', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'via-de', hops: ['wg-home', 'de-exit']),
+        _ctx([_wg('wg-home'), _node('de-exit')]),
+      );
+      expect(_codes(issues), isNot(contains(ChainIssueCode.wireguardOnLink)));
+    });
+
+    test('несколько WG-позиций — одна находка со всеми тегами', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'via-de', hops: ['home', 'wg-a', 'wg-b']),
+        _ctx([_node('home'), _wg('wg-a'), _wg('wg-b')]),
+      );
+      final found =
+          issues.where((i) => i.code == ChainIssueCode.wireguardOnLink);
+      expect(found, hasLength(1));
+      expect(found.single.hops, ['wg-a', 'wg-b']);
     });
   });
 

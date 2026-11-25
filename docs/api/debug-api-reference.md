@@ -1008,7 +1008,8 @@ Write'ы проходят **тот же гейт, что и форма реда�
 кнопки «сохранить»): `stripKeptForHop` — цепочка снимает strip-ключ, который
 звено требует (`on_hop_required` реестра, напр. `tls.utls` на reality; сборка
 снимет ключ с патча), `detourAtEntry`, `detourIgnoredOnLink`, `missingHops`,
-`masqueFixedH3OnLink`, `wgBehindTcpHop`. Бывший блокирующий
+`masqueFixedH3OnLink`, `wgBehindTcpHop`, `wireguardOnLink` (WireGuard на
+позиции ≥1 — копия узла конфликтует с оригиналом, задача 760). Бывший блокирующий
 `realityUtlsStripped` снят (задача 556).
 
 Этот класс ошибок `sing-box check` **пропускает**, а `run` роняет, — поэтому

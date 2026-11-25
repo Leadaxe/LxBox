@@ -4063,6 +4063,9 @@
   "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
     "value": "Позиция %s — MASQUE с фиксированным h3: QUIC через предыдущий хоп может повиснуть. Включите у узла vhttp: auto (или h2)."
   },
+  "Not recommended: positions %s are WireGuard or contain WireGuard nodes. After the first position the chain dials a copy of the node, and the server keeps one session per WireGuard key. While the node itself is in use, for example by a group check, the copy's handshakes fail, and the group still shows the node as working.": {
+    "value": "Не рекомендуется: позиции %s — WireGuard или содержат WireGuard-узлы. После первой позиции цепочка ходит через копию узла, а сервер держит одну сессию на ключ WireGuard. Пока сам узел тоже в работе, например его проверяет группа, хендшейки копии не проходят, а группа показывает узел рабочим."
+  },
   "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
     "value": "Позиция %s — WireGuard за TCP-хопом: сервер предыдущей позиции должен реально проксировать UDP, иначе хендшейк уходит в никуда."
   },

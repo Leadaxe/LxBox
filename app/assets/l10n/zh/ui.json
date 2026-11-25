@@ -3805,6 +3805,9 @@
   "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
     "value": "位置 %s 是固定 h3 的 MASQUE：经上一跳的 QUIC 可能卡住。请把该节点的 vhttp 设为 auto（或 h2）。"
   },
+  "Not recommended: positions %s are WireGuard or contain WireGuard nodes. After the first position the chain dials a copy of the node, and the server keeps one session per WireGuard key. While the node itself is in use, for example by a group check, the copy's handshakes fail, and the group still shows the node as working.": {
+    "value": "不建议：位置 %s 是 WireGuard 或包含 WireGuard 节点。从第二个位置起，链路通过节点的副本连接，而服务器对每个 WireGuard 密钥只保留一个会话。当节点本身也在使用中（例如被组检测）时，副本的握手会失败，而组仍显示该节点可用。"
+  },
   "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
     "value": "位置 %s 是位于 TCP 跳之后的 WireGuard：上一跳服务器必须能真正转发 UDP，否则握手无处可去。"
   },

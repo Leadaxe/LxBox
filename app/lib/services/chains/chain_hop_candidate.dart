@@ -49,6 +49,7 @@ class ChainHopCandidate {
     this.detour = false,
     this.outboundType = '',
     this.masqueVhttp = '',
+    this.wireguardInside = false,
     this.offered = true,
     this.displayLabel = '',
     this.subline = '',
@@ -109,6 +110,12 @@ class ChainHopCandidate {
   /// предыдущий хоп без бюджета хендшейка (SPEC 074) — может повиснуть;
   /// `auto`/`h2` легальны и молчат (директива оператора 25.08).
   final String masqueVhttp;
+
+  /// Позиция сама WireGuard-узел (AmneziaWG тоже `type: wireguard`) или
+  /// группа/Направление, где такой узел есть среди членов (рекурсивно).
+  /// На позиции ≥1 ядро ходит через КОПИЮ узла, а у WG одна сессия на ключ
+  /// на сервере — копия и оригинал перебивают друг другу хендшейки (§760).
+  final bool wireguardInside;
 }
 
 /// Быстрый доступ к кандидату по тегу.

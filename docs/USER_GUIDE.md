@@ -1431,6 +1431,13 @@ running core.
   only over UDP and has no fallback transport. You cannot spot the bad case in
   advance: the connection looks successful, and the server either forwards the
   datagrams or drops them without a word.
+- WireGuard after the first position is not recommended, whether it is a
+  node or a group or direction with WireGuard nodes. From the second position
+  on, the chain dials a copy of the node, and the server keeps one session per
+  WireGuard key. While the node itself is also in use, for example by a group
+  check, the copy's handshakes fail, and the group still shows the node as
+  working. The chain editor warns about such positions; the chain can still be
+  saved.
 - An HTTP proxy carries only TCP connections. Nodes with a TCP transport
   (VLESS, Trojan, VMess) work behind it fully, including the UDP of apps that
   they wrap inside their own stream. Nodes that speak UDP themselves

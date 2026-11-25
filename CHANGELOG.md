@@ -42,6 +42,17 @@
 
 ### Added
 
+- **Chain editor warns about WireGuard after the first position ([task 760](docs/spec/tasks/760-chain-wireguard-hop-warning.md)).**
+  A WireGuard node, or a group or direction with WireGuard nodes, at a chain
+  position after the first gets a warning. There the chain dials a copy of the
+  node, and the server keeps one session per WireGuard key: while the node
+  itself is in use, for example by a group check, the copy's handshakes fail,
+  and the group still shows the node as working. Saving is not blocked. Issue #233.
+  (RU: Редактор цепочки предупреждает о WireGuard после первой позиции: там
+  цепочка ходит через копию узла, а сервер держит одну сессию на ключ
+  WireGuard — пока сам узел в работе, хендшейки копии не проходят, а группа
+  показывает узел рабочим. Сохранение не запрещено.)
+
 - **Load balance: the pool's self-repair is visible ([task 759](docs/spec/tasks/759-pool-self-heal-state.md), core SPEC 138).**
   View pool and the pool section of the group screen show what the core does
   when connections fail: `quarantine` on a node taken out of rotation, the

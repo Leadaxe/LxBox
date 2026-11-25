@@ -69,6 +69,12 @@ enum ChainIssueCode {
   /// протоколах не существует, отказ выглядит чёрной дырой.
   wgBehindTcpHop,
 
+  /// WireGuard позицией ≥1 — сам узел или внутри группы/Направления. Ядро
+  /// ходит через копию узла, у WG одна сессия на ключ на сервере: копия и
+  /// оригинал перебивают друг другу хендшейки, а проверка группы смотрит на
+  /// оригинал и остаётся зелёной (§760, issue #233). Не запрет — совет.
+  wireguardOnLink,
+
   /// Позиция — цепочка, объявленная НИЖЕ по списку (ссылка вперёд).
   forwardChainReference,
 
@@ -375,6 +381,30 @@ List<ChainFormIssue> validateChainForm(
         "a link always dials through the previous position. The path is exactly "
         "as shown.", _list(detoured)),
       hops: detoured,
+    ));
+  }
+
+  // §760 — WireGuard на позиции ≥1. Позиция 0 не копируется ядром
+  // (`hop.go` ResolveLeaf: index 0 → сам узел), там конфликта нет.
+  final wgLinks = <String>[];
+  for (var i = 1; i < hops.length; i++) {
+    if ((ctx.candidates[hops[i]]?.wireguardInside ?? false) &&
+        !wgLinks.contains(hops[i])) {
+      wgLinks.add(hops[i]);
+    }
+  }
+  if (wgLinks.isNotEmpty) {
+    soft.add(ChainFormIssue(
+      code: ChainIssueCode.wireguardOnLink,
+      level: ChainIssueLevel.warning,
+      message: getLocalText.s(
+          "Not recommended: positions %s are WireGuard or contain WireGuard "
+          "nodes. After the first position the chain dials a copy of the node, "
+          "and the server keeps one session per WireGuard key. While the node "
+          "itself is in use, for example by a group check, the copy's "
+          "handshakes fail, and the group still shows the node as working.",
+          _list(wgLinks)),
+      hops: wgLinks,
     ));
   }
 
