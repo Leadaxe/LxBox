@@ -205,7 +205,32 @@ void main() {
       expect(i.level, ChainIssueLevel.blocking);
       expect(i.message, contains('"wg"'));
       expect(i.message, contains('"other"'));
+      expect(i.message, contains('in chain "mine" (position 2)'));
+      expect(i.message, isNot(contains('here')));
       expect(i.message, contains('make a copy'));
+      expect(chainFormCanSave(issues), isFalse);
+    });
+
+    test('узел с фиксированным портом на позиции 2 — ошибка с подсказкой', () {
+      final withPort = {
+        ...bodies,
+        'wgp': (
+          section: 'endpoints',
+          body: {'tag': 'wgp', 'type': 'wireguard', 'listen_port': 51820},
+        ),
+      };
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'mine', hops: ['home', 'wgp']),
+        ChainFormContext(bodies: withPort),
+      );
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.level, ChainIssueLevel.blocking);
+      expect(
+          i.message,
+          '"wgp" at position 2 of chain "mine" has a fixed local port '
+          '(listen_port) — remove the port from the node, or put a copy of '
+          'the node without the port at this position.');
+      expect(i.hops, ['wgp']);
       expect(chainFormCanSave(issues), isFalse);
     });
 

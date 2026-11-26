@@ -32,7 +32,6 @@ import '../mixins/mixin_apply.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
-import 'post_steps/chain_position_yields.dart' show applyChainPositionYields;
 import '../chains/chain_takeover.dart' show applyChainTakeover;
 import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
@@ -1025,12 +1024,11 @@ Future<BuildResult?> _buildConfig({
   // конфиг целиком) и кольца зависимостей — ДО валидатора, чей §254-fatal
   // остаётся последним рубежом на неразруленное.
   // §761 — ядро v1.14.4-lx.37-rc.2 само ставит `detour` узлам позиций ≥ 1
-  // цепочек: одному узлу или группе нужен один путь. Кольца и конфликты
-  // разводятся копиями, неисправимая цепочка выпадает (ссылки на неё
-  // дочищает санитайзер ниже); затем у узлов позиций ≥ 1 снимаются
-  // фиксированные локальные порты.
+  // цепочек: одному узлу или группе нужен один путь, фиксированный локальный
+  // порт у такого узла — ошибка загрузки. Цепочка с кольцом, конфликтом или
+  // портом выпадает (ссылки на неё дочищает санитайзер ниже), порт не
+  // снимается — как у лаунчера.
   emitWarnings.addAll(applyChainTakeover(config));
-  emitWarnings.addAll(applyChainPositionYields(config));
   final graphCodes = <RegistryWarning>[];
   final detourThroughGroup = <(String, String)>[];
   final detourUnavailable = <(String, String)>[...detourReport.unavailable];

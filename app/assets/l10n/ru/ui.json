@@ -7269,12 +7269,6 @@
   "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.": {
     "value": "«%s» есть на позициях %d и %d — сделайте для позиции %6$d копию «%4$s» без «%5$s»."
   },
-  "\"%s\" is used in chain \"%s\" (position %d) and here (\"%s\") at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
-    "value": "«%s» используется в цепочке «%s» (позиция %d) и здесь («%s») на позиции %d — сделайте копию «%s» (и её узлов; копиям WireGuard нужны другие ключи) для одной из них."
-  },
-  "The detour of \"%s\" at the entry leads to \"%s\", which this chain (\"%s\") takes over higher up — remove that detour or take \"%s\" out of this chain.": {
-    "value": "detour узла «%s» на входе ведёт в «%s», который эта цепочка («%s») берёт выше — уберите этот detour или уберите «%s» из цепочки."
-  },
   "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
     "value": "Тег «%s» занят узлом или группой, а цепочке он нужен для хопа — переименуйте этот узел."
   },
@@ -7292,5 +7286,11 @@
   },
   "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.": {
     "value": "В цепочке «%s» detour узла «%s» на входе ведёт в «%s», который цепочка берёт выше — уберите этот detour или уберите «%s» из цепочки."
+  },
+  "\"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or put a copy of the node without the port at this position.": {
+    "value": "«%s» на позиции %d цепочки «%s» имеет фиксированный локальный порт (%s) — уберите порт у узла или поставьте на эту позицию копию узла без порта."
+  },
+  "\"%s\" inside \"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or use a copy of the node without the port in \"%s\".": {
+    "value": "«%s» внутри «%s» на позиции %d цепочки «%s» имеет фиксированный локальный порт (%s) — уберите порт у узла или используйте в «%6$s» копию узла без порта."
   }
 }

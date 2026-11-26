@@ -158,4 +158,80 @@ void main() {
     expect(applyChainTakeover(c), isEmpty);
     expect((c['outbounds'] as List), hasLength(3));
   });
+
+  // Фиксированный локальный порт у узла позиции ≥ 1 (ALGORITHM К5,
+  // `chain_hop_local_port` лаунчера): цепочка выпадает, порт остаётся.
+  test('WireGuard с listen_port на позиции 2 → выпала, порт не снят', () {
+    final wg = {'tag': 'wg', 'type': 'wireguard', 'listen_port': 51820};
+    final c = _cfg([
+      _n('A'),
+      _c('ch', ['A', 'wg']),
+    ], [
+      wg
+    ]);
+    final w = applyChainTakeover(c);
+    expect(_byTag(c, 'ch'), isNull);
+    expect(_byTag(c, 'wg')!['listen_port'], 51820);
+    expect(w.single, contains('"wg" at position 2 has a fixed local port '
+        '(listen_port)'));
+  });
+
+  test('порт у члена группы позиции 2 → выпала, подсказка называет группу',
+      () {
+    final c = _cfg([
+      _n('A'),
+      {'tag': 'ts', 'type': 'tailscale', 'relay_server_port': 3478},
+      _n('B'),
+      _g('G', ['B', 'ts']),
+      _c('ch', ['A', 'G']),
+    ]);
+    final f = checkChainTakeover(chainBodiesOf(c), ['ch']).single;
+    expect(f.fault, ChainTakeoverFault.localPort);
+    expect(f.tag, 'ts');
+    expect(f.via, 'G');
+    expect(f.position, 1);
+    expect(f.fields, ['relay_server_port']);
+    expect(f.warning, contains('"ts" inside "G" at position 2'));
+  });
+
+  test('порт на входе, нулевой порт и поля сокета — не ошибка', () {
+    final c = _cfg([
+      {'tag': 'oc', 'type': 'openconnect', 'dtls_local_port': 0},
+      _c('ch1', ['wg0', 'oc']),
+      _n('B'),
+      {'tag': 'wg2', 'type': 'wireguard', 'bind_interface': 'eth0'},
+      _c('ch2', ['B', 'wg2']),
+    ], [
+      {'tag': 'wg0', 'type': 'wireguard', 'listen_port': 51820},
+    ]);
+    expect(applyChainTakeover(c), isEmpty);
+  });
+
+  test('цепочка, выпавшая из-за порта, мест не занимает', () {
+    final c = _cfg([
+      _n('A'),
+      _n('X'),
+      _c('ch1', ['A', 'wg']),
+      _c('ch2', ['X', 'A']),
+    ], [
+      {'tag': 'wg', 'type': 'wireguard', 'listen_port': 1},
+    ]);
+    final f = checkChainTakeover(chainBodiesOf(c), ['ch1', 'ch2']);
+    expect(f.map((e) => e.chain), ['ch1']);
+  });
+
+  // Как ядро (`protocol/chain/rewrite.go`): не считаются только `direct` и
+  // `block`.
+  test('узел типа dns в двух цепочках на позиции ≥ 1 — конфликт', () {
+    final c = _cfg([
+      _n('A'),
+      _n('B'),
+      _n('d', 'dns'),
+      _c('ch1', ['A', 'd']),
+      _c('ch2', ['B', 'd']),
+    ]);
+    final f = checkChainTakeover(chainBodiesOf(c), ['ch1', 'ch2']).single;
+    expect(f.chain, 'ch2');
+    expect(f.fault, ChainTakeoverFault.otherChain);
+  });
 }

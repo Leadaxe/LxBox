@@ -55,7 +55,7 @@ List<ChainTrouble> findChainTroubles({
     final state = ChainFormState.of(c, pool: pool, lists: lists);
     final f = chainOnePathFailure(state, bodies, originalTag: c.tag);
     if (f == null) continue;
-    final message = chainOnePathMessage(f, inEditor: false);
+    final message = chainOnePathMessage(f);
     if (message == null) continue;
     out.add(ChainTrouble(chain: c, failure: f, message: message));
   }

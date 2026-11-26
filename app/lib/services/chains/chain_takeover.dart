@@ -16,15 +16,34 @@
 /// - **конфликт** — узел или группа нужны цепочке на позиции ≥ 1 и
 ///   встречаются ещё где-то: на другой позиции ≥ 1 той же цепочки или в
 ///   другой цепочке на любой позиции; повтор тега. Общий вход двух цепочек
-///   (один узел или Направление на позиции 0 обеих) — не конфликт.
+///   (один узел или Направление на позиции 0 обеих) — не конфликт;
+/// - **фиксированный локальный порт** у узла позиции ≥ 1 (ALGORITHM К5):
+///   ядро такой узел не загрузит. Порт не снимается — цепочка выпадает, как
+///   у лаунчера (`chain_hop_local_port`, контракт 1.1.184).
 ///
-/// Достижимость — по всем членам групп любой вложенности; `direct`, `block` и
-/// `dns` не считаются. Чистая функция над картой тел: её зовут сборка
+/// Достижимость — по всем членам групп любой вложенности; `direct` и `block`
+/// не считаются (как в ядре, `protocol/chain/rewrite.go`). Чистая функция над картой тел: её зовут сборка
 /// ([applyChainTakeover]) и форма цепочки.
 library;
 
 const _kGroupTypes = {'selector', 'urltest'};
-const _kNoPath = {'direct', 'block', 'dns'};
+const _kNoPath = {'direct', 'block'};
+
+/// Фиксированный локальный порт по типу узла (ALGORITHM К5).
+const Map<String, List<String>> kChainHopLocalPortFields = {
+  'wireguard': ['listen_port'],
+  'tailscale': ['listen_port', 'relay_server_port'],
+  'openconnect': ['dtls_local_port'],
+};
+
+/// Значение, которое ядро считает незаданным (как `chainZeroJSON` лаунчера).
+bool _unset(Object? v) =>
+    v == null ||
+    v == false ||
+    v == 0 ||
+    (v is String && v.isEmpty) ||
+    (v is List && v.isEmpty) ||
+    (v is Map && v.isEmpty);
 
 /// Почему цепочка не собирается.
 enum ChainTakeoverFault {
@@ -46,6 +65,10 @@ enum ChainTakeoverFault {
   /// Тег хопа `<цепочка>#<i>` занят узлом или группой конфига.
   hopTagTaken,
 
+  /// Фиксированный локальный порт у узла позиции ≥ 1 ([tag] — узел, [via] —
+  /// тег позиции, поля — [ChainTakeoverFailure.fields]).
+  localPort,
+
   /// Позиция повторяется.
   duplicate,
 }
@@ -66,6 +89,7 @@ class ChainTakeoverFailure {
     this.otherChain = '',
     this.otherPosition = 0,
     this.otherVia = '',
+    this.fields = const [],
   });
 
   final String chain;
@@ -76,6 +100,9 @@ class ChainTakeoverFailure {
   final String otherChain;
   final int otherPosition;
   final String otherVia;
+
+  /// Для [ChainTakeoverFault.localPort] — поля портов узла.
+  final List<String> fields;
 
   /// Что сделать: копия какой группы и для какой позиции. Внутри цепочки —
   /// копия группы верхней позиции без [tag]; если [tag] стоит там позицией
@@ -121,6 +148,13 @@ class ChainTakeoverFailure {
           ChainTakeoverFault.nestedChain =>
             'nested chain "$tag" at position $p — a nested chain is only '
                 'allowed at the entry.',
+          ChainTakeoverFault.localPort => via == tag
+              ? '"$tag" at position $p has a fixed local port '
+                  '(${fields.join(', ')}) — remove the port from the node, or '
+                  'put a copy of the node without the port at this position.'
+              : '"$tag" inside "$via" at position $p has a fixed local port '
+                  '(${fields.join(', ')}) — remove the port from the node, or '
+                  'use a copy of the node without the port in "$via".',
           ChainTakeoverFault.hopTagTaken =>
             'the tag "$tag" is taken by a node or group; the core needs it '
                 'for the chain\'s hop — rename that node.',
@@ -190,6 +224,7 @@ List<ChainTakeoverFailure> checkChainTakeover(
     String otherChain = '',
     int otherPosition = 0,
     String otherVia = '',
+    List<String> fields = const [],
   }) =>
       ChainTakeoverFailure(
         chain: chainTag,
@@ -200,6 +235,7 @@ List<ChainTakeoverFailure> checkChainTakeover(
         otherChain: otherChain,
         otherPosition: otherPosition,
         otherVia: otherVia,
+        fields: fields,
       );
 
   final seen = <String>{};
@@ -218,6 +254,43 @@ List<ChainTakeoverFailure> checkChainTakeover(
         failure: fail(ChainTakeoverFault.hopTagTaken, i, hop),
         reached: none
       );
+    }
+  }
+
+  // Фиксированный локальный порт у узла позиции ≥ 1 — до колец и конфликтов,
+  // как у лаунчера: такая цепочка мест не занимает.
+  for (var i = 1; i < positions.length; i++) {
+    final p = positions[i];
+    final leaves = <String>[];
+    void collect(String tag, Set<String> seen) {
+      if (!seen.add(tag)) return;
+      final b = bodies[tag]?.body;
+      if (b == null) return;
+      final t = b['type'];
+      if (_kGroupTypes.contains(t)) {
+        for (final m in (b['outbounds'] as List? ?? const [])) {
+          collect('$m', seen);
+        }
+        return;
+      }
+      if (_kNoPath.contains(t) || t == 'chain') return;
+      leaves.add(tag);
+    }
+
+    collect(p, <String>{});
+    for (final leaf in leaves) {
+      final b = bodies[leaf]!.body;
+      final fields = [
+        for (final f in kChainHopLocalPortFields[b['type']] ?? const <String>[])
+          if (!_unset(b[f])) f,
+      ];
+      if (fields.isNotEmpty) {
+        return (
+          failure: fail(ChainTakeoverFault.localPort, i, leaf,
+              via: p, fields: fields),
+          reached: none
+        );
+      }
     }
   }
 

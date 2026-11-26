@@ -57,6 +57,18 @@ void main() {
     expect(t.single.message, isNot(contains('here')));
   });
 
+  test('узел с фиксированным портом на позиции 2 → подсказка про порт', () {
+    final withPort = {
+      ...built,
+      'wg': _ob({'tag': 'wg', 'type': 'wireguard', 'listen_port': 51820}),
+    };
+    final t = findChainTroubles(
+        chains: [_c('p', ['E1', 'wg'])], bodies: withPort);
+    expect(t.single.failure.fault, ChainTakeoverFault.localPort);
+    expect(t.single.message,
+        contains('"wg" at position 2 of chain "p" has a fixed local port'));
+  });
+
   test('общий вход двух цепочек — без подсказки', () {
     final t = findChainTroubles(chains: [
       _c('c1', ['E1', 'vpn-2']),
