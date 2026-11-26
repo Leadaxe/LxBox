@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/controllers/subscription_controller/cache_rehydrate.dart';
+import 'package:lxbox/services/parser/parse_env_snapshot.dart';
 import 'package:lxbox/models/core_reject_verdict.dart';
 import 'package:lxbox/models/import_rule.dart';
 import 'package:lxbox/models/node_spec.dart';

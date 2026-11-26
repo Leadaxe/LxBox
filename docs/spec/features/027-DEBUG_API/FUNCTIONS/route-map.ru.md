@@ -36,10 +36,10 @@
 | `/device` | версия Android, модель, ABI, версия и сборка приложения, версия ядра, сеть, аптайм | [021-CORE_CONTRACT](../../021-CORE_CONTRACT/FEATURE.ru.md) (версии), [020-APP_SHELL](../../020-APP_SHELL/FEATURE.ru.md) |
 | `/config` | сохранённый конфиг сырым или с отступами, его путь, снимок работающего ядра; `PUT` — заменить сохранённый | [019-CONFIG_EDITOR](../../019-CONFIG_EDITOR/FUNCTIONS/config-editor.ru.md), [config-pin.md](../../019-CONFIG_EDITOR/FUNCTIONS/config-pin.ru.md); `/running` — [012-LIVE_STATE](../../012-LIVE_STATE/FUNCTIONS/running-config.ru.md) |
 | `/pool` | снимок round-robin-пула по тегу группы | [006-DETOUR_AND_BALANCE](../../006-DETOUR_AND_BALANCE/FUNCTIONS/balancing.ru.md) |
-| `/logs` | журнал приложения и ядра с `limit`, `source`, `q`, `level`; очистка | [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FUNCTIONS/app-log.ru.md), [core-log.md](../../013-DIAGNOSTICS/FUNCTIONS/core-log.ru.md) |
+| `/logs` | лог приложения и ядра с `limit`, `source`, `q`, `level`; очистка | [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FUNCTIONS/app-log.ru.md), [core-log.md](../../013-DIAGNOSTICS/FUNCTIONS/core-log.ru.md) |
 | `/action` | старт, headless-старт, стоп, force-stop, reconnect, reload, reset-network, quic-knobs, urltest, urltest-all, switch-node, set-group, rebuild-config, check-config, refresh-subs, download-srs, clear-srs, toast, emulate-error, check-updates, preview-empty-state | [010-VPN_SERVICE](../../010-VPN_SERVICE/FUNCTIONS/tunnel-control.ru.md), [009-NODE_HEALTH](../../009-NODE_HEALTH/FUNCTIONS/urltest-group.ru.md), [003-CONFIG_BUILD](../../003-CONFIG_BUILD/FUNCTIONS/config-validation.ru.md), [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/auto-update.ru.md), [004-ROUTING](../../004-ROUTING/FUNCTIONS/remote-rule-sets.ru.md), [020-APP_SHELL](../../020-APP_SHELL/FUNCTIONS/update-check.ru.md) |
 | `/files` | кэш наборов правил, локальные файлы из белого списка, архив отчётов о сбоях, снимки памяти | [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FUNCTIONS/crash-reports.ru.md), [004-ROUTING](../../004-ROUTING/FUNCTIONS/remote-rule-sets.ru.md) |
-| `/diag` | дамп, причины завершения, хвост системного журнала, текущий отчёт о сбое, журнал приложения по сессиям, pprof | [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FUNCTIONS/diagnostic-dump.ru.md), [core-profiling.md](../../013-DIAGNOSTICS/FUNCTIONS/core-profiling.ru.md) |
+| `/diag` | дамп, причины завершения, хвост системного лога, текущий отчёт о сбое, лог приложения по сессиям, pprof | [013-DIAGNOSTICS](../../013-DIAGNOSTICS/FUNCTIONS/diagnostic-dump.ru.md), [core-profiling.md](../../013-DIAGNOSTICS/FUNCTIONS/core-profiling.ru.md) |
 | `/backup` | экспорт снимка данных, импорт со слиянием или заменой | [017-BACKUP_AND_STORAGE](../../017-BACKUP_AND_STORAGE/FUNCTIONS/full-backup-export.ru.md), [full-backup-restore.md](../../017-BACKUP_AND_STORAGE/FUNCTIONS/full-backup-restore.ru.md) |
 | `/rules` | CRUD своих правил, перестановка, перемещение | [004-ROUTING](../../004-ROUTING/FUNCTIONS/inline-rules.ru.md), [rule-order.md](../../004-ROUTING/FUNCTIONS/rule-order.ru.md), [024-TEMPLATE](../../024-TEMPLATE/FUNCTIONS/preset-bundles.ru.md) |
 | `/subs` | единый список источников, одна запись с `reveal` / `warnings`, добавление по вводу, патч меты, обновление, перестановка, правила импорта | [001-SUBSCRIPTIONS](../../001-SUBSCRIPTIONS/FUNCTIONS/subscription-meta.ru.md), [import-rules.md](../../001-SUBSCRIPTIONS/FUNCTIONS/import-rules.ru.md), [fetch-identity.md](../../001-SUBSCRIPTIONS/FUNCTIONS/fetch-identity.ru.md); разбор — [025-CONTRACT_REGISTRY](../../025-CONTRACT_REGISTRY/FUNCTIONS/parse-warnings.ru.md) |
@@ -81,9 +81,9 @@
 
 | # | Ревизия | Статус | Суть |
 |---|---------|--------|------|
-| 1 | [031F](../../../tasks/031F-debug-api/spec.md) | ✅ Done → §043 | State, config, журналы, действия, правила, подписки, настройки, файлы |
+| 1 | [031F](../../../tasks/031F-debug-api/spec.md) | ✅ Done → §043 | State, config, логи, действия, правила, подписки, настройки, файлы |
 | 2 | [122F](../../../tasks/122F-commandclient-migration/spec.md) | — | Маршруты Clash API удалены |
-| 3 | [035](../../../tasks/035-platform-interface-extras-in-debug-api.md) | ✅ Реализовано (в изменённой форме) | `/diag/*`: причины завершения, системный журнал, дамп |
+| 3 | [035](../../../tasks/035-platform-interface-extras-in-debug-api.md) | ✅ Реализовано (в изменённой форме) | `/diag/*`: причины завершения, системный лог, дамп |
 | 4 | [147](../../../tasks/147-debug-api-warp-endpoint.md) | Implemented | `/warp` |
 | 5 | [208](../../../tasks/208-urltest-balancer-round-robin.md) | Реализовано | `/pool` |
 | 6 | [238](../../../tasks/238-debug-api-channels-folders.md) | реализовано | `/directions`, `/folders` |

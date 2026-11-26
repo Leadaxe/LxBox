@@ -22,7 +22,7 @@ import com.leadaxe.lxbox.MainActivity
 /// **Маршрутизация.** Прямые lifecycle-команды (START/STOP/TOGGLE) идут на
 /// [BoxVpnService] напрямую (быстро, без Flutter-engine). Остальные
 /// (switch-node / set-group / rebuild / refresh / reset / urltest) форвардятся
-/// в Dart через [VpnPlugin.handleAutomationAction] → MethodChannel → shared
+/// в Dart через [AutomationRelay.handleAutomationAction] → MethodChannel → shared
 /// action-handlers (та же бизнес-логика, что у Debug API).
 class LxBoxIntentReceiver : BroadcastReceiver() {
 
@@ -130,7 +130,7 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
     /// consent: если он уже дан — стартуем напрямую; иначе открываем
     /// MainActivity с extra (тот же путь, что Quick Settings tile §032).
     private fun handleToggle(context: Context) {
-        if (BoxVpnService.currentStatus == VpnStatus.Started) {
+        if (TunnelState.status == VpnStatus.Started) {
             BoxVpnService.stop(context)
             return
         }
@@ -147,10 +147,10 @@ class LxBoxIntentReceiver : BroadcastReceiver() {
         }
     }
 
-    /// Форвард в Dart через VpnPlugin companion (cached MethodChannel). Если
+    /// Форвард в Dart через AutomationBridge (cached MethodChannel). Если
     /// Flutter-engine не запущен — silently skip (action не выполнится, Tasker
     /// узнает из отсутствия outgoing-события / по таймауту).
     private fun forward(context: Context, name: String, args: Map<String, Any?>) {
-        VpnPlugin.handleAutomationAction(name, args)
+        AutomationRelay.handleAutomationAction(name, args)
     }
 }

@@ -53,16 +53,17 @@ Map<String, dynamic> _server(String tag, String host, {Object? sections}) => {
 
 void main() {
   group('§438 версии формата', () {
-    test('пишем 2, читаем 2 и legacy 1', () async {
-      expect(kLxBackupVersion, kLxBackupFormat10);
+    test('пишем 3 (§757), читаем 3, 2 и legacy 1', () async {
+      expect(kLxBackupVersion, kLxBackupFormat11);
       final out = await buildLxBackup(lists: const [], rules: const [], vars: const {});
-      expect((jsonDecode(out.json) as Map)['lx_backup'], 2);
+      expect((jsonDecode(out.json) as Map)['lx_backup'], 3);
       expect(parseLxBackup(_file({})).version, 2);
+      expect(parseLxBackup(jsonEncode({'lx_backup': 3})).version, 3);
       expect(parseLxBackup(jsonEncode({'lx_backup': 1})).version, 1);
     });
 
-    test('больше читаемого и вне {1, 2} — отказ', () {
-      expect(() => parseLxBackup(jsonEncode({'lx_backup': 3})), throwsFormatException);
+    test('больше читаемого и вне {1, 2, 3} — отказ', () {
+      expect(() => parseLxBackup(jsonEncode({'lx_backup': 4})), throwsFormatException);
       expect(() => parseLxBackup(jsonEncode({'lx_backup': 0})), throwsFormatException);
     });
 
@@ -464,7 +465,9 @@ void main() {
       expect(file.rules[1], isA<CustomRuleJson>());
     });
 
-    test('rule_set в теле и srs с незнакомым ключом — отброс с предупреждением', () {
+    // §757 — `rule_set` в теле (рукописные теги) и `process_name` (ключ
+    // таблицы условий) читаются деревом; отбрасывается только вид `json`.
+    test('rule_set в теле и process_name у srs — дерево; вид json — отброс', () {
       final file = parseLxBackup(_file({
         'rules': [
           {'kind': 'inline', 'name': 'rs', 'enabled': true,
@@ -474,9 +477,12 @@ void main() {
           {'kind': 'json', 'name': 'legacy', 'enabled': true},
         ],
       }));
-      expect(file.rules, isEmpty);
+      expect(file.rules.map((r) => r.name), ['rs', 'srs']);
+      expect(file.rules[0].flatLeaf!.ruleSet, ['geo']);
+      expect(file.rules[1].allRefs, ['https://x/a.srs']);
+      expect(file.rules[1].flatLeaf!.conditions['process_name'], ['a']);
       expect(file.warnings.map((w) => w.code).toSet(), {kWarnUnknownField});
-      expect(file.warnings, hasLength(3));
+      expect(file.warnings, hasLength(1));
     });
 
     test('цель вне известных — выключено; preset без имени зовётся ссылкой', () {

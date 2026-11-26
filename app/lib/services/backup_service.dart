@@ -42,6 +42,9 @@ const _topLevelRoutingKeys = {
   // §612 — guard миграции режима автовыбора едет с Направлениями: архив без
   // него (до §612) после восстановления мигрирует заново.
   kUrltestModeMigratedKey,
+  // §757 — guard перезаписи ссылок на теги наборов правил едет с правилами:
+  // архив без него (до §757) после восстановления мигрирует заново.
+  kRuleSetTagsMigratedKey,
   'enabled_groups', // §125 — DEPRECATED (legacy, читается только миграцией)
   'tun_apps',
   'vpn_mode',
@@ -548,6 +551,14 @@ class BackupService {
         await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
       } catch (e) {
         errors.add('Interrupt-on-switch migration: $e');
+      }
+
+      // §757 — архив без маркера несёт ссылки на прежние теги наборов правил.
+      try {
+        await SettingsStorage.migrateRuleSetTagRefsIfNeeded(
+            await TemplateLoader.load());
+      } catch (e) {
+        errors.add('Rule set tag references migration: $e');
       }
 
       if (merge) {

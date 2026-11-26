@@ -9,8 +9,9 @@ import '../../../models/server_list.dart';
 import '../../../services/l10n/locale_controller.dart';
 import '../../../services/node_hash.dart' show disabledNodeCount;
 import '../../../services/subscription/import_rules.dart';
-import '../../../services/ui_helpers.dart';
+import '../../../widgets/ui_helpers.dart';
 import '../../../widgets/safe_bottom.dart';
+import '../../../widgets/focus_safe_tab_bar_view.dart';
 
 /// §302 — «Filters» tab: per-subscription import-rules (REPLACE + DISABLE +
 /// ENABLE §332),
@@ -602,7 +603,7 @@ class _RuleEditorScreenState extends State<_RuleEditorScreen> {
             ],
           ),
         ),
-        body: TabBarView(
+        body: FocusSafeTabBarView(
           children: [
             _ruleForm(context, blocker),
             _matchesTab(context),

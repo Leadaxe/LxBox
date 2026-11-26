@@ -16,7 +16,7 @@ costs.
 
 Creating ("New hop chain": Tag only — the tag is the chain's one name) and editing a chain on
 the "Hop chain · <tag>" screen: a list of positions with drag-and-drop,
-"Add position", the Advanced block, check findings right in the form. From
+"Add position", check findings right in the form. From
 the chain node's window — the live path and the **per-layer probe**: how
 much each hop costs.
 
@@ -28,15 +28,13 @@ much each hop costs.
 | Enabled | "A disabled chain is not built and cannot be used as a position" |
 | Positions | caption "In packet order: the first position is the hop closest to you, the last one is what the destination sees."; each position shows its kind (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | picker: sections **Directions** (only with "Use as detour") and **Servers** (nodes of the built config alphabetically, `TYPE · server:port`); those already used are excluded; nothing to add — "Nothing left to add…" |
-| Advanced | Idle timeout; "Strip evasion tricks from links"; "Per-key overrides" — a three-state checkbox per catalog key with the result "stripped"/"kept" |
 | Deletion | "Delete hop chain?" with confirmation; the text warns that chains using it will be rebuilt without it |
 | Leaving with unsaved edits | Save / Keep / Discard |
 
 ## Inputs / Outputs
 
 **Inputs:** the last built config (final tags: prefixes, uniquification),
-Directions, the list of chains with their order, the `strip` catalog from
-the registry.
+Directions, the list of chains with their order.
 **Outputs:** the saved chain; form findings; for a running tunnel — layer
 measurements.
 
@@ -57,8 +55,13 @@ measurements.
 - Warnings and notes do not prevent saving: missing positions (only once
   the target snapshot has been parsed), detour on the first position ("the
   real path is longer than shown"), detour on links ("does not apply inside
-  a chain"), WireGuard behind a TCP hop, MASQUE with fixed h3 on a link, a
-  `strip` key that the build will keep for the sake of a link.
+  a chain"), WireGuard behind a TCP hop, MASQUE with fixed h3 on a link.
+- No Advanced block (task 761): core `v1.14.4-lx.37-rc.2` rejects
+  `idle_timeout`, `strip_evasion`, `strip`; values saved earlier are dropped
+  on read (contract 1.1.184).
+- A node past the first position with a fixed local port blocks saving: the
+  message names the node, the chain and the position and says to remove the
+  port or put a copy of the node without it there.
 - Candidates are rebuilt every time the picker opens — the "Use as detour"
   flag may have changed while the form was open.
 - Groups, `direct-out`, chains are not offered in the picker, but positions
@@ -85,3 +88,4 @@ measurements.
 | 2 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | C6–C7: form checks, chain screen, position picker |
 | 3 | [558](../../../tasks/558-chain-owner-navigation.md) | Done | Navigation to the chain from the node window |
 | 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | The delete confirmation tells the truth: chains using it are rebuilt without it (P10) |
+| 5 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | The Advanced block is gone |

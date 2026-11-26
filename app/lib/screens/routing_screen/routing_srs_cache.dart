@@ -123,6 +123,9 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     // §534 — свежий снимок userVars до пересчёта: гейт набора на
     // ref-переменной (§265) читает значение из глобального словаря.
     _userVars = await SettingsStorage.getAllVars();
+    // §757 — файлы кэша наборов — по ссылке; старые имена — до скана и
+    // `pruneOrphans` (иначе ушли бы сиротами).
+    await migrateRuleSetCacheIds(_customRules);
     final scan = await RoutingHelpers.scanSrsCache(_customRules,
         presetFor: _presetFor, globalVars: _userVars);
     _srsCached
@@ -152,7 +155,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     if (!mounted) return;
     // Проверка "всё ли закачалось" — per-kind.
     bool ok;
-    if (rule is CustomRuleSrs) {
+    if (rule is CustomRuleTree && rule.allRefs.isNotEmpty) {
       ok = _srsCached.contains(rule.id);
     } else if (rule is CustomRulePreset) {
       final preset = _presetFor(rule.presetId);
@@ -170,7 +173,7 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
   }
 
   Future<void> _downloadSrs(CustomRule rule) async {
-    if (rule is CustomRuleSrs) {
+    if (rule is CustomRuleTree && rule.allRefs.isNotEmpty) {
       await _downloadSrsForSrsRule(rule);
       return;
     }
@@ -180,8 +183,10 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     }
   }
 
-  Future<void> _downloadSrsForSrsRule(CustomRuleSrs rule) async {
-    if (rule.srsUrl.trim().isEmpty) {
+  Future<void> _downloadSrsForSrsRule(CustomRuleTree rule) async {
+    // §757 — все наборы дерева, кэш по ссылке (`<id>~<h8>`).
+    final refs = rule.allRefs;
+    if (refs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(getLocalText.s("SRS URL is empty"))),
       );
@@ -190,9 +195,9 @@ mixin _RoutingSrsCacheMixin on State<RoutingScreen>, LazyPersistMixin<RoutingScr
     setState(() => _srsDownloading.add(rule.id));
     // ## 12 — все наборы по порядку; первый провал = провал правила.
     String? path;
-    for (var i = 0; i < rule.srsUrls.length; i++) {
+    for (final ref in refs) {
       path = await RuleSetDownloader.download(
-          CustomRuleSrs.cacheIdAt(rule.id, i), rule.srsUrls[i]);
+          CustomRuleTree.cacheIdFor(rule.id, ref), ref);
       if (path == null) break;
     }
     if (!mounted) return;

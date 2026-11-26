@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/l10n/locale_controller.dart';
-import '../../services/ui_helpers.dart';
-import 'resolved_server.dart';
+import '../../widgets/ui_helpers.dart';
+import '../../services/dns/resolved_server.dart';
 
 /// §680 — удаление сервера из списка доступно: не залочен ссылкой (пресет,
 /// правило, список) и не preset-ref (живёт с пресетом). Template и override

@@ -25,6 +25,7 @@ library;
 import 'dart:convert';
 
 import 'section.dart';
+import 'tlv.dart';
 
 /// Имена атрибутов ЭМИТА — СВЕДЕНЫ С ЛАУНЧЕРОМ 19.09.2026
 /// (SPEC 133 `GRAMMAR_SYNC.md` «Сведение №2», §5).
@@ -229,6 +230,12 @@ abstract final class EmitNames {
   /// вообще константа.
   static const jsonAlways = 'json_always';
 
+  /// Вид контейнера: `tlv` — бинарный, по диалекту секции (§4a).
+  static const container = 'container';
+
+  /// Обратная таблица значений записи: «значение тела → написание формата».
+  static const emitValueMap = 'emit_value_map';
+
   /// Условия, при которых ссылка НЕ собирается: форма тела не выражает.
   /// Список карт `{path, len_gt}` — отказ, если длина значения по пути
   /// больше порога. Пустая ссылка — тот же исход, что у схемы без
@@ -348,6 +355,11 @@ final class _Emit {
     // Форма-КОНТЕЙНЕР узнаётся по ПРОСТРАНСТВУ ИСТОЧНИКОВ, объявленному у неё
     // же в `forms[]` (`space: json`), а не по своему имени: имена форм —
     // данные, и знать их движку не положено ровно так же, как имена схем.
+    // §717 (контракт 1.1.175, MAPPER_ENGINE §4a) — БИНАРНЫЙ контейнер:
+    // объект по `json_map` сериализуется диалектом `tlv` секции.
+    if (emit[EmitNames.container] == kTlvDecoder) {
+      return EmitResult(uri: _emitTlv(scheme), lost: _lost);
+    }
     if (_spaceOf(form) == 'json') {
       return EmitResult(uri: _emitJson(scheme), lost: _lost);
     }
@@ -1570,6 +1582,18 @@ final class _Emit {
     final always = _jsonAlways();
 
     for (final e in _jsonMap().entries) {
+      // Ссылка `json_map` — не только путь тела: цепочка `a|b`, литерал `=…`,
+      // `$label`, `$param.<запись>` читаются тем же правилом, что и у
+      // бинарного контейнера ([_containerValue]) — примитив один на формы.
+      if (_isContainerRef(e.value)) {
+        final v = _containerValue(e.value);
+        if (v != null) {
+          map[e.key] = v is List ? v.join(',') : '$v';
+        } else if (always.containsKey(e.key)) {
+          map[e.key] = always[e.key]!;
+        }
+        continue;
+      }
       final v = _read(e.value);
       if (v == null) {
         if (always.containsKey(e.key)) map[e.key] = always[e.key]!;
@@ -1631,6 +1655,80 @@ final class _Emit {
     final bytes = utf8.encode(jsonEncode(_orderedJson(map)));
     final encoded = base64.encode(bytes);
     return '$scheme://${_userinfoPadding() ? encoded : encoded.replaceAll('=', '')}';
+  }
+
+  /// Бинарный контейнер `tlv`: объект собирается по ОБЪЯВЛЕННОЙ `json_map`
+  /// (вывести карту из таблицы здесь нельзя — адрес собирает поле диалекта, а
+  /// не запись), сериализуется диалектом и кладётся туда же, откуда его
+  /// читает разбор. Порядок записей — `param_order`. Пустая строка — тело
+  /// диалектом не выражается.
+  String _emitTlv(String scheme) {
+    final dialect = section.tlv;
+    final map = emit[EmitNames.jsonMap];
+    if (dialect == null || map is! Map) return '';
+    final obj = <String, dynamic>{};
+    for (final e in map.entries) {
+      final v = _containerValue('${e.value}');
+      if (v != null) obj['${e.key}'] = v;
+    }
+    final order = emit[EmitNames.paramOrder];
+    final payload = encodeTlvObject(dialect, obj,
+        order is List ? [for (final o in order) '$o'] : const []);
+    if (payload == null) return '';
+    return dialect.place == TlvNames.inQuery
+        ? '$scheme://?$payload'
+        : '$scheme://$payload';
+  }
+
+  /// Ссылка `json_map`, которая не сводится к одному пути тела.
+  static bool _isContainerRef(String ref) =>
+      ref.startsWith('=') || ref.startsWith(r'$') || ref.contains('|');
+
+  /// Значение ключа контейнера по ссылке `json_map`: путь тела, `$label`,
+  /// `$param.<запись>`, литерал `=…` либо ЦЕПОЧКА через `|` — первая ссылка,
+  /// давшая значение. Литерал цепочкой не режется: разделитель — часть
+  /// значения.
+  Object? _containerValue(String ref) {
+    if (ref.isEmpty) return null;
+    if (ref.startsWith('=')) return ref.substring(1);
+    if (ref.contains('|')) {
+      for (final one in ref.split('|')) {
+        final v = _containerValue(one.trim());
+        if (v != null) return v;
+      }
+      return null;
+    }
+    if (ref == r'$label') return label.isEmpty ? null : label;
+    const param = r'$param.';
+    if (ref.startsWith(param)) {
+      return _paramSpelling(ref.substring(param.length));
+    }
+    final v = _read(ref);
+    if (v == null || v == '' || (v is List && v.isEmpty)) return null;
+    _consumed.add(ref);
+    return v;
+  }
+
+  /// Написание формата для значения, которое запись [name] положила в тело:
+  /// `emit_value_map` записи, а без неё — обращение `value_map` (первое
+  /// написание, ведущее в это значение). Значение вне таблицы формат не
+  /// выражает — `null`.
+  String? _paramSpelling(String name) {
+    final p = section.params[name];
+    final path = p?.mapsTo;
+    if (p == null || path == null) return null;
+    final v = _read(path);
+    if (v == null) return null;
+    final back = p.raw[EmitNames.emitValueMap];
+    if (back is Map) {
+      final hit = back['$v'];
+      return hit == null ? null : '$hit';
+    }
+    if (p.valueMap.isEmpty) return '$v';
+    for (final e in p.valueMap.entries) {
+      if (e.value != null && '${e.value}' == '$v') return e.key;
+    }
+    return null;
   }
 
   /// `json_always` в обоих написаниях: перечень (заполнитель — пустая строка)

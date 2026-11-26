@@ -590,9 +590,13 @@ List<Map<String, dynamic>> _convertRules(
         out.addAll(records);
         continue;
       }
+      // §757 — модель хранит порты числами (нечисловые отброшены уже при
+      // чтении), поэтому отброшенное ищется в исходной записи 2.23.2.
+      final rawPorts = e['ports'];
       final badPorts = [
-        for (final p in rule.ports)
-          if (!_isPort(p)) p,
+        if (rule is CustomRuleTree && rawPorts is List)
+          for (final p in rawPorts)
+            if (!_isPort('$p')) '$p',
       ];
       if (badPorts.isNotEmpty) {
         warnings.add('rule "${rule.name}": non-numeric ports dropped: '

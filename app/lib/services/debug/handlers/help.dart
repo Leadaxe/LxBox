@@ -91,10 +91,24 @@ GET /config/running                 Running kernel snapshot (409 if none)
 === Pool (round_robin balancer) ===
 
 GET /pool?tag=<autoTag>             Snapshot of a round_robin urltest pool (e.g. tag=vpn-1-auto).
-                                      → {"tag","count","slots":[{slot,tag,delay,alive}]}. delay=0 → dead/untested.
+                                      → {"tag","count","shiftedKeys","markedKeys","frozen","frozenSeconds",
+                                         "slots":[{slot,tag,delay,alive,quarantined,connections,confirmedFailures}]}.
+                                      delay=0 → dead/untested; quarantined → out of rotation (delay stays non-zero).
                                       non-round_robin group → 200 slots:[] (pool is empty, not an error).
                                       tunnel down / command client unavailable → 409 Conflict (NOT empty 200).
                                       Works while the app is backgrounded (tunnel must be up).
+
+=== Impair (test outbound, runtime control) ===
+
+GET  /impair/{tag}                  Status of an impair outbound of the running core, as the core returns it:
+                                      {tag,link_params,counters,sublinks,schedule}. Tag URL-encoded.
+POST /impair/{tag}/set              Body: a schedule entry without "at" (JSON object: link_params, sublinks or both),
+                                      applied now on top of the schedule → status. {"sublinks": false} drops sublinks.
+POST /impair/{tag}/schedule         Body: {"entries":[...], "start":""|"now"|"first_use", "repeat":""|"60s"}.
+                                      Replaces the schedule; entries:[] stops it and restores the config line → status.
+                                      Bad body (start outside the three values too) → 400 before the core. Keys are
+                                      checked by the core. Tunnel down → 409; core errors: unknown tag 404,
+                                      not impair / bad JSON 400, service not started 409, core without it 501.
 
 === Logs ===
 
@@ -179,7 +193,6 @@ POST /warp[?rebuild=true]                      Registers a WARP node (same path 
                                                    "endpoint":"IP:port",     // default engage.cloudflareclient.com:2408
                                                    "obfuscate":true,         // QUIC masquerade
                                                    "forceNew":false,         // ignore cache, re-register
-                                                   "includeReserved":false,  // null → default by obfuscate
                                                    "quicParams":{"sni":"www.google.com","ip":"quic",
                                                                  "ib":"chrome","jc":4,"jmin":40,"jmax":70}}
                                                   ?rebuild=true → regenerate config + reload core.
@@ -215,6 +228,8 @@ POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|W
                                                  JSON with multiple outbounds may create several entries.
                                                  Rejected input → 400, nothing created; top-level dropped[]
                                                  lists the parse reasons ({code, path, value, title_en}).
+                                                 → 201 {id, kind, tags} (one entry) or {ids, count, tags}; tags = final
+                                                 config tags of the created nodes. An impair outbound keeps its tag as written.
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
@@ -278,6 +293,35 @@ GET    /nodes/link?tag=<tag>[?reveal=true]     Export the node as a link — exa
                                                  Found but not expressible as a link (app-built nodes, groups) →
                                                  {tag, protocol, error:"node has no link form"}, not a 404.
                                                  No such node → 404.
+PATCH  /nodes/{tag}[?rebuild=true]              Detour of one node by tag (as in the config or bare, URL-encoded):
+                                                 body {"detour": "<tag>" | {folder_id?, tag} | null}. Single server →
+                                                 its override_detour; folder member → its own detour (self/cycle →
+                                                 400). Subscription node → 409 (detour is per subscription:
+                                                 PATCH /subs/{id} override_detour). No node → 404.
+                                                 → {ok, tag, entry_id, kind, detour}.
+
+=== Assistant (§750 — AI assistant functions for an agent on a computer) ===
+
+GET    /assistant/overview                       {vpn_status, default_route, directions:[{tag,name,exit_count,
+                                                 current_exit}], connections:[{id,name,type,enabled,state}]}
+GET    /assistant/exits?direction=<tag>[&q=sub]  Exit names of a direction as written (flag, city), q = case-
+                                                 insensitive substring → {direction, exits[≤200], total, truncated}
+POST   /assistant/check-url                      Body {url, app?}: URL Check to depth http, fresh, as package app;
+                                                 waits ≤20 s → {outcome, failed_stage, error, http_status,
+                                                 elapsed_ms, route:{direction,exit,direct,blocked}, findings, advice}
+POST   /assistant/check-exit                     Body {direction: tag}: GET 1.1.1.1/cdn-cgi/trace through it →
+                                                 {outcome, country, ip, exit, error}
+GET    /assistant/apps?q=<substr>                Installed apps by label/package → [{package, label}] (≤10)
+GET    /assistant/app-route?app=<package>        Static route by saved rules → {app, target, target_name,
+                                                 rule_name, conditional}
+POST   /assistant/exit                           Body {direction: tag, exit}: select the exit in the running core
+                                                 (until restart) → {direction, exit, changed}
+POST   /assistant/connection                     Body {id, enabled}: turn a WG/AWG/OpenVPN/OpenConnect/Tailscale
+                                                 connection on/off (id from overview), rebuild, reload; turning on
+                                                 with the tunnel down starts it headless → {status:"applied",
+                                                 summary, changed, reload_pending?, vpn_started?, needs_consent?}
+Errors of the app: not_found → 404, invalid_argument → 400, vpn_off|busy|locked|source_off → 409,
+other → 500; the code is the first word of error.message. App routing changes go through POST /rules.
 
 === Directions CRUD (routing directions) ===
 
@@ -372,8 +416,8 @@ POST   /chains[?rebuild=true]                    Create → 201. Body optional: 
                                                  with the machine reason: empty | reserved | duplicate |
                                                  auto_twin. A body without hops creates an EMPTY chain (same as
                                                  the UI: the record exists, the route is not filled in yet).
-PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,hops,idle_timeout,strip_evasion,
-                                                 strip,rewrite}. tag renames the chain in place (same slot in
+PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,hops,rewrite}.
+                                                 tag renames the chain in place (same slot in
                                                  the source list) and rewrites references to the old tag in the
                                                  same write: other chains' positions, rule outbounds and preset
                                                  outbound vars, route_final, detours, DNS detour / vars.outbound.
@@ -390,12 +434,9 @@ PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,ho
                                                  or another chain is {tag} with no folder_id. A plain string is
                                                  read as {tag}. The build resolves links to final tags; a
                                                  position that does not resolve drops the whole chain.
-                                                 idle_timeout: "" = core default (5m), "0s" = live until stop.
-                                                 strip_evasion is a TRISTATE: omit = keep, null = core default
-                                                 (true, key not written), bool = explicit choice.
-                                                 strip = per-key patch over strip_evasion, REPLACES the map;
-                                                 keys only from tls.fragment | multiplex.padding |
-                                                 xhttp.padding | tls.utls (unknown key → 400).
+                                                 idle_timeout, strip_evasion, strip: removed (core >=
+                                                 1.14.4-lx.37-rc.2 rejects them; the filters are
+                                                 lx.detour.strip) — not read, not stored.
                                                  rewrite = JSON merge-patch (RFC 7396) per outbound type, kept
                                                  verbatim (a null inside DELETES a key — no "empty cleanup").
 DELETE /chains/{tag}[?rebuild=true]              Remove. Positions of OTHER chains pointing at the removed tag
@@ -437,8 +478,7 @@ tooFewHops (<2 positions) | emptyHop | duplicateHop | selfReference |
 nestedNotFirst (a nested chain is only legal at position 0) |
 forwardChainReference (referencing a chain declared below) |
 tagEmpty | tagTaken. Non-blocking findings (a position that is no longer
-among the targets, a first hop with its own detour, a strip key kept because
-a hop needs it — stripKeptForHop) do NOT block the write — same line the
+among the targets, a first hop with its own detour) do NOT block the write — same line the
 form draws.
 
 === Folders CRUD (server folders) ===
@@ -711,7 +751,9 @@ curl -H "Authorization: Bearer \$TOKEN" 'http://127.0.0.1:9269/logs?level=error,
 - emoji in URL path (✨auto etc.) — must be URL-encoded. curl does not do it for you.
 - Subscription URLs masked default (`scheme://host/***`); ?reveal=true for full.
 - /rules CRUD accepts snake_case (domain_suffixes, ip_cidrs, preset_id, vars_values,
-  dns: {enabled, server_tag}) and returns snake_case.
+  dns: {enabled, server_tag, force_ipv4, block_https, fixed_ips}) and returns
+  snake_case. block_https (§755) answers HTTPS/SVCB queries for the rule's
+  domains empty (no ECH); ignored when the rule has no domain condition.
 - /rules resolve option (inline/srs): resolve: {only, strategy, server_tag,
   disable_cache, disable_optimistic_cache, rewrite_ttl, timeout, client_subnet}.
   only=false emits a non-terminal resolve rule BEFORE the route rule; only=true
@@ -755,7 +797,11 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     {'method': 'GET', 'path': '/config/running', 'description': 'Config of the running kernel (SPEC 036); 409 when unavailable'},
     // Pool (§208)
-    {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,slots:[{slot,tag,delay,alive}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
+    {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,shiftedKeys,markedKeys,frozen,frozenSeconds,slots:[{slot,tag,delay,alive,quarantined,connections,confirmedFailures}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
+    // Impair (§762)
+    {'method': 'GET', 'path': '/impair/{tag}', 'description': 'Status of an impair outbound of the running core, as is → {tag,link_params,counters,sublinks,schedule}. Tunnel down → 409; unknown tag 404; not impair 400'},
+    {'method': 'POST', 'path': '/impair/{tag}/set', 'body': 'schedule entry without at: {link_params?, sublinks?}', 'description': 'Change the line or sublinks now, on top of the schedule → status. Keys checked by the core (400 on reject)'},
+    {'method': 'POST', 'path': '/impair/{tag}/schedule', 'body': '{entries:[...], start?: ""|now|first_use, repeat?: ""|60s}', 'description': 'Replace the schedule → status; entries:[] stops it and restores the config line. Bad body / start → 400; core without it → 501'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warning,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
@@ -786,7 +832,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/action/check-updates', 'description': 'Force update check (bypass cap + toggle); returns {kind,tag,html_url,...}'},
     {'method': 'POST', 'path': '/action/pathmtu', 'params': {'target': 'host or IP (default 8.8.8.8)'}, 'description': '§725: Path MTU past the tunnel (ICMP echo with DF on the physical network, binary search up to the interface MTU). Sync, up to ~25 s → {target,ip,iface,transport,iface_mtu,vpn_running,path_mtu,status:ok|unreachable|no_network|below_floor|cancelled|error,recommend:{wireguard,masque}|null,probes:[{size,status,rtt_ms}]}'},
     // WARP
-    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, includeReserved?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
+    {'method': 'POST', 'path': '/warp', 'params': {'rebuild': 'true|false'}, 'body': '{licenseKey?, endpoint?, obfuscate?, forceNew?, quicParams?:{sni,ip,ib,jc,jmin,jmax}}', 'description': 'Register Cloudflare WARP node (same path as Get WARP wizard). All fields optional. obfuscate=true → QUIC masquerade via quicParams. ?rebuild=true regenerates config.'},
     // Rules
     {'method': 'GET', 'path': '/rules', 'description': 'Alias /state/rules'},
     {'method': 'GET', 'path': '/rules/{id}', 'description': 'Single rule'},
@@ -798,7 +844,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Subscriptions CRUD (user servers + subscriptions)
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
-    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries). Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
+    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries) → 201 {id, kind, tags} or {ids, count, tags}; tags = final config tags. Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
     {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity,tls}', 'description': 'Update meta. tls (§636) = {fragment,record_fragment,fallback_delay,mixed_case_sni}: missing key keeps the field, null resets it to inherit (node → source → global); a bad fallback_delay → 400. Source level for a subscription/folder, node level for a standalone server. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
@@ -812,6 +858,16 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
     // Nodes (the emitter's side)
     {'method': 'GET', 'path': '/nodes/link', 'params': {'tag': '<tag> (required)', 'reveal': 'true|false (default false)'}, 'description': 'Export the node as a link — exactly what Copy link puts on the clipboard (NodeSpec.toUri()). tag is taken either as it stands in the config (with the subscription prefix) or bare; chain hops are searched too. uri carries credentials → only with reveal=true → {tag, protocol, uri, private_key}. Without reveal → {tag, protocol, private_key, error:"reveal required"}. Found but not expressible as a link (app-built nodes, groups) → {tag, protocol, error:"node has no link form"}, not a 404. No such node → 404.'},
+    {'method': 'PATCH', 'path': '/nodes/{tag}', 'params': {'rebuild': 'true|false'}, 'body': '{"detour": "<tag>" | {folder_id?, tag} | null}', 'description': 'Detour of one node by tag: single server → override_detour, folder member → its detour; subscription node → 409 (use PATCH /subs/{id}); no node → 404 → {ok, tag, entry_id, kind, detour}'},
+    // Assistant (§750)
+    {'method': 'GET', 'path': '/assistant/overview', 'description': '{vpn_status, default_route, directions:[{tag,name,exit_count,current_exit}], connections:[{id,name,type,enabled,state}]}'},
+    {'method': 'GET', 'path': '/assistant/exits', 'params': {'direction': 'direction tag', 'q': 'case-insensitive substring (optional)'}, 'description': 'Exit names of a direction as written → {direction, exits (≤200), total, truncated}'},
+    {'method': 'POST', 'path': '/assistant/check-url', 'body': '{url, app?}', 'description': 'URL Check (depth http, fresh) as package app; waits ≤20 s → {outcome, failed_stage, error, http_status, elapsed_ms, route, findings, advice}'},
+    {'method': 'POST', 'path': '/assistant/check-exit', 'body': '{direction (tag)}', 'description': 'Actual exit of a direction via 1.1.1.1/cdn-cgi/trace → {outcome, country, ip, exit, error}'},
+    {'method': 'GET', 'path': '/assistant/apps', 'params': {'q': 'label or package substring'}, 'description': 'Installed apps → [{package, label}] (≤10)'},
+    {'method': 'GET', 'path': '/assistant/app-route', 'params': {'app': 'package'}, 'description': 'Route of the app by saved rules → {app, target, target_name, rule_name, conditional}'},
+    {'method': 'POST', 'path': '/assistant/exit', 'body': '{direction (tag), exit}', 'description': 'Select the exit in the running core (until restart) → {direction, exit, changed}'},
+    {'method': 'POST', 'path': '/assistant/connection', 'body': '{id, enabled}', 'description': 'Turn a WG/AWG/OpenVPN/OpenConnect/Tailscale connection on/off, rebuild, reload; on + tunnel down → headless start → {status, summary, changed, reload_pending?, vpn_started?, needs_consent?}. Errors: not_found 404, invalid_argument 400, vpn_off|busy|locked|source_off 409, other 500'},
     // Directions CRUD (routing directions)
     {'method': 'GET', 'path': '/directions', 'description': 'List routing directions (storage shape, snake_case)'},
     {'method': 'GET', 'path': '/directions/{tag}', 'description': "Single direction (tag = the direction's outbound tag, e.g. vpn-1 or a custom one)"},

@@ -11,12 +11,13 @@ import '../models/tunnel_status.dart';
 import '../services/app_log.dart';
 import '../services/l10n/app_language_reconcile.dart'
     show AppLanguageNativeState;
-import '../services/platform_channels.dart';
+import 'platform_channels.dart';
 
 // Method-name + timeout константы вынесены `part`'ами (та же библиотека, тот же
 // приватный доступ к `_Methods` / `_Timeouts` из [BoxVpnClient]).
 part 'box_vpn_client/method_names.dart';
 part 'box_vpn_client/timeouts.dart';
+part 'box_vpn_client/models.dart';
 
 /// Thin Dart wrapper над native MethodChannel/EventChannel для VPN-control.
 /// Заменяет внешний `flutter_singbox_vpn` plugin.
@@ -1006,7 +1007,43 @@ class BoxVpnClient {
     _methods.setMethodCallHandler(_handleNativeCall);
   }
 
+  /// §750 — шлюз ассистента к Debug API: натив (`AssistantBridge`) зовёт
+  /// `assistantCall` с `{method, path, body?}` и ждёт `{status, body}`.
+  /// Ставится в `main()` вместе с мостом автоматизации.
+  Future<Map<String, Object?>> Function(
+      String method, String path, String? body)? _onAssistantCall;
+
+  /// §750 — регистрирует обработчик входящего `assistantCall`. Идемпотентно.
+  void registerAssistantCallHandler(
+      Future<Map<String, Object?>> Function(
+              String method, String path, String? body)
+          handler) {
+    _onAssistantCall = handler;
+    _methods.setMethodCallHandler(_handleNativeCall);
+  }
+
   Future<dynamic> _handleNativeCall(MethodCall call) async {
+    if (call.method == _Methods.assistantCall) {
+      final handler = _onAssistantCall;
+      if (handler == null) {
+        return const {'status': 503, 'body': '{"error":"not_ready"}'};
+      }
+      try {
+        final raw = (call.arguments as Map?) ?? const {};
+        return await handler(
+          '${raw['method'] ?? ''}',
+          '${raw['path'] ?? ''}',
+          raw['body'] as String?,
+        );
+      } catch (e) {
+        // Наружу исключения не выпускаем: натив ждёт ответ по контракту.
+        AppLog.I.error('[assistant] gateway call failed: $e');
+        return {
+          'status': 500,
+          'body': jsonEncode({'error': 'internal error: $e'}),
+        };
+      }
+    }
     if (call.method == _Methods.automationAction) {
       final handler = _onAutomationAction;
       if (handler == null) return null;
@@ -1034,6 +1071,83 @@ class BoxVpnClient {
       timeout: _Timeouts.settings,
       onTimeoutValue: null,
     );
+  }
+
+  /// §750 — `{vpn_status, default_route, directions, connections}`.
+  /// [indexJson] — индекс ассистента, собранный в момент запроса
+  /// (`collectAssistantIndex`): натив ничего не хранит.
+  Future<Object?> assistantOverview(String indexJson) =>
+      _assistantCall(_Methods.assistantOverview, args: {'index': indexJson});
+
+  /// §750 — `{direction, exits, total, truncated}`.
+  Future<Object?> assistantListExits(String direction, {String? query}) =>
+      _assistantCall(_Methods.assistantListExits,
+          args: {'direction': direction, 'query': query});
+
+  /// §750 — проверка адреса (URL Check §687 на глубину http), до 20 с.
+  Future<Object?> assistantCheckUrl(String url, {String? app}) =>
+      _assistantCall(_Methods.assistantCheckUrl,
+          args: {'url': url, 'app': app},
+          timeout: _Timeouts.assistantCheckUrl);
+
+  /// §750 — фактический выход Направления (`cdn-cgi/trace`).
+  Future<Object?> assistantCheckExit(String direction) =>
+      _assistantCall(_Methods.assistantCheckExit,
+          args: {'direction': direction});
+
+  /// §750 — `[{package, label}]`.
+  Future<Object?> assistantFindApps(String query) =>
+      _assistantCall(_Methods.assistantFindApps, args: {'query': query});
+
+  /// §750 — `{app, target, target_name, rule_name, conditional}`.
+  /// [indexJson] — индекс, собранный в момент запроса.
+  Future<Object?> assistantAppRoute(String indexJson, String app) =>
+      _assistantCall(_Methods.assistantAppRoute,
+          args: {'index': indexJson, 'app': app});
+
+  /// §750 — `{direction, exit, changed}`.
+  Future<Object?> assistantSelectExit(String direction, String exit) =>
+      _assistantCall(_Methods.assistantSelectExit,
+          args: {'direction': direction, 'exit': exit});
+
+  /// §750 — общий вызов операций ассистента. Ответ натива приводится к
+  /// JSON-виду (`Map<String, dynamic>` / `List`). Ошибка операции приходит
+  /// от натива данными `{"error":{code,message}}`; сбои канала (таймаут,
+  /// старый натив без метода, исключение) сворачиваются в ту же форму, чтобы
+  /// вызывающий разбирал один путь.
+  Future<Object?> _assistantCall(
+    String method, {
+    Map<String, dynamic>? args,
+    Duration timeout = _Timeouts.assistant,
+  }) async {
+    Map<String, dynamic> err(String code, String message) => {
+          'error': {'code': code, 'message': message},
+        };
+    try {
+      final raw = await _methods
+          .invokeMethod<Object?>(method, args)
+          .timeout(timeout);
+      return _jsonify(raw);
+    } on TimeoutException {
+      AppLog.I.warning('BoxVpnClient: $method timed out');
+      return err('busy', 'The app did not answer in time. Try again.');
+    } on MissingPluginException {
+      return err('core_error', 'This build does not support $method.');
+    } on PlatformException catch (e) {
+      return err('core_error', e.message ?? e.code);
+    }
+  }
+
+  /// MethodChannel отдаёт `Map<Object?, Object?>` — приводим к ключам-строкам
+  /// рекурсивно.
+  static Object? _jsonify(Object? v) {
+    if (v is Map) {
+      return <String, dynamic>{
+        for (final e in v.entries) '${e.key}': _jsonify(e.value),
+      };
+    }
+    if (v is List) return [for (final x in v) _jsonify(x)];
+    return v;
   }
 
   /// §721 — тумблер «AI assistant control»: native пишет зеркало
@@ -1117,65 +1231,4 @@ class BoxVpnClient {
       return onTimeoutValue;
     }
   }
-}
-
-/// Разбивка памяти процесса приложения из native `getMemoryInfo` (§507:
-/// AMS `getProcessMemoryInfo`, не голый `Debug.getMemoryInfo`). Все поля —
-/// в байтах. Категории `summary.*` (PSS) плюс прямые счётчики native heap.
-/// Ядро sing-box в том же процессе → его память внутри [nativeHeap]/
-/// [nativeHeapAllocated].
-class MemoryInfo {
-  const MemoryInfo({
-    this.totalPss = 0,
-    this.totalSwap = 0,
-    this.javaHeap = 0,
-    this.nativeHeap = 0,
-    this.code = 0,
-    this.stack = 0,
-    this.graphics = 0,
-    this.privateOther = 0,
-    this.system = 0,
-    this.nativeHeapAllocated = 0,
-    this.nativeHeapSize = 0,
-  });
-
-  /// summary.total-pss — суммарный PSS процесса.
-  final int totalPss;
-  final int totalSwap;
-  final int javaHeap;
-  final int nativeHeap;
-  final int code;
-  final int stack;
-  final int graphics;
-  final int privateOther;
-  final int system;
-
-  /// Аллоцированный native heap (malloc) — прямой счётчик, не PSS.
-  final int nativeHeapAllocated;
-  final int nativeHeapSize;
-
-  static int _int(Object? v) => v is int ? v : (v is num ? v.toInt() : 0);
-
-  factory MemoryInfo.fromMap(Map<dynamic, dynamic> m) => MemoryInfo(
-        totalPss: _int(m['totalPss']),
-        totalSwap: _int(m['totalSwap']),
-        javaHeap: _int(m['javaHeap']),
-        nativeHeap: _int(m['nativeHeap']),
-        code: _int(m['code']),
-        stack: _int(m['stack']),
-        graphics: _int(m['graphics']),
-        privateOther: _int(m['privateOther']),
-        system: _int(m['system']),
-        nativeHeapAllocated: _int(m['nativeHeapAllocated']),
-        nativeHeapSize: _int(m['nativeHeapSize']),
-      );
-}
-
-
-/// §455 — вердикт `Libbox.checkConfig()`: [ok] — ядро приняло; иначе [error]
-/// — отказ словами ядра (unknown field, отвергнутая опция, битый ключ).
-final class CoreCheck {
-  const CoreCheck({required this.ok, this.error = ''});
-  final bool ok;
-  final String error;
 }

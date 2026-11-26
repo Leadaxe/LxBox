@@ -35,6 +35,7 @@ final class DocumentSource {
     this.priority = 0,
     this.detect,
     this.unwrap,
+    this.container,
     this.redetect = false,
     this.requiresAfterUnwrap,
     this.mapper,
@@ -53,6 +54,7 @@ final class DocumentSource {
         priority: (j['priority'] as num?)?.toInt() ?? 0,
         detect: (j['detect'] as Map?)?.cast<String, dynamic>(),
         unwrap: j['unwrap'] as String?,
+        container: (j['container'] as Map?)?.cast<String, dynamic>(),
         redetect: j['redetect'] as bool? ?? false,
         requiresAfterUnwrap:
             (j['requires_after_unwrap'] as Map?)?.cast<String, dynamic>(),
@@ -74,6 +76,11 @@ final class DocumentSource {
   /// КОДОМ: `qCompress`+zlib предикатами не выражается. Но вызывается он по
   /// ИМЕНИ из данных, а не веткой в снифере (так же у лаунчера).
   final String? unwrap;
+
+  /// Контракт 1.1.176 (MAPPER_ENGINE §2.1) — параметры распаковщика
+  /// `container_link`: `scheme` (написание ссылки), `omit` (ключи объекта,
+  /// которые в контейнер не идут), `set` (значения поверх).
+  final Map<String, dynamic>? container;
 
   /// Распакованный текст судится ЗАНОВО, с самого начала.
   final bool redetect;
@@ -188,6 +195,10 @@ final class DocumentMatch {
 /// Именованный распаковщик оболочки: `unwrap` реестра → функция.
 typedef Unwrapper = String? Function(String text);
 
+/// Распаковщик ОБЪЕКТНОЙ оболочки (контракт 1.1.176): документ-объект →
+/// текст другого вида; `null` — объект не распакован.
+typedef JsonUnwrapper = String? Function(DocumentSource source, Object json);
+
 /// Реестр видов источника.
 final class DocumentRegistry {
   DocumentRegistry(this.sources, {this.maxUnwrapDepth = 2});
@@ -277,6 +288,7 @@ final class DocumentRegistry {
   DocumentMatch? detect(
     String text, {
     required Map<String, Unwrapper> unwrappers,
+    Map<String, JsonUnwrapper> jsonUnwrappers = const {},
     int depth = 0,
   }) {
     // BOM — мусор кодировки файла, не признак формата: снимается один раз
@@ -304,6 +316,24 @@ final class DocumentRegistry {
         }
         if (json == null) continue;
         if (!detectMatchesJson(d, json)) continue;
+        // Контракт 1.1.176 (§2.1) — ОБЪЕКТНАЯ оболочка: документ-объект
+        // печатается текстом другого вида и уходит на повторный детект.
+        // Распаковщика нет или объект не сериализовался — вид не распакован,
+        // ветка не сработала.
+        final wrap = s.unwrap;
+        if (wrap != null) {
+          if (depth >= maxUnwrapDepth && maxUnwrapDepth > 0) continue;
+          final inner = jsonUnwrappers[wrap]?.call(s, json)?.trim();
+          if (inner == null || inner.isEmpty) continue;
+          final again = s.redetect
+              ? detect(inner,
+                  unwrappers: unwrappers,
+                  jsonUnwrappers: jsonUnwrappers,
+                  depth: depth + 1)
+              : null;
+          return again ??
+              DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
+        }
         return DocumentMatch(
             source: s, text: trimmed, json: json, unwrapDepth: depth);
       }
@@ -335,7 +365,10 @@ final class DocumentRegistry {
         // «обёртки не было» повторный детект той же ветки.
         if (s.redetect && formMatchesText(d, inner)) {
           final again =
-              detect(inner, unwrappers: unwrappers, depth: depth + 1);
+              detect(inner,
+                  unwrappers: unwrappers,
+                  jsonUnwrappers: jsonUnwrappers,
+                  depth: depth + 1);
           if (again != null) return again;
         }
         continue;
@@ -345,7 +378,10 @@ final class DocumentRegistry {
         return DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
       }
       final again =
-          detect(inner, unwrappers: unwrappers, depth: depth + 1);
+          detect(inner,
+                  unwrappers: unwrappers,
+                  jsonUnwrappers: jsonUnwrappers,
+                  depth: depth + 1);
       if (again != null) return again;
       return DocumentMatch(source: s, text: inner, unwrapDepth: depth + 1);
     }

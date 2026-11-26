@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../widgets/outbound_picker.dart';
 import '../../../widgets/template_var_list.dart';
-import '../../dns_settings_screen/resolved_server.dart';
+import '../../../services/dns/resolved_server.dart';
 import '../edit_controller.dart';
 import '../sections/server_form_section.dart';
 import '../../../services/l10n/locale_controller.dart';

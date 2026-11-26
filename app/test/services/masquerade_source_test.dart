@@ -51,6 +51,25 @@ void main() {
       );
     });
 
+    // §741 — JSON-источник с комментариями: ключи читаются, запись
+    // пересобирает JSON (комментарии при этом теряются — известное
+    // ограничение).
+    test('JSON source with comments: keys read and written', () {
+      const json = '{\n'
+          '  // wg\n'
+          '  "type": "wireguard", "tag": "wg",\n'
+          '  "private_key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaA=",\n'
+          '  "address": ["10.0.0.2/32"], # addr\n'
+          '  "peers": [{"address": "masq.example.com", "port": 51820,\n'
+          '    "public_key": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA=",\n'
+          '    "allowed_ips": ["0.0.0.0/0"]}]\n'
+          '}';
+      expect(masqueradeKeysPresent(json), isFalse);
+      final out = withMasquerade(json, quic);
+      expect(jsonDecode(out)['ip'], 'quic');
+      expect(masqueradeKeysPresent(out), isTrue);
+    });
+
     test('existing keys in another case are replaced', () {
       final src = ini.replaceFirst(
         'Jc = 3\n',

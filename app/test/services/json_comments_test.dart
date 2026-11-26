@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/services/parser/json_comments.dart';
 
@@ -78,5 +80,81 @@ void main() {
     expect(out, isNotNull);
     expect(out, isNot(contains('United States')));
     expect(out, contains('"#keep"'));
+  });
+
+  // §741 (контракт 1.1.172) — случаи, названные лаунчером (TASKS_LXBOX §173).
+  group('§741 jsonSourceText', () {
+    const commented = '// пометка: основной сервер, «ключ» менять в декабре\n'
+        '{\n'
+        '  "type": "trojan", /* блочный "комментарий" с кавычками */\n'
+        '  "server": "example-2.com",\n'
+        '  "server_port": 443, # решётка до конца строки\n'
+        '  "password": "pass//not#comment/*x*/",\n'
+        '  "tls": {"enabled": true, "server_name": "example-2.com"}\n'
+        '}';
+
+    test('кавычки в /* */, //, # и /* внутри строки пароля', () {
+      final v = jsonDecode(jsonSourceText(commented)) as Map;
+      expect(v['password'], 'pass//not#comment/*x*/');
+      expect(v['server_port'], 443);
+      expect((v['tls'] as Map)['server_name'], 'example-2.com');
+    });
+
+    test('текст, начинающийся с комментария, опознаётся как JSON', () {
+      expect(uncommentedJson('# head\n{"a": 1}'), '\n{"a": 1}');
+      expect(uncommentedJson('/* x */ [1]'), ' [1]');
+    });
+
+    test('ссылка, .conf и JSON без комментариев — как есть', () {
+      const uri = 'vless://u@h:1?x=1#Name // x';
+      expect(jsonSourceText(uri), uri);
+      const ini = '# c\n[Interface]\nPrivateKey = a/b+c=\n';
+      expect(jsonSourceText(ini), ini);
+      const plain = '{"a": "#x"}';
+      expect(identical(jsonSourceText(plain), plain), isTrue);
+    });
+
+    test('экранированная кавычка в строке не закрывает её', () {
+      expect(jsonDecode(jsonSourceText(r'{"p": "a\"//b" // c' '\n}')),
+          {'p': r'a"//b'});
+    });
+
+    test('незакрытый /* съедает текст до конца — не JSON', () {
+      expect(uncommentedJson('{"a": 1} /* tail'), '{"a": 1} ');
+      expect(uncommentedJson('{"a": /* 1}'), isNull);
+    });
+  });
+
+  group('§741 withJsonTag', () {
+    test('нет ключа tag — первым ключом с отступом следующей строки', () {
+      const text = '{\n  // c\n  "type": "trojan" # t\n}';
+      final out = withJsonTag(text, 'n1')!;
+      expect(out, '{\n  "tag": "n1",\n  // c\n  "type": "trojan" # t\n}');
+      expect(jsonDecode(jsonSourceText(out)), {'tag': 'n1', 'type': 'trojan'});
+    });
+
+    test('однострочный и с комментарием перед {', () {
+      expect(withJsonTag('{"type": "x"}', 'a'), '{"tag": "a", "type": "x"}');
+      expect(withJsonTag('// h\n{"type": "x"}', 'a'),
+          '// h\n{"tag": "a", "type": "x"}');
+    });
+
+    test('ключ tag есть — меняется только значение; вложенный tag не трогается',
+        () {
+      const text = '{"tls": {"tag": "in"}, /* "tag": "c" */ "tag": "old" # x\n}';
+      expect(withJsonTag(text, 'new "q"'),
+          '{"tls": {"tag": "in"}, /* "tag": "c" */ "tag": "new \\"q\\"" # x\n}');
+    });
+
+    test('строка "tag" как значение ключом не считается', () {
+      const text = '{"name": "tag", "type": "x"}';
+      expect(withJsonTag(text, 'a'), '{"tag": "a", "name": "tag", "type": "x"}');
+    });
+
+    test('не объект, пустой объект, tag не строка — null', () {
+      expect(withJsonTag('[1]', 'a'), isNull);
+      expect(withJsonTag('{ /* c */ }', 'a'), isNull);
+      expect(withJsonTag('{"tag": 1}', 'a'), isNull);
+    });
   });
 }

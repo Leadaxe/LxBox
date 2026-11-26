@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../contract_paths.dart';
-import 'package:lxbox/screens/chain_edit/chain_form_validation.dart';
-import 'package:lxbox/screens/chain_edit/chain_hop_candidate.dart';
+import 'package:lxbox/services/chains/chain_form_validation.dart';
+import 'package:lxbox/services/chains/chain_hop_candidate.dart';
 
 // §393 C6 — валидация формы цепочки. ФОРМА — ЕДИНСТВЕННЫЙ РУБЕЖ (§393 L4):
 // `sing-box check` ошибки старта не ловит, ядро отвергает конфиг ЦЕЛИКОМ, и
@@ -39,6 +38,12 @@ ChainHopCandidate _node(String tag,
         body: reality ? _realityBody(tag) : null,
         detour: detour,
         outboundType: 'vless');
+
+ChainHopCandidate _tunnel(String tag, {ChainHopKind kind = ChainHopKind.node}) =>
+    ChainHopCandidate(
+        tag: tag,
+        kind: kind,
+        outboundType: kind == ChainHopKind.node ? 'wireguard' : '');
 
 ChainHopCandidate _chain(String tag, {bool below = false}) =>
     ChainHopCandidate(tag: tag, kind: ChainHopKind.chain, below: below);
@@ -171,59 +176,80 @@ void main() {
     });
   });
 
-  // §57 (контракт 1.1.61) — REALITY × снятый uTLS больше не ошибка формы:
-  // `on_hop_required` реестра снимает ключ с патча, цепочка собирается,
-  // находка — предупреждение с кодом реестра.
-  group('reality + strip tls.utls — on_hop_required реестра', () {
-    setUpAll(loadTestRegistry);
+  // §761 — один путь на узел: что сборка не разведёт копиями, форма запирает.
+  group('один путь на узел или группу', () {
+    ({String section, Map<String, dynamic> body}) ob(Map<String, dynamic> b) =>
+        (section: 'outbounds', body: b);
+    final bodies = {
+      'home': ob({'tag': 'home', 'type': 'vless'}),
+      'de': ob({'tag': 'de', 'type': 'vless'}),
+      'vpn-1': ob({
+        'tag': 'vpn-1',
+        'type': 'selector',
+        'outbounds': ['home', 'de'],
+      }),
+      'wg': (section: 'endpoints', body: {'tag': 'wg', 'type': 'wireguard'}),
+      'other': ob({
+        'tag': 'other',
+        'type': 'chain',
+        'outbounds': ['de', 'wg'],
+      }),
+    };
 
-    test('снятый utls на reality-ЗВЕНЕ — предупреждение, сохранять можно', () {
+    test('WireGuard на позиции ≥ 1 другой цепочки — ошибка, называет обе', () {
       final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home', 'de-reality'],
-          strip: {'tls.utls': true},
-        ),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
+        const ChainFormState(tag: 'mine', hops: ['home', 'wg']),
+        ChainFormContext(bodies: bodies),
       );
-      final kept = _find(issues, ChainIssueCode.stripKeptForHop);
-      expect(kept, isNotNull);
-      expect(kept!.level, ChainIssueLevel.warning);
-      expect(kept.hops, ['de-reality']);
-      expect(chainFormCanSave(issues), isTrue);
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.level, ChainIssueLevel.blocking);
+      expect(i.message, contains('"wg"'));
+      expect(i.message, contains('"other"'));
+      expect(i.message, contains('in chain "mine" (position 2)'));
+      expect(i.message, isNot(contains('here')));
+      expect(i.message, contains('make a copy'));
+      expect(chainFormCanSave(issues), isFalse);
     });
 
-    test('reality на позиции 0 не судится: strip применяется к звеньям', () {
-      final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home-reality', 'de-exit'],
-          strip: {'tls.utls': true},
+    test('узел с фиксированным портом на позиции 2 — ошибка с подсказкой', () {
+      final withPort = {
+        ...bodies,
+        'wgp': (
+          section: 'endpoints',
+          body: {'tag': 'wgp', 'type': 'wireguard', 'listen_port': 51820},
         ),
-        _ctx([_node('home-reality', reality: true), _node('de-exit')]),
+      };
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'mine', hops: ['home', 'wgp']),
+        ChainFormContext(bodies: withPort),
       );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.level, ChainIssueLevel.blocking);
+      expect(
+          i.message,
+          '"wgp" at position 2 of chain "mine" has a fixed local port '
+          '(listen_port) — remove the port from the node, or put a copy of '
+          'the node without the port at this position.');
+      expect(i.hops, ['wgp']);
+      expect(chainFormCanSave(issues), isFalse);
     });
 
-    test('utls по умолчанию каталога не снимается — находки нет', () {
+    test('[home, vpn-1{home, de}] — ошибка с подсказкой про копию vpn-1', () {
       final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: ['home', 'de-reality']),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
+        const ChainFormState(tag: 'mine', hops: ['home', 'vpn-1']),
+        ChainFormContext(bodies: bodies),
       );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.message, contains('make a copy of "vpn-1" without "home"'));
+      expect(i.hops, containsAll(['home', 'vpn-1']));
     });
 
-    test('явная галка перевешивает выключенный strip_evasion', () {
+    test('общий вход с другой цепочкой — не ошибка', () {
       final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home', 'de-reality'],
-          stripEvasion: false,
-          strip: {'tls.utls': true},
-        ),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
+        const ChainFormState(tag: 'mine', hops: ['de', 'home']),
+        ChainFormContext(bodies: bodies),
       );
-      expect(_codes(issues), contains(ChainIssueCode.stripKeptForHop));
+      expect(_codes(issues), isNot(contains(ChainIssueCode.onePath)));
     });
   });
 
@@ -266,6 +292,17 @@ void main() {
       ]));
       expect(chainFormCanSave(issues), isTrue);
     });
+  });
+
+  // §760 снято (ядро v1.14.4-lx.37-rc.2 узлы на позициях не копирует):
+  // туннель на позиции ≥1 — не находка.
+  test('WG-узел второй позицией — без находки про туннель', () {
+    final issues = validateChainForm(
+      const ChainFormState(tag: 'via-wg', hops: ['home', 'wg-nl']),
+      _ctx([_node('home'), _tunnel('wg-nl')]),
+    );
+    // Остаётся только находка про UDP-туннель за TCP-позицией.
+    expect(_codes(issues), {ChainIssueCode.wgBehindTcpHop});
   });
 
   group('потерянные позиции', () {

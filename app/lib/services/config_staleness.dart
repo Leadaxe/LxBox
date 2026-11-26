@@ -25,7 +25,7 @@
 
 import 'dart:convert';
 
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 
 /// Что native кладёт в `OverrideOptions` перед `startOrReloadService`.
 /// Зеркало `BoxService.buildOverrideOptions` (Kotlin).

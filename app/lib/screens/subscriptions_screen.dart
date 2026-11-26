@@ -574,22 +574,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     });
   }
 
-  /// §585 — комментарии вставленного JSON убраны из источника записи.
-  /// §722 D — документ обрезан до узлов: одно сообщение на импорт (оно
-  /// важнее строки про комментарии).
-  void _snackCommentsRemoved() {
-    if (!mounted) return;
-    final c = widget.subController;
-    final String text;
-    if (c.lastExtrasDropped) {
-      text = getLocalText.s(
-          "Only the nodes are saved. The rest of the input is not kept.");
-    } else if (c.lastCommentsRemoved) {
-      text = getLocalText.s("Comments were removed.");
-    } else {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  /// §722 D — документ обрезан до узлов: одно сообщение на импорт.
+  /// §741 — комментарии вставленного JSON хранятся, о них сообщения нет.
+  void _snackExtrasDropped() {
+    if (!mounted || !widget.subController.lastExtrasDropped) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(getLocalText.s(
+            "Only the nodes are saved. The rest of the input is not kept."))));
   }
 
   Future<void> _add() async {
@@ -606,7 +597,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       _ignoreInputDismiss = true;
       _inputController.clear();
       _ignoreInputDismiss = false;
-      _snackCommentsRemoved();
+      _snackExtrasDropped();
       await _regenerateAndSave(entryBaseline: baseline);
     } else {
       _presentParseRejectSheetIfNeeded();
@@ -668,7 +659,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     await widget.subController.addFromInput(text);
     final addErr = widget.subController.lastError;
     if (addErr == null) {
-      _snackCommentsRemoved();
+      _snackExtrasDropped();
       await _regenerateAndSave(entryBaseline: baseline);
     } else if (mounted) {
       _presentParseRejectSheetIfNeeded();

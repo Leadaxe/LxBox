@@ -259,9 +259,6 @@ void main() {
         tag: 'chain-1',
         enabled: false,
         hops: [NodeLink(tag: 'PR NL-1'), NodeLink(tag: 'Tokyo'), NodeLink(tag: 'vpn-1')],
-        idleTimeout: '5m',
-        stripEvasion: false,
-        strip: {'tls.utls': true, 'tls.fragment': false},
         rewrite: {
           'vless': {'flow': null, 'packet_encoding': 'xudp'},
         },
@@ -371,12 +368,12 @@ void main() {
 
     test('цепочка: настройки в body, позиции ссылками, поля позиции нет', () {
       final record = chainToRecord(const SourceChain(
-          tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], idleTimeout: '1m'));
+          tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]));
       expect(record, {
         'kind': 'chain',
         'tag': 'c',
         'enabled': true,
-        'body': {'type': 'chain', 'idle_timeout': '1m'},
+        'body': {'type': 'chain'},
         'hops': [
           {'tag': 'a'},
           {'tag': 'b'},

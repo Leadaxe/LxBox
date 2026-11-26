@@ -75,7 +75,9 @@ ones.
 - Tapping a row only highlights it. The ▷ button on the right selects the
   node; for the active one it is ✓ and cannot be pressed.
 - `NETWORKS` has no Ping, Use this node or ▷ button.
-- Copy JSON / detour moved to View details.
+- Copy JSON / detour moved to View details. The JSON tab there shows the
+  node as the core runs it (effective / original and the core's changes); with
+  the tunnel down it shows no data (task 761).
 
 ## Boundaries
 
@@ -107,3 +109,4 @@ ones.
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | — | Turn off / Turn on of a WG node, the `off` state |
 | 13 | [572](../../../tasks/572-notifications-group-by-code.md) | Released v2.25.7 | Node notifications grouped by code |
 | 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Load balance Auto twin shows the pool label; slot names when no badge |
+| 15 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | The JSON tab of View details shows the node from the core |

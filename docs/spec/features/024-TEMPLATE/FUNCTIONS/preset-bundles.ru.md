@@ -37,11 +37,12 @@ DNS-серверы и DNS-правила.
 | `for_each_node_do{#filter, #do, #final}` | обход собирает значения узлов в собственные переменные пресета типа `text_list` (`#append`), `#final` снимает дубли, сортирует и ограничивает их; тело раскрывается один раз после обхода |
 | псевдопеременные `rule_enable`, `dns_enable` с `#on_change` | реагируют на переключение пресета и его DNS-части; пересчитывают глобальные |
 
-**Каталог** (12 пресетов в поставляемом шаблоне):
+**Каталог** (13 пресетов в поставляемом шаблоне):
 
 | Пресет | Умолч. | Номер | Что делает | Переменные |
 |---|---|---|---|---|
 | Traffic Processing | вкл, закреплён | 0 | `sniff`, `hijack-dns` для `protocol: dns`, `resolve` | Packet sniffing, Sniff timeout, Hijack DNS, Resolve destination IP¹, Resolve strategy¹ |
+| Block HTTPS/SVCB records | выкл | 10 | только DNS: на HTTPS/SVCB-запросы любого домена — пустой ответ, приложения не используют ECH, правила по домену видят имя сайта (§755) | — |
 | Tunnel ingress | вкл | 940 | соединения из клиентского туннеля (WireGuard, AWG, OpenVPN, OpenConnect): разрешённое переключателями `allow_*` узла идёт в свой outbound, остальное — reject; DNS закрытых пиров — reject | Incoming from tunnels (`reject`), Device and local network go to (`direct-out`), Gateway traffic goes to (`vpn-1`) |
 | Tailscale networks | вкл | 945 | на каждый узел Tailscale: `preferred_by` → узел, резолв его DNS | DNS |
 | Private IPs | выкл | 950 | `ip_is_private` | Outbound (`direct-out`) |

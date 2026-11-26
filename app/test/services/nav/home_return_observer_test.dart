@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lxbox/services/nav/home_return_observer.dart';
+import 'package:lxbox/widgets/home_return_observer.dart';
 
 /// §076F — возврат на главный: обработчик пересборки срабатывает ровно
 /// тогда, когда после pop'а наверху оказывается корневой (home) маршрут,

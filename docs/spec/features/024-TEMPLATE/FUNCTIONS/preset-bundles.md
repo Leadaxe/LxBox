@@ -37,11 +37,12 @@ sets, several route rules, DNS servers and DNS rules at once.
 | `for_each_node_do{#filter, #do, #final}` | the walk collects node values into the preset's own `text_list` variables (`#append`), `#final` dedups, sorts and caps them; the body is expanded once after the walk |
 | pseudo-variables `rule_enable`, `dns_enable` with `#on_change` | react to the preset and its DNS part being toggled; recompute globals |
 
-**The catalog** (12 presets in the shipped template):
+**The catalog** (13 presets in the shipped template):
 
 | Preset | Default | Number | What it does | Variables |
 |---|---|---|---|---|
 | Traffic Processing | on, pinned | 0 | `sniff`, `hijack-dns` for `protocol: dns`, `resolve` | Packet sniffing, Sniff timeout, Hijack DNS, Resolve destination IP¹, Resolve strategy¹ |
+| Block HTTPS/SVCB records | off | 10 | DNS only: HTTPS/SVCB queries answered empty for every domain — apps do not use ECH, domain rules see the site name (§755) | — |
 | Tunnel ingress | on | 940 | connections from a client tunnel (WireGuard, AWG, OpenVPN, OpenConnect): what the node's `allow_*` switches permit goes to its outbound, the rest is rejected; DNS of the closed peers is rejected | Incoming from tunnels (`reject`), Device and local network go to (`direct-out`), Gateway traffic goes to (`vpn-1`) |
 | Tailscale networks | on | 945 | for each Tailscale node: `preferred_by` → the node, resolving its DNS | DNS |
 | Private IPs | off | 950 | `ip_is_private` | Outbound (`direct-out`) |

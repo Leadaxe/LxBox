@@ -62,17 +62,13 @@ void main() {
       expect(tags.indexOf('ch'), lessThan(tags.indexOf('vpn-1')));
     });
 
-    test('strip / strip_evasion / idle_timeout / rewrite доезжают в raw-объект',
-        () async {
+    test('§761: в цепочке только tag, type, outbounds, rewrite', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [
           const SourceChain(
             tag: 'tuned',
             hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
-            idleTimeout: '10m',
-            stripEvasion: false,
-            strip: {'tls.utls': true, 'tls.fragment': false},
             rewrite: {
               'vless': {'packet_encoding': 'xudp'},
             },
@@ -80,9 +76,11 @@ void main() {
         ],
       );
       final chain = _byTag(r, 'tuned')!;
-      expect(chain['idle_timeout'], '10m');
-      expect(chain['strip_evasion'], isFalse);
-      expect(chain['strip'], {'tls.fragment': false, 'tls.utls': true});
+      // Ядро v1.14.4-lx.37-rc.2 отвергает эти ключи цепочки при загрузке.
+      expect(chain.containsKey('idle_timeout'), isFalse);
+      expect(chain.containsKey('strip_evasion'), isFalse);
+      expect(chain.containsKey('strip'), isFalse);
+      expect(chain.keys.toSet(), {'tag', 'type', 'outbounds', 'rewrite'});
       expect(chain['rewrite'], {
         'vless': {'packet_encoding': 'xudp'},
       });
@@ -109,59 +107,6 @@ void main() {
       );
       expect(_byTag(r, 'off'), isNull);
       expect(r.emitWarnings, isEmpty);
-    });
-  });
-
-  // §57 (контракт 1.1.61) — `on_hop_required` каталога strip: REALITY-звено
-  // требует `tls.utls`, ключ снимается с патча цепочки, цепочка собирается,
-  // код реестра — предупреждением. Прежде форма запирала такую цепочку.
-  group('§57 — REALITY × strip tls.utls на звене', () {
-    test('цепочка собирается, tls.utls снят с патча, код в отчёте', () async {
-      final r = await _build(
-        nodeTags: ['DE'],
-        extraUris: [
-          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
-              '?security=reality&sni=example.com&fp=chrome'
-              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
-              '&sid=0123abcd#NL',
-        ],
-        chains: [
-          const SourceChain(
-            tag: 'via-nl',
-            hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
-            strip: {'tls.utls': true, 'tls.fragment': false},
-          ),
-        ],
-      );
-      final chain = _byTag(r, 'via-nl');
-      expect(chain, isNotNull, reason: 'цепочка обязана собраться');
-      expect(chain!['strip'], {'tls.fragment': false, 'tls.utls': false});
-      expect(
-          r.emitWarnings.where((w) =>
-              w.contains('[chain_strip_utls_on_reality]') && w.contains('NL')),
-          hasLength(1));
-    });
-
-    test('REALITY на позиции 0 не судится — патч как есть', () async {
-      final r = await _build(
-        nodeTags: ['DE'],
-        extraUris: [
-          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
-              '?security=reality&sni=example.com&fp=chrome'
-              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
-              '&sid=0123abcd#NL',
-        ],
-        chains: [
-          const SourceChain(
-            tag: 'from-nl',
-            hops: [NodeLink(tag: 'NL'), NodeLink(tag: 'DE')],
-            strip: {'tls.utls': true},
-          ),
-        ],
-      );
-      expect(_byTag(r, 'from-nl')!['strip'], {'tls.utls': true});
-      expect(r.emitWarnings.where((w) => w.contains('chain_strip_utls')),
-          isEmpty);
     });
   });
 
@@ -249,17 +194,32 @@ void main() {
   });
 
   group('§393 C4 / T9 — Направление не берёт цепочку через себя', () {
-    test('прямой случай [proxy-out, exit] при фильтре «всё»', () async {
+    test('прямой случай [proxy-out, exit]: фильтр ловит вход и цепочку', () async {
       // Самый частый сценарий из всех (§393 L6): фильтр Направления ловит
-      // цепочку, которая через это же Направление проходит.
+      // цепочку, которая через это же Направление проходит. §761: выход в
+      // Направление входа не попадает — иначе кольцо (тест ниже).
+      final r = await _build(
+        nodeTags: ['DE', 'NL'],
+        chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')])],
+        directions: [const Direction(tag: 'proxy-out', label: 'P', nodeFilter: 'DE|via')],
+      );
+      expect(_byTag(r, 'via-de'), isNotNull, reason: 'сама цепочка жива');
+      expect(_byTag(r, 'proxy-out')!['outbounds'], ['DE']);
+      expect(r.emitWarnings.join('\n'), contains('was left out of it'));
+    });
+
+    test('§761: [proxy-out, NL] при фильтре «всё» — кольцо, цепочка выпала с подсказкой',
+        () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')])],
         directions: [const Direction(tag: 'proxy-out', label: 'P')],
       );
-      expect(_byTag(r, 'via-de'), isNotNull, reason: 'сама цепочка жива');
+      expect(_byTag(r, 'via-de'), isNull);
       expect(_byTag(r, 'proxy-out')!['outbounds'], ['DE', 'NL']);
-      expect(r.emitWarnings.join('\n'), contains('was left out of it'));
+      expect(
+          r.emitWarnings.join('\n'),
+          contains('make a copy of "proxy-out" without "NL" for the entry'));
     });
 
     test('ТРАНЗИТИВНО: цепочка через цепочку через Направление', () async {
@@ -269,13 +229,15 @@ void main() {
           const SourceChain(tag: 'inner', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')]),
           const SourceChain(tag: 'outer', hops: [NodeLink(tag: 'inner'), NodeLink(tag: 'SG')]),
         ],
-        directions: [const Direction(tag: 'proxy-out', label: 'P')],
+        directions: [
+          const Direction(tag: 'proxy-out', label: 'P', nodeFilter: 'DE|inner|outer')
+        ],
       );
       // Обе цепочки эмитированы, но ни одна не входит в proxy-out: outer
       // проходит через proxy-out ЧЕРЕЗ inner.
       expect(_byTag(r, 'inner'), isNotNull);
       expect(_byTag(r, 'outer'), isNotNull);
-      expect(_byTag(r, 'proxy-out')!['outbounds'], ['DE', 'NL', 'SG']);
+      expect(_byTag(r, 'proxy-out')!['outbounds'], ['DE']);
     });
 
     test('в ЧУЖОЕ Направление та же цепочка входит обычным узлом', () async {
@@ -283,7 +245,7 @@ void main() {
         nodeTags: ['DE', 'NL'],
         chains: [const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'proxy-out'), NodeLink(tag: 'NL')])],
         directions: [
-          const Direction(tag: 'proxy-out', label: 'P'),
+          const Direction(tag: 'proxy-out', label: 'P', nodeFilter: 'DE'),
           const Direction(tag: 'other', label: 'O', nodeFilter: 'via'),
         ],
       );

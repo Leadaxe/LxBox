@@ -21,13 +21,12 @@ import '../../models/import_rule.dart';
 import '../../models/node_spec.dart';
 import '../../models/node_warning.dart';
 import '../../services/app_log.dart';
-import '../../services/contract/registry.dart';
 import '../../services/node_hash.dart';
 import '../../services/node_identity.dart';
 import '../../services/parse_hints.dart';
 import '../../services/parser/body_decoder.dart';
-import '../../services/parser/engine/section_loader.dart';
 import '../../services/parser/parse_all.dart';
+import '../../services/parser/parse_env_snapshot.dart';
 import '../../services/subscription/import_rules.dart';
 import '../../services/subscription/node_budget.dart';
 import '../../services/subscription/sources.dart';
@@ -145,37 +144,6 @@ CacheParseResult parseCachedBody(CacheParseInput input) {
     emptyHint: null,
     totalNodeCount: cut.total,
   );
-}
-
-/// Синглтоны разбора основного isolate, снятые для воркера: в новом isolate
-/// `ContractRegistry.I` и `MapperSections.I` пусты, а разбор без них молча
-/// деградирует (коды и санитайзер пропускаются, черновые секции пусты).
-final class ParseEnvSnapshot {
-  const ParseEnvSnapshot({required this.registry, required this.drafts});
-
-  /// Снимок main. Тексты уже лежат в синглтонах — повторного чтения ассетов
-  /// нет.
-  factory ParseEnvSnapshot.capture() => ParseEnvSnapshot(
-        registry: ContractRegistry.I.snapshot,
-        drafts: MapperSections.I.draftTexts,
-      );
-
-  /// `null` — на main реестр не загружен; воркер тогда работает без него же.
-  final RegistrySnapshot? registry;
-  final Map<String, String> drafts;
-
-  /// Поставить снимок в синглтоны текущего (рабочего) isolate. §674 —
-  /// тем же снимком воркер превью пула Направлений.
-  Future<void> install() async {
-    final reg = registry;
-    if (reg != null) {
-      await ContractRegistry.I.loadFromSnapshot(reg);
-      if (!ContractRegistry.I.isLoaded) {
-        throw StateError('contract registry not initialized in worker');
-      }
-    }
-    MapperSections.I.loadDraftsFromTexts(drafts);
-  }
 }
 
 /// [parseCachedBody] в отдельном isolate. Ошибка инициализации синглтонов —

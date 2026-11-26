@@ -51,9 +51,6 @@
       "other": "%1$d снимка · %2$s. Нажмите для просмотра, «Поделиться» — чтобы получить профили pprof."
     }
   },
-  "%1$d · %2$d invalid": {
-    "value": "%1$d · %2$d некорректных"
-  },
   "%1$d/%2$d conns": {
     "value": "%1$d/%2$d соед."
   },
@@ -87,14 +84,6 @@
       "few": "%d настройки приложения",
       "many": "%d настроек приложения",
       "other": "%d настройки приложения"
-    }
-  },
-  "%d apps selected — tap to edit": {
-    "value": {
-      "one": "Выбрано %d приложение — нажмите, чтобы изменить",
-      "few": "Выбрано %d приложения — нажмите, чтобы изменить",
-      "many": "Выбрано %d приложений — нажмите, чтобы изменить",
-      "other": "Выбрано %d приложения — нажмите, чтобы изменить"
     }
   },
   "%d chained": {
@@ -465,9 +454,6 @@
   "(optional)": {
     "value": "(необязательно)"
   },
-  "1 app selected — tap to edit": {
-    "value": "Выбрано 1 приложение — нажмите, чтобы изменить"
-  },
   "1 server disabled": {
     "value": "Отключено серверов: 1"
   },
@@ -776,12 +762,6 @@
   "AND": {
     "value": "И"
   },
-  "AND with match. Transport (L4) and L7 sniff.": {
-    "value": "AND с match-условиями. Транспорт (L4) и L7-сниффинг."
-  },
-  "AND. Which interface the packet came in on.": {
-    "value": "AND. Через какой интерфейс пришёл пакет."
-  },
   "About": {
     "value": "О приложении"
   },
@@ -794,8 +774,14 @@
   "Edit the Source tab": {
     "value": "Правьте вкладку Source"
   },
-  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
-    "value": "Ассистенты Android смогут включать и выключать VPN и узнавать его статус (Android 16+)"
+  "Let Android assistants control the VPN, run network checks and read your routing setup (Android 16+)": {
+    "value": "Ассистенты Android смогут управлять VPN, проверять сеть и читать настройки маршрутизации (Android 16+)"
+  },
+  "Let assistants change settings": {
+    "value": "Разрешить ассистентам менять настройки"
+  },
+  "Assistants can add and edit routing rules and Directions and turn sources on or off without asking": {
+    "value": "Ассистенты смогут без подтверждения добавлять и править правила маршрутизации и Направления, включать и выключать источники"
   },
   "Accept automation commands": {
     "value": "Принимать команды автоматизации"
@@ -848,12 +834,6 @@
   "Fixed IP": {
     "value": "Фиксированный IP"
   },
-  "Go RE2, matched anywhere in the domain, e.g. %s": {
-    "value": "Go RE2, совпадение в любом месте домена, например %s"
-  },
-  "Go RE2, matched anywhere in the package name, e.g. %s": {
-    "value": "Go RE2, совпадение в любом месте имени пакета, например %s"
-  },
   "How domains matched by this rule are resolved.": {
     "value": "Как резолвятся домены, совпавшие с этим правилом."
   },
@@ -883,9 +863,6 @@
   },
   "Owner": {
     "value": "Владелец"
-  },
-  "Package name regex": {
-    "value": "Regex имени пакета"
   },
   "Relay": {
     "value": "Звено"
@@ -1107,9 +1084,6 @@
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "Пока эта настройка включена, любое приложение на устройстве сможет управлять VPN через broadcast-команды. Включайте, только если пользуетесь Tasker / MacroDroid и понимаете последствия."
   },
-  "Any — tap Edit to filter by network / L7 protocol": {
-    "value": "Любой — нажмите «Изменить», чтобы фильтровать по сети / L7-протоколу"
-  },
   "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
     "value": "Кто получит эту ссылку, сможет воспользоваться ключом. Копируйте её, только чтобы перенести узел на своё устройство."
   },
@@ -1294,9 +1268,6 @@
   },
   "Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb": {
     "value": "Бинарные профили (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb"
-  },
-  "Bind to this device (reserved)": {
-    "value": "Привязать к этому устройству (reserved)"
   },
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "Заблокированы — Android может ограничивать VPN-сервис. Нажмите, чтобы разрешить."
@@ -2357,9 +2328,6 @@
   "Don't use detour servers": {
     "value": "Не использовать detour-серверы"
   },
-  "Done": {
-    "value": "Готово"
-  },
   "Download": {
     "value": "Загрузка"
   },
@@ -2782,6 +2750,9 @@
   "General": {
     "value": "Общие"
   },
+  "Not in effect": {
+    "value": "Не действует"
+  },
   "Generate random": {
     "value": "Сгенерировать случайное"
   },
@@ -2919,9 +2890,6 @@
   },
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "Как это работает: Направления, правила, DNS, detour, рецепты"
-  },
-  "INBOUND": {
-    "value": "INBOUND"
   },
   "IP": {
     "value": "IP"
@@ -3064,9 +3032,6 @@
         "value": "К сведению"
       }
     }
-  },
-  "Inline": {
-    "value": "Встроенный"
   },
   "Input is empty": {
     "value": "Поле ввода пусто"
@@ -3320,17 +3285,8 @@
   "Managed by presets automatically": {
     "value": "Управляется пресетами автоматически"
   },
-  "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
-    "value": "Совпадает с RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local"
-  },
-  "Match when the packet SOURCE is a private address": {
-    "value": "Совпадает, когда ИСТОЧНИК пакета — приватный адрес"
-  },
   "Matches": {
     "value": "Совпадения"
-  },
-  "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
-    "value": "Совпадает, когда трафик идёт по выбранной сети И соответствует выбранному L7-протоколу."
   },
   "Measuring…": {
     "value": "Замеряю…"
@@ -3400,9 +3356,6 @@
   },
   "Nearby Wi-Fi permission missing": {
     "value": "Нет разрешения «Устройства Wi-Fi поблизости»"
-  },
-  "NETWORK & PROTOCOL": {
-    "value": "СЕТЬ И ПРОТОКОЛ"
   },
   "Name": {
     "value": "Имя"
@@ -3490,21 +3443,6 @@
   },
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "Узлов Tailscale пока нет — сначала добавьте узел на экране Servers"
-  },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "Фильтра по SSID нет — правило активно в любой сети Wi-Fi."
-  },
-  "Any": {
-    "value": "Любая"
-  },
-  "Cellular": {
-    "value": "Мобильная"
-  },
-  "Metered networks only": {
-    "value": "Только лимитные сети"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "Мобильные данные и Wi-Fi, отмеченные как лимитные в настройках Android"
   },
   "metered": {
     "value": "лимитная"
@@ -3682,9 +3620,6 @@
       "many": "Маршрутизация — %d правил",
       "other": "Маршрутизация — %d правила"
     }
-  },
-  "Select apps…": {
-    "value": "Выбрать приложения…"
   },
   "Server + %d detours copied": {
     "value": {
@@ -3888,9 +3823,6 @@
   "On update": {
     "value": "При обновлении"
   },
-  "One URL per line — several rule sets in one rule.": {
-    "value": "По одному URL на строку — несколько наборов правил в одном правиле."
-  },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "Один узел ведёт трафик обратно в собственную цепочку. Нажмите на него, чтобы открыть источник, измените или уберите его detour, затем запустите снова."
   },
@@ -3899,9 +3831,6 @@
   },
   "One-way": {
     "value": "Одностороннее"
-  },
-  "One-way DPI tricks make no sense on a link that dials through the previous hop.": {
-    "value": "Односторонние приёмы обхода DPI бессмысленны у звена, которое ходит через предыдущий хоп."
   },
   "One-way traffic": {
     "value": "Односторонний трафик"
@@ -3993,9 +3922,6 @@
   "Password (optional)": {
     "value": "Пароль (необязательно)"
   },
-  "Paste": {
-    "value": "Вставить"
-  },
   "Paste JSON": {
     "value": "Вставить JSON"
   },
@@ -4034,9 +3960,6 @@
   },
   "Pay": {
     "value": "Оплатить"
-  },
-  "Per-key overrides": {
-    "value": "Точечные переопределения"
   },
   "Phone → %1$s → %2$s → Internet": {
     "value": "Телефон → %1$s → %2$s → Интернет"
@@ -4149,8 +4072,8 @@
   "Positions %s are empty — remove them: the core rejects a chain with a blank position.": {
     "value": "Позиции %s пусты — уберите их: цепочку с пустой позицией ядро отвергает."
   },
-  "Positions %s have their own detour — it does not apply inside a chain: a link always dials through the previous position. The path is exactly as shown.": {
-    "value": "У позиций %s есть свой detour — внутри цепочки он не действует: звено всегда ходит через предыдущую позицию. Путь ровно такой, как показано."
+  "Positions %s have their own detour — it does not apply inside a chain: a position past the first always dials through the previous one. The path is exactly as shown.": {
+    "value": "У позиций %s свой detour — внутри цепочки он не действует: позиция после первой всегда идёт через предыдущую. Путь ровно такой, как показан."
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "Предпочтения, параметры пинга, автообновление, история Wi-Fi"
@@ -4188,12 +4111,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "Пресеты не переносятся — они есть в самом приложении"
   },
-  "Private IP": {
-    "value": "Приватный IP"
-  },
-  "Private source IP": {
-    "value": "Приватный IP источника"
-  },
   "Probe again": {
     "value": "Замерить снова"
   },
@@ -4223,9 +4140,6 @@
   },
   "Protocol and server details": {
     "value": "Протокол и данные сервера"
-  },
-  "Protocol filter": {
-    "value": "Фильтр протоколов"
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "Proxy-ссылка, конфиг WireGuard или JSON исходящего канала"
@@ -4364,9 +4278,6 @@
   },
   "Reload failed: %s": {
     "value": "Не удалось перезагрузить: %s"
-  },
-  "Remote (.srs)": {
-    "value": "Удалённый (.srs)"
   },
   "Remove": {
     "value": "Убрать"
@@ -4743,9 +4654,6 @@
   "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.": {
     "value": "Отправлять x-hwid и заголовки устройства при каждой загрузке подписки — для панелей с лимитом устройств по HWID (Remnawave). По умолчанию включено."
   },
-  "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
-    "value": "Отправляет client_id Cloudflare. При обфускации отключено — привязку к устройству часто блокируют."
-  },
   "Server": {
     "value": "Сервер"
   },
@@ -5010,9 +4918,6 @@
   },
   "Strict tunnel — all traffic goes through tun.": {
     "value": "Строгий туннель — весь трафик идёт через tun."
-  },
-  "Strip evasion tricks from links": {
-    "value": "Снимать приёмы обхода у звеньев"
   },
   "Subscription": {
     "value": "Подписки",
@@ -5396,9 +5301,6 @@
   "Unattributed (no owner)": {
     "value": "Без владельца (unattributed)"
   },
-  "Unavailable with port/protocol filters — they are unknown at DNS-query time.": {
-    "value": "Недоступно при фильтрах порта/протокола — в момент DNS-запроса они ещё неизвестны."
-  },
   "Unique id — referenced by DNS rules / resolvers": {
     "value": "Уникальный идентификатор — на него ссылаются DNS-правила и резолверы"
   },
@@ -5776,9 +5678,6 @@
   "empty = core default": {
     "value": "пусто = значение ядра по умолчанию"
   },
-  "empty = core default (5m); 0s = keep until stop": {
-    "value": "пусто = умолчание ядра (5m); 0s = жить до остановки"
-  },
   "empty = no prefix": {
     "value": "пусто = без префикса"
   },
@@ -5826,9 +5725,6 @@
   },
   "keep the fastest server until it fails": {
     "value": "держит самый быстрый сервер, пока он не откажет"
-  },
-  "kept": {
-    "value": "остаётся"
   },
   "latency-tested twin of this direction": {
     "value": "двойник этого Направления с тестом задержки"
@@ -5942,9 +5838,6 @@
   },
   "storage shape (lxbox_settings.json)": {
     "value": "формат хранения (lxbox_settings.json)"
-  },
-  "stripped": {
-    "value": "снимается"
   },
   "taken from member names; empty = no badges. Display only — not sent to the core": {
     "value": "берётся из имён участников; пусто = без значков. Только для вида — в ядро не уходит"
@@ -6303,9 +6196,6 @@
   },
   "The app does not know this node type and does not check it. The node goes to the core as written.": {
     "value": "Приложение не знает этот тип узла и не проверяет его. Узел уходит в ядро как написан."
-  },
-  "Comments were removed.": {
-    "value": "Комментарии убраны."
   },
   "via %s": {
     "value": "через %s"
@@ -7004,20 +6894,29 @@
   "Devices shared by other users are not counted as yours.": {
     "value": "Устройства, которыми поделились другие пользователи, вашими не считаются."
   },
-  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
-    "value": "Ядро: lx.wg.idle_suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
+  "Core: lx.wg.idle.suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "Ядро: lx.wg.idle.suspend. Простаивающий эндпоинт WireGuard вне активного маршрута разбирается и собирается заново при следующем подключении."
   },
-  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
-    "value": "Ядро: lx.wg.idle_suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
+  "Core: lx.wg.idle.suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "Ядро: lx.wg.idle.suspend_reachable. Такой же сон для эндпоинтов на активном маршруте, после более долгого простоя."
   },
-  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
-    "value": "Ядро: lx.wg.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
+  "Core: lx.wg.idle.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "Ядро: lx.wg.idle.lazy_build. Эндпоинт собирается при первом подключении, а не на старте ядра."
   },
-  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
-    "value": "Ядро: lx.wg.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
+  "Core: lx.wg.idle.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "Ядро: lx.wg.idle.build_max. Сверх лимита разбирается эндпоинт, простаивающий дольше всех."
   },
-  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
-    "value": "Ядро: lx.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
+  "Core: lx.wg.buffers.read_datagram_count. Datagrams one read of a tunnel without a detour takes; below 128 the socket also gives up kernel receive coalescing (UDP GRO). Ignored outside Linux and Android.": {
+    "value": "Ядро: lx.wg.buffers.read_datagram_count. Сколько датаграмм за одно чтение берёт туннель без detour; ниже 128 сокет ещё и отказывается от склейки приёма в ядре (UDP GRO). Вне Linux и Android не действует."
+  },
+  "Core: lx.wg.buffers.send_by_mtu. Off puts the send buffers back at 64 KiB per packet.": {
+    "value": "Ядро: lx.wg.buffers.send_by_mtu. Выключение возвращает буферы отправки по 64 КБ на пакет."
+  },
+  "Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry.": {
+    "value": "Ядро: lx.wg.connected_socket. Сокет туннеля подключается к серверу; неудачная отправка или смена маршрута его отключает, а сервер, сменивший адрес, слышен только после следующего повтора рукопожатия."
+  },
+  "Core: lx.detour.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "Ядро: lx.detour.mtu_align. Узел поверх туннеля получает размер пакета, который в туннель влезает: mtu у WireGuard и MASQUE, начальный размер пакета у Hysteria2 и TUIC. Значения никогда не повышаются."
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "Ядро: lx.masque.idle_timeout. Окно простоя для узлов MASQUE без собственного idle_timeout."
@@ -7141,5 +7040,260 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "Detour учтён в тесте у %d из %d; остальные проверяются напрямую."
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "Не действует: detour недоступен, трафик идёт к этому серверу напрямую."
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "Не действует: detour недоступен, узлы подключаются напрямую."
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "Блокировать записи HTTPS/SVCB"
+  },
+  "Hides ECH from apps like Chrome so the site name stays visible and this rule can match it. Apps with their own DNS-over-HTTPS bypass it.": {
+    "value": "Скрывает ECH от приложений вроде Chrome: имя сайта остаётся видно, и правило может его сопоставить. Приложения со своим DNS-over-HTTPS обходят блокировку."
+  },
+  "Needs a domain condition": {
+    "value": "Нужно условие по домену"
+  },
+  "DNS options apply to these domains on any port and protocol": {
+    "value": "DNS-опции действуют на эти домены на любом порту и протоколе"
+  },
+  "DNS options have no effect: the rule has no condition DNS can see": {
+    "value": "DNS-опции не действуют: у правила нет условия, которое видит DNS"
+  },
+  "DNS options are set in the form. This rule can only be edited as JSON.": {
+    "value": "DNS-опции задаются в форме. Это правило можно править только как JSON."
+  },
+  "DNS options do not apply to this rule: it has no condition DNS queries can match, such as domains, apps or a rule set.": {
+    "value": "DNS-опции к этому правилу не применяются: у него нет условия, по которому можно сопоставить DNS-запрос, — доменов, приложений или набора правил."
+  },
+  "%s Discard returns to the form without the JSON changes.": {
+    "value": "%s «Отменить» вернёт к форме без правок JSON."
+  },
+  "A rule set may hold its own ports and processes. To combine it with other conditions by OR, use a rule group.": {
+    "value": "В наборе могут быть свои порты и процессы. Чтобы связать его с другими условиями через «или», используйте группу правил."
+  },
+  "Add current": {
+    "value": "Текущая сеть"
+  },
+  "Apps": {
+    "value": "Приложения"
+  },
+  "BSSID": {
+    "value": "BSSID"
+  },
+  "Choose apps": {
+    "value": "Выбрать приложения"
+  },
+  "Condition": {
+    "value": "Условие"
+  },
+  "Destination / Rule sets": {
+    "value": "Назначение / наборы правил"
+  },
+  "Domain keywords": {
+    "value": "Ключевые слова домена"
+  },
+  "Domain suffixes": {
+    "value": "Суффиксы доменов"
+  },
+  "Domains": {
+    "value": "Домены"
+  },
+  "Empty": {
+    "value": "Пусто"
+  },
+  "IP addresses / CIDR": {
+    "value": "IP-адреса / CIDR"
+  },
+  "Inbound": {
+    "value": "Вход"
+  },
+  "Inbound tags": {
+    "value": "Теги входов"
+  },
+  "Invalid regex: %s": {
+    "value": "Неверная регулярка: %s"
+  },
+  "Keep editing": {
+    "value": "Продолжить правку"
+  },
+  "Leave JSON?": {
+    "value": "Выйти из JSON?"
+  },
+  "Manual download only. Tap ☁ to fetch the rule-set files.": {
+    "value": "Только ручная загрузка. Нажмите ☁, чтобы скачать файлы наборов."
+  },
+  "Metered network": {
+    "value": "Лимитная сеть"
+  },
+  "Network type": {
+    "value": "Тип сети"
+  },
+  "Network types": {
+    "value": "Типы сети"
+  },
+  "Networks": {
+    "value": "Сети"
+  },
+  "No conditions yet.": {
+    "value": "Условий пока нет."
+  },
+  "Not a URL: %s": {
+    "value": "Не URL: %s"
+  },
+  "Not available on this device": {
+    "value": "На этом устройстве не действует"
+  },
+  "Package regex": {
+    "value": "Регулярка пакета"
+  },
+  "Packages": {
+    "value": "Пакеты"
+  },
+  "Path regex": {
+    "value": "Регулярка пути"
+  },
+  "Pick saved": {
+    "value": "Из сохранённых"
+  },
+  "Port ranges": {
+    "value": "Диапазоны портов"
+  },
+  "Ports": {
+    "value": "Порты"
+  },
+  "Private addresses": {
+    "value": "Частные адреса"
+  },
+  "Private source addresses": {
+    "value": "Частные адреса источника"
+  },
+  "Process": {
+    "value": "Процесс"
+  },
+  "Protocols": {
+    "value": "Протоколы"
+  },
+  "Remove %s?": {
+    "value": "Удалить «%s»?"
+  },
+  "Rule %d": {
+    "value": "Правило %d"
+  },
+  "Rule group": {
+    "value": "Группа правил"
+  },
+  "Rule sets": {
+    "value": "Наборы правил"
+  },
+  "Rule sets in this rule: %d": {
+    "value": "Наборов в правиле: %d"
+  },
+  "Rule sets — URL (one per line)": {
+    "value": "Наборы правил — URL (по одному на строку)"
+  },
+  "Source IP addresses / CIDR": {
+    "value": "IP-адреса источника / CIDR"
+  },
+  "Source port": {
+    "value": "Порт источника"
+  },
+  "Source port ranges": {
+    "value": "Диапазоны портов источника"
+  },
+  "Source ports": {
+    "value": "Порты источника"
+  },
+  "The form cannot show this rule.": {
+    "value": "Форма не может показать это правило."
+  },
+  "The rule has no conditions": {
+    "value": "В правиле нет условий"
+  },
+  "What is filled in here will be lost.": {
+    "value": "Заполненное здесь пропадёт."
+  },
+  "all of": {
+    "value": "все из"
+  },
+  "any of": {
+    "value": "любое из"
+  },
+  "quarantine": {
+    "value": "карантин"
+  },
+  "%d conn · %d fail": {
+    "value": "%d соед. · %d отк."
+  },
+  "shifted keys: %d": {
+    "value": "сдвинутых ключей: %d"
+  },
+  "address problems: %d": {
+    "value": "проблем в адресе: %d"
+  },
+  "frozen for %d s": {
+    "value": "заморозка %d с"
+  },
+  "frozen": {
+    "value": "заморозка"
+  },
+  "Effective": {
+    "value": "Действующий"
+  },
+  "Original": {
+    "value": "Исходный"
+  },
+  "No data from the core: the tunnel is not running or the node is not in the running config.": {
+    "value": "Нет данных от ядра: туннель не запущен или узла нет в работающем конфиге."
+  },
+  "Changed by the core": {
+    "value": "Изменено ядром"
+  },
+  "chain %s, position %d": {
+    "value": "цепочка %s, позиция %d"
+  },
+  "rewrite of chain %s, position %d": {
+    "value": "rewrite цепочки %s, позиция %d"
+  },
+  "MTU alignment (%s) under %s": {
+    "value": "выравнивание MTU (%s) под %s"
+  },
+  "\"%s\" at position %d is also inside \"%s\" at the entry — make a copy of \"%s\" without \"%s\" for the entry.": {
+    "value": "«%s» на позиции %d есть и внутри «%s» на входе — сделайте для входа копию «%s» без «%s»."
+  },
+  "\"%s\" is the entry and also inside \"%s\" at position %d — make a copy of \"%s\" without \"%s\" for this position.": {
+    "value": "«%s» стоит на входе и есть внутри «%s» на позиции %d — сделайте для этой позиции копию «%s» без «%s»."
+  },
+  "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.": {
+    "value": "«%s» есть на позициях %d и %d — сделайте для позиции %6$d копию «%4$s» без «%5$s»."
+  },
+  "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
+    "value": "Тег «%s» занят узлом или группой, а цепочке он нужен для хопа — переименуйте этот узел."
+  },
+  "Hop chain \"%s\" is not built": {
+    "value": "Цепочка «%s» не собирается"
+  },
+  "More chains are not built: %d.": {
+    "value": "Не собираются ещё цепочки: %d."
+  },
+  "Open chain": {
+    "value": "Открыть цепочку"
+  },
+  "\"%s\" is used in chain \"%s\" (position %d) and in chain \"%s\" (position %d) — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
+    "value": "«%s» используется в цепочке «%s» (позиция %d) и в цепочке «%s» (позиция %d) — сделайте копию «%s» (и её узлов; копиям WireGuard нужны другие ключи) для одной из них."
+  },
+  "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.": {
+    "value": "В цепочке «%s» detour узла «%s» на входе ведёт в «%s», который цепочка берёт выше — уберите этот detour или уберите «%s» из цепочки."
+  },
+  "\"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or put a copy of the node without the port at this position.": {
+    "value": "«%s» на позиции %d цепочки «%s» имеет фиксированный локальный порт (%s) — уберите порт у узла или поставьте на эту позицию копию узла без порта."
+  },
+  "\"%s\" inside \"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or use a copy of the node without the port in \"%s\".": {
+    "value": "«%s» внутри «%s» на позиции %d цепочки «%s» имеет фиксированный локальный порт (%s) — уберите порт у узла или используйте в «%6$s» копию узла без порта."
+  },
+  "These changes can't be saved until the error is fixed. Leave without saving?": {
+    "value": "Эти изменения нельзя сохранить, пока не исправлена ошибка. Выйти без сохранения?"
   }
 }

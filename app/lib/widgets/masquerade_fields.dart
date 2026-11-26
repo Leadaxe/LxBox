@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import '../services/l10n/locale_controller.dart';
 import '../services/wireguard/masquerade_source.dart';
+import 'dpad_radio_group.dart';
 
 /// Протоколы маскировки (`ip`).
 const kMasqueradeProtocols = ['quic', 'dns', 'stun', 'sip'];
@@ -404,7 +405,7 @@ class MasqueradeSection extends StatelessWidget {
     builder: (ctx) => SimpleDialog(
       title: Text(title),
       children: [
-        RadioGroup<String>(
+        DpadRadioGroup<String>(
           groupValue: current,
           onChanged: (v) => Navigator.pop(ctx, v),
           child: Column(

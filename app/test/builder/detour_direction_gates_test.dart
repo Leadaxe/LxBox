@@ -637,7 +637,7 @@ void main() {
             Direction(tag: 'vpn-2', label: 'Relay', isDetour: true),
           ],
           customRules: [
-            CustomRuleInline(
+            CustomRuleTree.flat(
                 name: 'Pin', domains: const ['x.com'], outbound: 'vpn-2'),
           ],
         ),

@@ -86,7 +86,7 @@ void main() {
     test('staged custom rules видны читателю ДО дисковой записи', () async {
       // Имитация бага: правка правил staged (markDirty экрана), rebuild на
       // didPop читает storage — dispose-flush ещё не случился.
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'r1',
         domainSuffixes: ['example.com'],
         outbound: 'vpn-1',

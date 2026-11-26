@@ -64,7 +64,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │       ├─ refs[]                list          srs — rule-set URLs (§434)
 │       ├─ update_interval_hours int?          srs — §366 TTL, only when not default
 │       ├─ ref, vars             string, object?  preset — preset_id and var overrides
-│       ├─ dns                   object?       §117/§256 — {enabled, serverTag, forceIpv4?}
+│       ├─ dns                   object?       §117/§256/§755 — {enabled, serverTag, forceIpv4?, blockHttps?, fixedIps?}
 │       └─ resolve               object?       §247 — {only, strategy?, serverTag?, …}
 │
 ├─ dns                           object          §044/§061/§439 — DNS records
@@ -105,6 +105,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 │           └─ balancer          object{3 keys}  §208 — {pool, pool_tolerance, sticky_hash[]}
 ├─ directions_migrated           bool          §125/§393 — the guard for the one-shot directions migration
 ├─ urltest_mode_migrated         bool          §612 — the guard for the one-shot passive_check → failover migration
+├─ rule_set_tags_migrated        bool          §757 — the guard for the one-shot rewrite of rule_set references to old rule set tags
 ├─ last_global_update            ISO-8601      LEGACY (§593) — neither written nor read; kept known for old files
 ├─ presets_migrated              bool          §159 — the "default presets have been seeded" guard (fresh-install seed)
 ├─ late_presets_seeded           List<String>  §578 — late default presets already seeded once (e.g. tailscale)
@@ -175,7 +176,8 @@ Context.filesDir/                           # native `files/` = Dart getApplicat
     ├── <url.hashCode>
     └── <url.hashCode>.headers
 
-Android SharedPreferences (shared_prefs/):  # two files, boxvpn_boot and lxbox_native_cache —
+Android SharedPreferences (shared_prefs/):  # three Kotlin files, boxvpn_boot, lxbox_native_cache and
+                                            #   lxbox_automation (plus Flutter's own file) —
                                             #   see ARCHITECTURE §5 "Persistent storage"
 ```
 
@@ -214,6 +216,7 @@ Android SharedPreferences (shared_prefs/):  # two files, boxvpn_boot and lxbox_n
   "directions":         [ … ],     // §125 — routing directions (template→storage)
   "directions_migrated": true,     // §125/§393 — the guard for the one-shot directions migration
   "urltest_mode_migrated": true,   // §612 — the guard for the passive_check → failover migration
+  "rule_set_tags_migrated": true,  // §757 — the guard for the rule_set tag references rewrite
   "last_global_update": "ISO-8601",// LEGACY (§593) — present only in old files
   "presets_migrated":   true,      // §159 — the "defaults seeded" guard (fresh-install seed)
   "late_presets_seeded": [ "tailscale" ], // §578 — late default presets seeded once
@@ -1038,7 +1041,7 @@ anchors, see `rule_order.dart`).
     "wifi_bssid":       [ … ],
     "outbound":         "<tag>"     // or "action": "reject" instead of outbound
   },
-  "dns":     { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true },  // §117 task 3 + §256
+  "dns":     { "enabled": true, "serverTag": "<dns-server tag>", "forceIpv4": true, "blockHttps": true },  // §117 task 3 + §256 + §755
   "resolve": { "only": false, "strategy": "ipv4_only", "serverTag": "",
                "disableCache": true, "disableOptimisticCache": true,
                "rewriteTtl": 60, "timeout": "5s", "clientSubnet": "…" }                 // §247
@@ -1049,9 +1052,11 @@ Only non-empty matchers are written. `name` is user-supplied and mutable.
 
 OR semantics inside a category, AND between them. `protocol` and `ip_is_private` are not made headless — they are lifted to the routing-rule level.
 
-`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. The gate: with non-empty `port` (or port ranges), `protocol` or `network` the mirror is not emitted.
+`dns` ([§117] task 3, “DNS follows the rule”) is optional: the builder emits a mirror DNS rule `{rule_set: <the same headless one>, server: serverTag}` inside an atomic mirror group (ordered like the routing rules). Absent → the old behaviour. Since [§755] there is no port gate: `port`/`port_range` of an inline rule sit on the routing rule, not in the headless set, so every DNS aspect (mirror, `forceIpv4`, `fixedIps`, `blockHttps`) applies to the rule's domains on any port, protocol and `network`.
 
-`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order). The same port/protocol/network gate applies (the DNS layer is blind to port, protocol and network).
+`dns.blockHttps` ([§755], Block HTTPS/SVCB records) is optional: a serverless rule `{rule_set|match, query_type: [HTTPS, SVCB], action: predefined, rcode: NOERROR}` emitted first among the rule's DNS rules (then Force IPv4, then the server or Fixed IP). Apps get no ECH config and send a plain SNI, so the domain rule sees the site name. It takes effect only when the rule has a domain condition (`domain`/`domain_suffix`/`domain_keyword`/`domain_regex`, or any srs rule); otherwise the stored value is kept but ignored. Absent → `false`.
+
+`dns.forceIpv4` ([§256], Force IPv4) is optional: it suppresses AAAA (IPv6) for the rule's match through a serverless rule `{rule_set|match, ip_version: 6, action: predefined, rcode: NOERROR}` (so the app cleanly takes the A record). It is **orthogonal** to `enabled` and `serverTag` — the suppressor answers locally and needs no DNS server, so a rule may carry `forceIpv4` alone (`enabled: false`, `serverTag: ""`). It is emitted BEFORE the server mirror (the §253 order), after Block HTTPS (§755). No port gate since §755.
 
 `resolve` ([§247]) is optional: the builder emits a non-terminal route rule `{rule_set: <the same headless one>, action: resolve, …}` either BEFORE the terminal route (`only: false`, the flagship case — forcing `ipv4_only` for direct branches) or INSTEAD of it (`only: true`, an advanced fall-through). The gate: for inline rules it is emitted only when the domain group is non-empty (`resolveEligible`); for srs it is always emitted, since a `.srs` may contain domains.
 
@@ -1796,6 +1801,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `mixin_target_suggestions` | `bool` | §704 — the autocomplete suggestions under the Target field of the mixin form; the icon at the right of the field toggles them. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getMixinTargetSuggestions` / `setMixinTargetSuggestions`. |
 | `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |
 | `urltest_mode_migrated` | `bool` | §612 — the guard for the one-shot migration from `passive_check` to the `failover` mode. The raw `urltest_passive_check` `true` or absent (the old default) → the Directions' `auto`, the folds' `replace.auto` and the folders' `kind: auto` members (`group.strategy`, not `group_type: selector`) with `least_test` or no `mode` become `failover`; `false` → nothing changes; `round_robin` is never touched. Then `urltest_passive_check` is deleted and this key set to `true`. Exported with Routing (as `directions_migrated`): a backup made before §612 restores without it, and the next start migrates its groups. |
+| `rule_set_tags_migrated` | `bool` | §757 (contract 1.1.182, TASKS_LXBOX §185) — the guard for the one-shot rewrite of hand-written `rule_set` references to the old tags of own rules' sets: in the bodies of route rules (`rules[]`, tree nodes and verbatim JSON) and in own DNS rules (`dns.rules[]`, `user` and `srs`). The first ref of a rule `name` and `name-N` (before §757), `name:<h8>` / `name:inline` (1.1.179–1.1.181) become the tags of contract 1.1.182 (`name:<stem>`; the root inline set is `name`); a bare `name` stays when the rule has its own root inline set. Runs before the first build, after a backup restore and a workspace switch; then this key is set to `true`. Exported with Routing: a backup made before §757 restores without it, and the rewrite runs again. |
 
 > The structural keys have their own sections above: [`tun_apps`](#tun_apps--046), [`vpn_mode`](#vpn_mode--119), [`warp_account`](#warp_account--025), [`masque_account`](#masque_account--130). Together with this table that is the exhaustive list of current top-level keys in `lxbox_settings.json`. The registry that must match it is `SettingsStorage.allowedTopLevelKeys` (§159 — the allowlist filter for backup import): **a new key belongs in both**, or it survives an export and is silently dropped on restore.
 
@@ -1936,3 +1942,4 @@ The scrubber only handles the `vars` and `sources` keys; everything else (`meta.
 [§434]: ./spec/tasks/434-srs-rule-multiple-rule-sets.md
 [§435]: ./spec/tasks/435-node-sections-tailscale.md
 [§445]: ./spec/tasks/445-tailscale-state-dir-lifecycle.md
+[§755]: ./spec/tasks/755-block-https-svcb-records.md

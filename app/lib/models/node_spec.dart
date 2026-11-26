@@ -198,6 +198,10 @@ sealed class NodeSpec {
   /// Канонический URI. Инвариант: `parseUri(spec.toUri()) ≈ spec`.
   String toUri();
 
+  /// Ссылка для «Copy link» / Share. У всех моделей это [toUri]; свою форму
+  /// даёт только узел, чьё хранение — не ссылка ([UnknownTypeSpec] из JSON).
+  String shareUri() => toUri();
+
   /// Тип протокола — для UI иконок и дебага.
   String get protocol;
 
@@ -1506,6 +1510,18 @@ final class UnknownTypeSpec extends NodeSpec {
 
   @override
   String toUri() => rawSource;
+
+  /// Узел, пришедший ссылкой, отдаёт её как есть. Узел из JSON хранится
+  /// текстом записи ([rawSource] — объект), и ссылка для него собирается
+  /// движком по секции реестра его типа; нет секции с обратным ходом либо
+  /// тело форматом не выражается — остаётся текст записи, как и было.
+  @override
+  String shareUri() {
+    final src = rawSource.trimLeft();
+    if (src.isNotEmpty && !src.startsWith('{')) return rawSource;
+    final uri = e.uriViaEngine(this);
+    return uri == null || uri.isEmpty ? rawSource : uri;
+  }
 
   UnknownTypeSpec copyWith({String? tag, String? label, NodeSpec? chained}) =>
       UnknownTypeSpec(

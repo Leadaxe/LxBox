@@ -28,14 +28,14 @@ void main() {
   test('inline и srs — пикер есть, reject тоже', () {
     expect(
       RoutingHelpers.showsOutboundPicker(
-          CustomRuleInline(
+          CustomRuleTree.flat(
               name: 'ads', domains: ['a.test'], outbound: kOutboundReject),
           null),
       isTrue,
     );
     expect(
       RoutingHelpers.showsOutboundPicker(
-          CustomRuleSrs(name: 'geo', srsUrl: 'https://example.invalid/x.srs'),
+          CustomRuleTree.flat(name: 'geo', srsUrl: 'https://example.invalid/x.srs'),
           null),
       isTrue,
     );

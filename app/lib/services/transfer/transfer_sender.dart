@@ -14,7 +14,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 
 import '../app_log.dart';
-import '../platform_channels.dart';
+import '../../vpn/platform_channels.dart';
 import '../subscription/user_agent.dart';
 import 'transfer_code.dart';
 import 'transfer_receiver.dart';

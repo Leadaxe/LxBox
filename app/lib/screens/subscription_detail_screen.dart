@@ -20,9 +20,10 @@ import '../services/probe/probe_controller.dart';
 import '../services/probe/probe_detour.dart';
 import '../services/probe/probe_runner.dart';
 import '../services/settings_storage.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/subscription/sources.dart';
 import '../services/subscription/subscription_identity.dart'; // §289 — generateUuidV4
+import '../widgets/detour_path_line.dart';
 import '../widgets/detour_target_picker.dart';
 import '../widgets/probe_detour_note.dart';
 import '../widgets/user_agent_dialog.dart';
@@ -40,6 +41,7 @@ import 'subscription_detail_screen/widgets/subscription_settings_tab.dart';
 import 'subscription_detail_screen/widgets/subscription_source_tab.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/telegram_link.dart'; // §657
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 class SubscriptionDetailScreen extends StatefulWidget {
   const SubscriptionDetailScreen({
@@ -853,7 +855,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: FocusSafeTabBarView(
         controller: _tabCtrl,
         children: [
           // Tab 1: Nodes
@@ -930,6 +932,15 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       // §252 — разворот цели в цепочку «как пакет пойдёт» для превью.
       detourPathHopsOf: (stored) => detourPathHops(stored,
           controller: widget.controller, directions: _directions),
+      // §752 — detour подписки снят сборкой у её узлов (цель недоступна).
+      buildResults: widget.controller,
+      overrideDetourRemoved: () {
+        for (final n in widget.entry.list.nodes) {
+          final w = detourRemovedWarning(_buildWarningsOfNode(n));
+          if (w != null) return w;
+        }
+        return null;
+      },
       hasDetour: hasDetour,
       detourMode: _detourMode,
       onTagPrefixChanged: (val) {
@@ -1267,6 +1278,7 @@ class _SubscriptionDetailScreenState extends State<SubscriptionDetailScreen>
       context,
       controller: widget.controller,
       directions: _directions,
+      selfSourceId: widget.entry.list.id,
     );
     if (chosen == null || !mounted) return;
     setState(() {

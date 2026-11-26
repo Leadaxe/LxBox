@@ -16,6 +16,10 @@ const int kStorageVersion = 1;
 /// (`least_test` → `failover`). Guard, как `directions_migrated`.
 const String kUrltestModeMigratedKey = 'urltest_mode_migrated';
 
+/// §757 — маркер разовой перезаписи рукописных ссылок `rule_set` на прежние
+/// теги наборов собственных правил (контракт 1.1.182, TASKS_LXBOX §185).
+const String kRuleSetTagsMigratedKey = 'rule_set_tags_migrated';
+
 /// Источники: подписка, сервер, папка, цепочка — в порядке списка (§509).
 const String kSourcesKey = 'sources';
 

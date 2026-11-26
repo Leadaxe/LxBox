@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/resolved_server.dart';
 import 'package:lxbox/screens/dns_settings_screen/widgets/merged_server_tile.dart';
 
 /// §680 — залоченный включённый сервер: свитч рисуется ON и активным,

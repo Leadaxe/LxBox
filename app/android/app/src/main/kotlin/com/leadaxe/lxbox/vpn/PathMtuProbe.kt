@@ -4,8 +4,6 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.system.ErrnoException
@@ -18,7 +16,6 @@ import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.NetworkInterface
-import java.util.concurrent.Executors
 
 /// §725 — примитив замера Path MTU: ОДНА эхо-проба заданного размера мимо
 /// туннеля. Поиск, повторы и отмена — в Dart (`lib/services/diagnostics/
@@ -57,53 +54,60 @@ object PathMtuProbe {
     private const val HDR_V4 = 28
     private const val HDR_V6 = 48
 
-    private val executor = Executors.newCachedThreadPool()
-    private val main = Handler(Looper.getMainLooper())
 
-    fun attach(channel: MethodChannel) {
+    /// Сторона окна: канал Dart. §747 — сама проба исполняется в `:bg`
+    /// (ICMP-сокет защищает живой `BoxVpnService`, сеть по умолчанию знает
+    /// `DefaultNetworkMonitor` сервиса), сюда приходят только ответы. Каждый
+    /// вызов — на своём потоке: замер ждёт ответа сети до `timeoutMs`.
+    fun attach(ctx: android.content.Context, channel: MethodChannel) {
+        val app = ctx.applicationContext
         channel.setMethodCallHandler { call, result ->
-            fun ok(v: Any?) = main.post { result.success(v) }
-            fun fail(code: String, msg: String?) = main.post { result.error(code, msg, null) }
-            when (call.method) {
-                "network" -> executor.execute {
-                    try {
-                        val net = physicalNetwork()
-                        if (net == null) fail("no_network", "no physical network") else ok(describe(net))
-                    } catch (e: Throwable) {
-                        fail("error", e.message ?: e.toString())
-                    }
-                }
-                "resolve" -> executor.execute {
-                    try {
-                        val host = call.argument<String>("host").orEmpty().trim()
-                        val net = physicalNetwork()
-                        if (net == null) {
-                            fail("no_network", "no physical network")
-                        } else {
-                            val all = net.getAllByName(host)
-                            val pick = all.firstOrNull { it is Inet4Address } ?: all.firstOrNull()
-                            if (pick == null) fail("resolve", "no address for $host")
-                            else ok(pick.hostAddress)
-                        }
-                    } catch (e: Throwable) {
-                        fail("resolve", e.message ?: e.toString())
-                    }
-                }
-                "probe" -> executor.execute {
-                    try {
-                        val ip = call.argument<String>("ip").orEmpty()
-                        val size = call.argument<Int>("size") ?: 0
-                        val timeoutMs = call.argument<Int>("timeoutMs") ?: 1000
-                        val seq = call.argument<Int>("seq") ?: 0
-                        val net = physicalNetwork()
-                        if (net == null) fail("no_network", "no physical network")
-                        else ok(probe(net, ip, size, timeoutMs, seq))
-                    } catch (e: Throwable) {
-                        ok(mapOf("status" to "error", "rtt_ms" to 0, "error" to (e.message ?: e.toString())))
-                    }
-                }
-                else -> result.notImplemented()
+            val method = when (call.method) {
+                "network" -> "pathMtuNetwork"
+                "resolve" -> "pathMtuResolve"
+                "probe" -> "pathMtuProbe"
+                else -> null
             }
+            if (method == null) result.notImplemented()
+            else BgClient.forward(app, method, call.arguments, result, long = true)
+        }
+    }
+
+    // ── Сервисная сторона (`BgMethods`): ответы и коды ошибок — прежние. ──
+
+    fun network(): Map<String, Any> {
+        try {
+            val net = physicalNetwork() ?: throw BgError("no_network", "no physical network")
+            return describe(net)
+        } catch (e: BgError) {
+            throw e
+        } catch (e: Throwable) {
+            throw BgError("error", e.message ?: e.toString())
+        }
+    }
+
+    fun resolve(host: String): String? {
+        try {
+            val net = physicalNetwork() ?: throw BgError("no_network", "no physical network")
+            val all = net.getAllByName(host)
+            val pick = all.firstOrNull { it is Inet4Address } ?: all.firstOrNull()
+                ?: throw BgError("resolve", "no address for $host")
+            return pick.hostAddress
+        } catch (e: BgError) {
+            throw e
+        } catch (e: Throwable) {
+            throw BgError("resolve", e.message ?: e.toString())
+        }
+    }
+
+    fun probeCall(ip: String, size: Int, timeoutMs: Int, seq: Int): Map<String, Any> {
+        return try {
+            val net = physicalNetwork() ?: throw BgError("no_network", "no physical network")
+            probe(net, ip, size, timeoutMs, seq)
+        } catch (e: BgError) {
+            throw e
+        } catch (e: Throwable) {
+            mapOf("status" to "error", "rtt_ms" to 0, "error" to (e.message ?: e.toString()))
         }
     }
 

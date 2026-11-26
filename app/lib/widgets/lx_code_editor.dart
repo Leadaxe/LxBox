@@ -9,7 +9,9 @@ import 'package:flutter/services.dart';
 
 import '../config/config_parse.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/parser/json_comments.dart';
 import '../services/settings_storage.dart';
+import '../vpn/platform_channels.dart';
 
 /// §624 — JSON-поля приложения на нативном редакторе sora-editor (Android
 /// View через platform view, hybrid composition). Kotlin-сторона —
@@ -51,6 +53,10 @@ final _uriLine = RegExp(r'^[a-zA-Z][a-zA-Z0-9+.\-]*://');
 ///   `#`/`;`-комментарий, за которым первой значимой строкой идёт
 ///   `Ключ = значение`, — [LxCodeLanguage.ini];
 /// - `схема://…` — [LxCodeLanguage.uri];
+/// - §749: строка-комментарий `//`, `/* */` или `#` (не INI по правилу
+///   выше), после которой первым значащим символом идёт `{` или `[`
+///   ([jsonLeadChar]), — [LxCodeLanguage.json]: JSON с пометкой автора в
+///   начале (§741 хранит её на вкладке Source);
 /// - иначе (base64-подписка, YAML и т.п.) — `null`.
 LxCodeLanguage? detectCodeLanguage(String text) {
   final lines = text.split('\n');
@@ -69,21 +75,32 @@ LxCodeLanguage? detectCodeLanguage(String text) {
     for (var j = i + 1; j < lines.length; j++) {
       final l = clean(lines[j]);
       if (l.isEmpty || l.startsWith('#') || l.startsWith(';')) continue;
-      return _iniSection.hasMatch(l) || _iniKeyValue.hasMatch(l)
-          ? LxCodeLanguage.ini
-          : null;
+      if (_iniSection.hasMatch(l) || _iniKeyValue.hasMatch(l)) {
+        return LxCodeLanguage.ini;
+      }
+      break;
     }
-    return null;
+    return _commentedJson(text);
+  }
+  if (first.startsWith('//') || first.startsWith('/*')) {
+    return _commentedJson(text);
   }
   if (_uriLine.hasMatch(first)) return LxCodeLanguage.uri;
   return null;
+}
+
+/// §749 — текст начинается с комментария: JSON, если за ведущими
+/// комментариями первым идёт `{` или `[`.
+LxCodeLanguage? _commentedJson(String text) {
+  final c = jsonLeadChar(text);
+  return c == '{' || c == '[' ? LxCodeLanguage.json : null;
 }
 
 /// Нативный редактор только на Android. Не `defaultTargetPlatform`: под
 /// `flutter test` он возвращает `android`, и тесты полезли бы в platform view.
 bool get _nativeEditor => !kIsWeb && Platform.isAndroid;
 
-const _viewType = 'lxbox/sora_editor';
+const _viewType = PlatformChannels.soraEditorViewType;
 const double _pad = 6;
 
 /// Как поле занимает место по вертикали.
@@ -235,7 +252,7 @@ class _LxBusyIcon extends StatelessWidget {
 /// финальный `changed` должен лечь в контроллер, а не потеряться.
 class _SoraLink {
   _SoraLink(int viewId, this.controller)
-    : channel = MethodChannel('com.leadaxe.lxbox/sora_editor_$viewId') {
+    : channel = MethodChannel('${PlatformChannels.soraEditorChannelPrefix}$viewId') {
     channel.setMethodCallHandler(_handle);
   }
 

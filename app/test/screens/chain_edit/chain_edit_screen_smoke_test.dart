@@ -7,7 +7,6 @@ import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/screens/chain_edit_screen.dart';
-import 'package:lxbox/services/contract/chain_strip.dart';
 
 import '../../contract_paths.dart';
 
@@ -69,6 +68,42 @@ void main() {
     expect(save.onPressed, isNull);
   });
 
+  testWidgets('нельзя сохранить — «назад» даёт выйти без сохранения, без Save',
+      (tester) async {
+    const chain = SourceChain(
+        tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]);
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (ctx) => TextButton(
+          onPressed: () => Navigator.push(
+            ctx,
+            MaterialPageRoute<void>(
+              builder: (_) => ChainEditScreen(
+                initial: chain,
+                config: _config(),
+                directions: const [Direction(tag: 'vpn-1', label: 'vpn-1')],
+                chains: const [chain],
+              ),
+            ),
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Убрать вторую позицию: форма грязная и с блокирующей ошибкой.
+    await tester.tap(find.byTooltip('Remove position').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Save'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChainEditScreen), findsNothing);
+  });
+
   testWidgets('две живые позиции — сохранение доступно', (tester) async {
     await tester.pumpWidget(_host(
         const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
@@ -98,21 +133,6 @@ void main() {
     expect(titles.indexOf('de-exit'), lessThan(titles.indexOf('home')));
   });
 
-  // §57 — REALITY × снятый uTLS: предупреждение по реестру, не блокировка
-  // (сборка снимет ключ с патча и соберёт цепочку).
-  testWidgets('снятый tls.utls на reality-звене сохранение НЕ запирает',
-      (tester) async {
-    await tester.pumpWidget(_host(const SourceChain(
-      tag: 'via-de',
-      hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-reality')],
-      strip: {'tls.utls': true},
-    )));
-    await tester.pumpAndSettle();
-    final save = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.check));
-    expect(save.onPressed, isNotNull);
-  });
-
   testWidgets('пикер позиций открывается и не предлагает уже занятые',
       (tester) async {
     await tester
@@ -126,33 +146,13 @@ void main() {
     expect(find.text('de-exit'), findsOneWidget);
   });
 
-  testWidgets('Advanced раскрывается: idle_timeout и каталог strip на месте',
-      (tester) async {
+  // §761 — блока Advanced нет: idle_timeout и strip ядро rc.2 не принимает.
+  testWidgets('Advanced нет: ни idle_timeout, ни каталога strip', (tester) async {
     await tester.pumpWidget(_host(
         const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(ExpansionTile));
-    await tester.pumpAndSettle();
-    // Каталог strip — из реестра (chain.json): показываем ровно его ключи.
-    expect(chainStripKeys(), isNotEmpty);
-    for (final key in chainStripKeys()) {
-      expect(find.text(key), findsOneWidget);
-    }
-  });
-
-  testWidgets('галка каталога трёхзначна: не тронута → null', (tester) async {
-    await tester.pumpWidget(_host(
-        const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(ExpansionTile));
-    await tester.pumpAndSettle();
-    final boxes = tester
-        .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
-        .toList();
-    expect(boxes, hasLength(chainStripKeys().length));
-    // Нетронутое состояние — именно null, а не false: «как у ядра» и «я так
-    // решил» обязаны различаться уже в форме.
-    expect(boxes.every((b) => b.value == null), isTrue);
+    expect(find.byType(ExpansionTile), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
   });
 
   testWidgets('свой тег среди тегов конфига конфликтом не считается',

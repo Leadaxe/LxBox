@@ -8,13 +8,15 @@ import '../models/background_mode.dart';
 import '../models/memory_limit_setting.dart';
 import '../models/parser_config.dart';
 import '../services/builder/if_engine.dart';
-import '../services/l10n/template_aware_state.dart';
+import '../widgets/template_aware_state.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../widgets/template_var_list.dart';
 import '../widgets/var_values_model.dart';
 import 'vpn_mode_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/dpad_radio_group.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// VPN Settings — System (`VpnService.Builder` toggles) + Core (sing-box
 /// engine vars, `chapter: 'core'`). Routing/DNS vars живут на своих экранах.
@@ -261,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ],
           ),
         ),
-        body: TabBarView(
+        body: FocusSafeTabBarView(
           children: [
             _buildSystemTab(context),
             _buildCoreTab(context, template, editableVars),
@@ -357,7 +359,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ],
               ),
             ),
-            RadioGroup<BackgroundMode>(
+            DpadRadioGroup<BackgroundMode>(
               groupValue: _backgroundMode,
               onChanged: (BackgroundMode? m) {
                 if (!_vpnLoaded) return;
@@ -392,11 +394,14 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// §709 — короткие подсказки (i) у переменных корневого блока `lx` ядра
   /// (секции Network / WireGuard / QUIC / Sniff guard шаблона).
   static Map<String, String> _lxVarHints() => {
-        'wg_idle_suspend': getLocalText.s("Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial."),
-        'wg_idle_suspend_reachable': getLocalText.s("Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period."),
-        'wg_lazy_build': getLocalText.s("Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start."),
-        'wg_build_max': getLocalText.s("Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down."),
-        'mtu_align': getLocalText.s("Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised."),
+        'wg_idle_suspend': getLocalText.s("Core: lx.wg.idle.suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial."),
+        'wg_idle_suspend_reachable': getLocalText.s("Core: lx.wg.idle.suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period."),
+        'wg_lazy_build': getLocalText.s("Core: lx.wg.idle.lazy_build. An endpoint is built on its first dial instead of at core start."),
+        'wg_build_max': getLocalText.s("Core: lx.wg.idle.build_max. Over the limit the endpoint idle for the longest is torn down."),
+        'wg_read_datagram_count': getLocalText.s("Core: lx.wg.buffers.read_datagram_count. Datagrams one read of a tunnel without a detour takes; below 128 the socket also gives up kernel receive coalescing (UDP GRO). Ignored outside Linux and Android."),
+        'wg_send_by_mtu': getLocalText.s("Core: lx.wg.buffers.send_by_mtu. Off puts the send buffers back at 64 KiB per packet."),
+        'wg_connected_socket': getLocalText.s("Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry."),
+        'mtu_align': getLocalText.s("Core: lx.detour.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised."),
         'masque_idle_timeout': getLocalText.s("Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own."),
         'sniff_guard_tls': getLocalText.s("Core: lx.sniff_guard.tls. A relay or router that sniffs TLS (Xray destOverride without routeOnly) redirects the connection by the SNI of the ClientHello; a node with a masked SNI then looks dead. Paths through direct, SSH and SOCKS start unprotected, other relays start protected; the core switches a path when a node fails one way and connects the other."),
         'sniff_guard_quic': getLocalText.s("Core: lx.sniff_guard.quic. The same for the first QUIC packet. Never applied through a SOCKS relay. AmneziaWG follows what other QUIC nodes on the same path have taught the core."),

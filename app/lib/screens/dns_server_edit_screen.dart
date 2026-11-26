@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/dns_ref.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/outbound_picker.dart';
 import 'dns_server_edit/edit_controller.dart';
 // §312 — опция пикера членов группы нужна caller'у (dns_settings_screen).
@@ -15,8 +15,9 @@ import 'dns_server_edit/tabs/json_tab.dart';
 import 'dns_server_edit/tabs/params_tab.dart';
 import 'dns_settings_screen/dns_server_copy.dart' show dnsCopyTag;
 import 'dns_settings_screen/dns_server_delete.dart';
-import 'dns_settings_screen/resolved_server.dart';
+import '../services/dns/resolved_server.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §117 задача 4 — полноэкранный редактор DNS-сервера (locked decision №8).
 /// Паттерн 1:1 с [CustomRuleEditScreen]: Scaffold-route,
@@ -398,7 +399,7 @@ class _DnsServerEditScreenState extends State<DnsServerEditScreen> {
                 ],
               ),
             ),
-            body: TabBarView(
+            body: FocusSafeTabBarView(
               children: [
                 DnsServerParamsTab(onSave: _save),
                 const DnsServerJsonTab(),

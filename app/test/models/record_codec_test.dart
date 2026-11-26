@@ -10,7 +10,7 @@ import 'package:lxbox/models/record_codec.dart';
 void main() {
   group('§435 ruleToRecord / ruleFromRecord — inline', () {
     test('inline: тело в именах и типах sing-box, действие — outbound', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         id: 'r1',
         name: 'Home LAN',
         enabled: true,
@@ -58,7 +58,7 @@ void main() {
       });
       expect(rec.containsKey('refs'), isFalse);
 
-      final back = ruleFromRecord(rec).value! as CustomRuleInline;
+      final back = ruleFromRecord(rec).value! as CustomRuleTree;
       expect(back.id, 'r1');
       expect(back.orderNum, 945);
       expect(back.ipCidrs, ['100.64.0.0/10']);
@@ -69,7 +69,7 @@ void main() {
     });
 
     test('reject → action: reject, обратно kOutboundReject', () {
-      final r = CustomRuleInline(name: 'Block', domains: ['ads.com'], outbound: kOutboundReject);
+      final r = CustomRuleTree.flat(name: 'Block', domains: ['ads.com'], outbound: kOutboundReject);
       final rec = ruleToRecord(r);
       expect(rec['body'], {'domain': ['ads.com'], 'action': 'reject'});
       expect(ruleFromRecord(rec).value!.outbound, kOutboundReject);
@@ -81,7 +81,7 @@ void main() {
         'name': 'x',
         'body': {'domain_suffix': '.ts.net'},
       });
-      final r = read.value! as CustomRuleInline;
+      final r = read.value! as CustomRuleTree;
       expect(r.outbound, kDirectOutboundTag);
       expect(r.domainSuffixes, ['.ts.net']);
       expect(r.enabled, isTrue);
@@ -95,11 +95,13 @@ void main() {
         'body': {'ip_cidr': ['1.1.1.1/32'], 'process_name': ['a'], 'user': ['u'], 'outbound': 'p'},
       });
       expect(read.value, isNotNull);
-      expect(read.unknownKeys, ['process_name', 'user']);
+      // §757 — `process_name` — ключ таблицы условий (провозится в дереве).
+      expect(read.unknownKeys, ['user']);
+      expect(read.value!.flatLeaf!.conditions['process_name'], ['a']);
     });
 
     test('dns/resolve — поля записи вне body, переживают round-trip', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'x',
         domains: ['a'],
         dns: const RuleDns(enabled: true, serverTag: 'doh'),
@@ -120,8 +122,8 @@ void main() {
   });
 
   group('§435 ruleToRecord / ruleFromRecord — srs / preset / json', () {
-    test('srs: refs снаружи body, rule_set в body не пишется; при чтении — незнакомый ключ', () {
-      final r = CustomRuleSrs(
+    test('srs: refs в теле (§757), старая форма на записи читается', () {
+      final r = CustomRuleTree.flat(
         id: 's1',
         name: 'Geo',
         srsUrls: ['https://x/a.srs', 'https://x/b.srs'],
@@ -130,19 +132,34 @@ void main() {
       );
       final rec = ruleToRecord(r);
       expect(rec['kind'], 'srs');
-      expect(rec['refs'], ['https://x/a.srs', 'https://x/b.srs']);
-      expect(rec['body'], {'port': [443], 'outbound': 'vpn-1'});
+      expect(rec.containsKey('refs'), isFalse);
+      expect(rec['body'], {
+        'refs': ['https://x/a.srs', 'https://x/b.srs'],
+        'port': [443],
+        'outbound': 'vpn-1',
+      });
+      expect(ruleFromRecord(rec).value, r, reason: 'круг новой формы');
 
-      final back = ruleFromRecord({
+      // Старая форма: `refs` на записи → в корень тела; запись — новой формы.
+      final old = ruleFromRecord({
+        'kind': 'srs',
+        'id': 's1',
+        'name': 'Geo',
+        'refs': ['https://x/a.srs', 'https://x/b.srs'],
+        'body': {'port': [443], 'outbound': 'vpn-1'},
+      }).value!;
+      expect(old, r);
+      expect(ruleToRecord(old), rec);
+
+      // §757 — `rule_set` в теле — рукописные теги дерева, читаются
+      // типизированно.
+      final hand = ruleFromRecord({
         ...rec,
         'body': {...rec['body'] as Map, 'rule_set': ['Geo', 'Geo-2']},
       });
-      // Норма B3 (14.09.2026): `rule_set` в теле записи сторона не переносит —
-      // ключ незнакомый, решение об отбросе принимает контекст (секции —
-      // запись целиком).
-      expect(back.unknownKeys, ['rule_set']);
-      expect((back.value! as CustomRuleSrs).srsUrls, r.srsUrls);
-      expect(back.value!.ports, ['443']);
+      expect(hand.unknownKeys, isEmpty);
+      expect(hand.value!.flatLeaf!.ruleSet, ['Geo', 'Geo-2']);
+      expect(hand.value!.srsUrls, r.srsUrls);
     });
 
     test('preset: ref + vars', () {
@@ -248,7 +265,7 @@ void main() {
         ).value!;
 
     final rules = <CustomRule>[
-      CustomRuleInline(
+      CustomRuleTree.flat(
         id: 'i1',
         name: 'Home LAN',
         enabled: false,
@@ -264,8 +281,8 @@ void main() {
         dns: const RuleDns(enabled: true, serverTag: 'my-doh', forceIpv4: true),
         resolve: const RuleResolve(only: true, strategy: 'ipv4_only'),
       ),
-      CustomRuleInline(name: '  spaced name  ', domains: ['a'], outbound: kOutboundReject),
-      CustomRuleSrs(
+      CustomRuleTree.flat(name: '  spaced name  ', domains: ['a'], outbound: kOutboundReject),
+      CustomRuleTree.flat(
         id: 's1',
         name: 'Geo sets',
         orderNum: 1010,
@@ -274,7 +291,7 @@ void main() {
         protocols: ['quic'],
         outbound: 'vpn-1',
       ),
-      CustomRuleSrs(id: 's2', name: 'Never', srsUrl: 'https://x/c.srs', updateIntervalHours: 0),
+      CustomRuleTree.flat(id: 's2', name: 'Never', srsUrl: 'https://x/c.srs', updateIntervalHours: 0),
       CustomRulePreset(
         id: 'p1',
         name: 'Russia direct',
@@ -502,7 +519,7 @@ void main() {
 
   group('§694 network_type / network_is_expensive', () {
     test('inline: ключи ядра в теле, круг байт в байт', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'Big on cellular',
         domains: ['video.example'],
         networkTypes: ['cellular'],
@@ -517,7 +534,7 @@ void main() {
         'action': 'reject',
       });
       final back = ruleFromRecord(rec, unknownAsVerbatim: true).value!;
-      expect(back, isA<CustomRuleInline>(),
+      expect(back, isA<CustomRuleTree>(),
           reason: 'ключи знакомы — не дословный JSON');
       expect(back.networkTypes, ['cellular']);
       expect(back.networkIsExpensive, true);
@@ -550,7 +567,7 @@ void main() {
         'ref': 'https://e/geo.srs',
         'body': {'network_type': 'wifi', 'outbound': 'direct-out'},
       };
-      final back = ruleFromRecord(rec).value! as CustomRuleSrs;
+      final back = ruleFromRecord(rec).value! as CustomRuleTree;
       expect(back.networkTypes, ['wifi']);
       expect(ruleToRecord(back)['body']['network_type'], ['wifi']);
     });

@@ -5,7 +5,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.SystemClock
@@ -21,24 +20,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.withTimeoutOrNull
 
 class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     PluginRegistry.ActivityResultListener {
 
     companion object {
         private const val TAG = "VpnPlugin"
-        /// §707 итер. 9 — файлы SharedPreferences rc.3, только для переноса и удаления.
-        private const val LEGACY_TAILDROP_PREFS = "lxbox_taildrop"
-        private const val LEGACY_NOTIFICATION_BUTTONS_PREFS = "lxbox_notification_buttons"
-        /// §639 — сколько Quit ждёт Stopped от штатной остановки сервиса
-        /// перед убийством процесса. Уведомление снимается раньше (Stopping).
-        private const val QUIT_STOP_BUDGET_MS = 3_000L
         private const val METHOD_CHANNEL = "com.leadaxe.lxbox/methods"
         private const val STATUS_CHANNEL = "com.leadaxe.lxbox/status_events"
         private const val CORE_LOG_CHANNEL = "lxbox/coreLog"   // §043
@@ -53,94 +43,35 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         private const val CC_CONNECTION_TEST_CHANNEL = "lxbox/cc/connection_test" // §687
         private const val CC_OPENCONNECT_CHANNEL = "lxbox/cc/openconnect" // §654
         private const val CC_TAILDROP_INBOX_CHANNEL = "lxbox/cc/taildrop_inbox" // §707
+
+        /// §747 — потоки данных из `:bg`: лог ядра и потоки клиентов ядра.
+        /// Имя потока в канале событий — имя `EventChannel`.
+        private val STREAM_CHANNELS = listOf(
+            CORE_LOG_CHANNEL, CC_STATUS_CHANNEL, CC_OUTBOUNDS_CHANNEL, CC_GROUPS_CHANNEL,
+            CC_CONNECTIONS_CHANNEL, CC_DNS_CHANNEL, CC_TAILSCALE_CHANNEL,
+            CC_TAILSCALE_PING_CHANNEL, CC_CONNECTION_TEST_CHANNEL, CC_OPENCONNECT_CHANNEL,
+            CC_TAILDROP_INBOX_CHANNEL,
+        )
         private const val TAILDROP_PICK_CODE = 25 // §707
         private const val TAILDROP_SAVE_CODE = 26 // §707
         private const val VPN_REQUEST_CODE = 24
 
-        // §207 — allowlist имён pprof-профилей (до `?`). Пропускаем наружу
-        // только их, не произвольный path. Зеркало Go net/http/pprof.
-        private val PPROF_PROFILES = setOf(
-            "goroutine", "profile", "heap", "allocs",
-            "block", "mutex", "threadcreate",
-        )
+        /// §747 — методы Dart, которые `:bg` вправе вызвать с ответом
+        /// (`UiCalls`): шлюз ассистента §750.
+        private val REVERSE_METHODS = setOf("assistantCall")
 
-        // §047 — статические ссылки для bridge'а из LxBoxIntentReceiver (он
-        // живёт вне Flutter-плагина). Заполняются в onAttachedToEngine,
-        // обнуляются в onDetachedFromEngine. null = Flutter-engine не активен.
-        @Volatile
-        private var bridgeChannel: MethodChannel? = null
-        @Volatile
-        private var appContext: Context? = null
-        private val bridgeHandler =
-            android.os.Handler(android.os.Looper.getMainLooper())
+        /// §747 — повторы подключения к `:bg`, если он не ответил.
+        private const val ATTACH_RETRIES = 6
+        private const val ATTACH_RETRY_MS = 500L
+        private const val ATTACH_RETRY_MAX_MS = 8_000L
 
-        /// §047 incoming bridge: LxBoxIntentReceiver форвардит intent-action +
-        /// extras → Dart (`box_vpn_client` `automationAction` handler) → shared
-        /// action-handlers. Если engine не запущен — silently skip.
-        fun handleAutomationAction(name: String, args: Map<String, Any?>) {
-            val channel = bridgeChannel
-            if (channel == null) {
-                Log.w(TAG, "[automation] handleAutomationAction($name) — no Flutter engine, skip")
-                return
-            }
-            bridgeHandler.post {
-                runCatching {
-                    channel.invokeMethod(
-                        "automationAction",
-                        mapOf("name" to name, "args" to args),
-                    )
-                }.onFailure {
-                    Log.e(TAG, "[automation] invokeMethod(automationAction) failed", it)
-                }
-            }
-        }
-
-        /// Фича 478, ревью после v2.25.1 (M2) — сообщить Dart о нативном Stop
-        /// (`BoxVpnService.stop`): Dart гасит идущий прогон страховки. Имя —
-        /// `kVpnStopRequestedAction` в `automation_dispatcher.dart`. Нет
-        /// движка — нет и прогона, пропуск молча.
-        fun notifyStopRequested() = handleAutomationAction("vpn-stop-requested", emptyMap())
-
-        /// §047 outgoing emit: Dart (`AutomationEventEmitter`) шлёт событие
-        /// наружу. action — короткое имя (`VPN_CONNECTED`), namespace'ится в
-        /// `com.leadaxe.lxbox.event.<action>`. Открыт всем подписчикам — события
-        /// не содержат секретов (только лейблы: теги нод, группы, статус); см.
-        /// §157 (permission-фильтр удалён вместе с нерабочей галкой).
-        fun sendAutomationBroadcast(action: String, extras: Map<String, Any?>) {
-            val ctx = appContext ?: return
-            val intent = Intent("com.leadaxe.lxbox.event.$action")
-            for ((k, v) in extras) {
-                when (v) {
-                    null -> {}
-                    is String -> intent.putExtra(k, v)
-                    is Boolean -> intent.putExtra(k, v)
-                    is Int -> intent.putExtra(k, v)
-                    is Long -> intent.putExtra(k, v)
-                    is Double -> intent.putExtra(k, v)
-                    else -> intent.putExtra(k, v.toString())
-                }
-            }
-            // setPackage намеренно не выставляем — broadcast открыт всем
-            // подписчикам (события без секретов, только лейблы).
-            ctx.sendBroadcast(intent)
-            Log.d(TAG, "[automation] emit $action (${extras.size} extras)")
-        }
+        /// §747 — Binder-метка живого процесса окна: `:bg` вешает на неё
+        /// `linkToDeath`. Одна на процесс.
+        private val uiToken = android.os.Binder()
     }
 
     private lateinit var methodChannel: MethodChannel
     private lateinit var statusEventChannel: EventChannel
-    private lateinit var coreLogEventChannel: EventChannel
-    /// §122 Фаза 0 — EventChannel'ы нового CommandClient-канала.
-    private lateinit var ccStatusEventChannel: EventChannel
-    private lateinit var ccOutboundsEventChannel: EventChannel
-    private lateinit var ccGroupsEventChannel: EventChannel
-    private lateinit var ccConnectionsEventChannel: EventChannel
-    private lateinit var ccDnsEventChannel: EventChannel // §180
-    private lateinit var ccTailscaleEventChannel: EventChannel // §579
-    private lateinit var ccTailscalePingEventChannel: EventChannel // §581
-    private lateinit var ccConnectionTestEventChannel: EventChannel // §687
-    private lateinit var ccOpenConnectEventChannel: EventChannel // §654
-    private lateinit var ccTaildropInboxEventChannel: EventChannel // §707
     /// §707 — ждущий выбор файлов «Send file…» (тег, пир, имя пира, ответ).
     private var pendingTaildropPick: Pair<Triple<String, String, String>, MethodChannel.Result>? = null
     /// §707 — ждущий «Сохранить как» (API 24–28): тег, имя файла, ответ.
@@ -174,6 +105,9 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             // Фича 478 / Д-1 — сырой текст ядра без обёрток приложения.
             val coreError = intent.getStringExtra(BoxVpnService.EXTRA_CORE_ERROR)
             Log.d(TAG, "[vpn] plugin.statusReceiver.onReceive name=$name${if (error != null) " error=$error" else ""}${if (revoked) " revoked=true" else ""} sink=${statusSink != null}")
+            // §747 — копия состояния туннеля в окне: её пишут только этот
+            // приёмник и запрос снимка. Клиент ядра экрана живёт в `:bg`.
+            BgEvents.wireOf(intent)?.let { applyTunnelWire(it) }
             mainHandler.post {
                 val event = mutableMapOf<String, Any>("status" to name)
                 if (error != null) event["error"] = error
@@ -192,6 +126,37 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         }
     }
 
+    /// Движок подключён (между onAttachedToEngine и onDetachedFromEngine).
+    private var attached = false
+
+    /// Метка запуска `:bg` из последнего принятого снимка: смена — процесс
+    /// `:bg` перезапущен.
+    private var bgEpoch: Long? = null
+
+    /// Идёт подключение к `:bg` ([attachToBg]): второе не начинается.
+    private var attaching = false
+
+    /// Пока шло подключение, процесс `:bg` снова сменился: повторить.
+    private var reattachNeeded = false
+
+    /// Подряд неудавшихся подключений (`:bg` не ответил).
+    private var attachFailures = 0
+
+    /// §747 — подписи уведомления, которые Dart передал `:bg` (метод → его
+    /// аргументы): `:bg` держит их в памяти, и после его перезапуска окно
+    /// передаёт их заново.
+    private val notificationLabels = LinkedHashMap<String, Map<String, Any?>?>()
+
+    /// §747 — потоки данных, которые Dart сейчас слушает (имя `EventChannel`).
+    /// Главный поток.
+    private val listening = HashSet<String>()
+
+    /// Каналы потоков данных: нужны только ради onListen / onCancel — сами
+    /// события уходят в [messenger] готовыми конвертами из `:bg`.
+    private val streamChannels = ArrayList<EventChannel>()
+
+    private var messenger: io.flutter.plugin.common.BinaryMessenger? = null
+
     // -------------------------------------------------------------------------
     // FlutterPlugin
     // -------------------------------------------------------------------------
@@ -199,13 +164,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         Log.d(TAG, "onAttachedToEngine")
         context = binding.applicationContext
+        attached = true
         BoxApplication.initialize(context)
 
         methodChannel = MethodChannel(binding.binaryMessenger, METHOD_CHANNEL)
         methodChannel.setMethodCallHandler(this)
         // §047 — статические bridge-ссылки для LxBoxIntentReceiver.
-        bridgeChannel = methodChannel
-        appContext = context
+        AutomationBridge.bridgeChannel = methodChannel
+        AutomationBridge.appContext = context
 
         statusEventChannel = EventChannel(binding.binaryMessenger, STATUS_CHANNEL)
         statusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
@@ -219,86 +185,26 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             }
         })
 
-        // §043: core log pump из sing-box. Sing-box логи приходят через
-        // PlatformInterface.writeDebugMessage в BoxVpnService → coreLogSink
-        // (Volatile companion field) → этот EventChannel → ClashLogPump в Dart.
-        coreLogEventChannel = EventChannel(binding.binaryMessenger, CORE_LOG_CHANNEL)
-        coreLogEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
-                Log.d(TAG, "[vpn] coreLogEventChannel.onListen — sink installed")
-                BoxVpnService.coreLogSink = sink
-            }
-            override fun onCancel(args: Any?) {
-                Log.d(TAG, "[vpn] coreLogEventChannel.onCancel — sink cleared")
-                BoxVpnService.coreLogSink = null
-            }
-        })
-
-        // §122 Фаза 0 — 4 канала CommandClient (status/outbounds/groups/connections).
-        // BoxCommandClient.handler пушит снапшоты в BoxVpnService.cc*Sink → сюда → Dart.
-        ccStatusEventChannel = EventChannel(binding.binaryMessenger, CC_STATUS_CHANNEL)
-        ccStatusEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccStatusSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccStatusSink = null }
-        })
-        ccOutboundsEventChannel = EventChannel(binding.binaryMessenger, CC_OUTBOUNDS_CHANNEL)
-        ccOutboundsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOutboundsSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccOutboundsSink = null }
-        })
-        ccGroupsEventChannel = EventChannel(binding.binaryMessenger, CC_GROUPS_CHANNEL)
-        ccGroupsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccGroupsSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccGroupsSink = null }
-        })
-        ccConnectionsEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTIONS_CHANNEL)
-        ccConnectionsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) {
-                BoxVpnService.ccConnectionsSink = sink
-                // §193 — connections single-shot: ядро шлёт reset-снапшот РОВНО
-                // один раз при подписке screenClient (pull в libbox нет). Новый
-                // Dart-подписчик (открытие Stats при уже живом screenClient) не
-                // получает нового reset → пусто. Переэмитим накопленный
-                // аккумулятор сразу, чтобы Stats увидел текущие соединения.
-                BoxService.commandClient?.reEmitScreenConnections()
-            }
-            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionsSink = null }
-        })
-        // §180 — DNS-журнал из ядра (SPEC 018).
-        ccDnsEventChannel = EventChannel(binding.binaryMessenger, CC_DNS_CHANNEL)
-        ccDnsEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccDnsQueriesSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccDnsQueriesSink = null }
-        })
-        // §579 — состояние узлов Tailscale (псевдо-направление NETWORKS).
-        ccTailscaleEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_CHANNEL)
-        ccTailscaleEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscaleSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTailscaleSink = null }
-        })
-        // §581 — ответы проверки устройства Tailscale.
-        ccTailscalePingEventChannel = EventChannel(binding.binaryMessenger, CC_TAILSCALE_PING_CHANNEL)
-        ccTailscalePingEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTailscalePingSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTailscalePingSink = null }
-        })
-        ccConnectionTestEventChannel = EventChannel(binding.binaryMessenger, CC_CONNECTION_TEST_CHANNEL)
-        ccConnectionTestEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccConnectionTestSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccConnectionTestSink = null }
-        })
-        // §654 C — состояние endpoint'ов openconnect (второй фактор / SSO).
-        // §707 — входящие Taildrop узла.
-        ccTaildropInboxEventChannel = EventChannel(binding.binaryMessenger, CC_TAILDROP_INBOX_CHANNEL)
-        ccTaildropInboxEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccTaildropInboxSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccTaildropInboxSink = null }
-        })
-        ccOpenConnectEventChannel = EventChannel(binding.binaryMessenger, CC_OPENCONNECT_CHANNEL)
-        ccOpenConnectEventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(args: Any?, sink: EventChannel.EventSink?) { BoxVpnService.ccOpenConnectSink = sink }
-            override fun onCancel(args: Any?) { BoxVpnService.ccOpenConnectSink = null }
-        })
+        // §747 — потоки данных окна (лог ядра §043, потоки клиентов ядра §122)
+        // рождаются в `:bg` и приходят каналом событий (pipe) готовыми
+        // конвертами `EventChannel`: окно отдаёт их в свой канал того же имени,
+        // не декодируя. Каналы здесь — ради onListen / onCancel: подписка и
+        // отписка Dart уходят в `:bg`, и ядро не шлёт то, что никто не читает.
+        messenger = binding.binaryMessenger
+        // Строки журнала от стороны окна (повтор вызова после гибели `:bg`) —
+        // тем же потоком `lxbox/coreLog`, что строки сервиса.
+        BgClient.journal = { line ->
+            val payload = BgCodec.encodeEventEnvelope(listOf(line))
+            mainHandler.post { onFrame(CORE_LOG_CHANNEL, payload) }
+        }
+        for (name in STREAM_CHANNELS) {
+            val channel = EventChannel(binding.binaryMessenger, name)
+            channel.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, sink: EventChannel.EventSink?) = streamListen(name)
+                override fun onCancel(args: Any?) = streamCancel(name)
+            })
+            streamChannels.add(channel)
+        }
 
         Log.d(TAG, "[vpn] onAttachedToEngine: registerReceiver(statusReceiver)")
         // §155 — на отдельных OEM-прошивках registerReceiver может бросить
@@ -312,37 +218,216 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 Context.RECEIVER_NOT_EXPORTED
             )
         }.onFailure { Log.e(TAG, "[vpn] registerReceiver(statusReceiver) failed: $it") }
+        attachToBg()
+    }
+
+    private fun streamListen(name: String) {
+        listening.add(name)
+        val ctx = context
+        BgClient.onLane { BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false) }
+    }
+
+    private fun streamCancel(name: String) {
+        listening.remove(name)
+        val ctx = context
+        BgClient.onLane { BgClient.callOr(ctx, "streamCancel", mapOf("stream" to name), false) }
+    }
+
+    /// §747 — открыть канал событий и назвать себя `:bg` (Binder-метка: `:bg`
+    /// узнает и о гибели процесса окна), затем забрать снимок состояния
+    /// туннеля (broadcast не липкий — окно, открытое при работающем туннеле,
+    /// иначе видело бы `Stopped`).
+    ///
+    /// Зовётся при подключении движка и всякий раз, когда процесс `:bg`
+    /// оказался другим: оборвался канал событий (`:bg` перезапустился, чтобы
+    /// сбросить ядро после остановки туннеля, или умер) либо в снимке новая
+    /// метка запуска. Новый процесс ничего не знает об окне, поэтому ему
+    /// заново передаётся всё, что `:bg` держит в памяти от окна: слушаемые
+    /// потоки данных и подписи уведомления. Dart этого не замечает.
+    private fun attachToBg() {
+        if (attaching) {
+            // Подключение уже идёт, а процесс `:bg` снова оказался другим
+            // (канал оборвался, пока мы подключались): по окончании повторить,
+            // иначе окно осталось бы без потоков данных до следующей смены
+            // процесса.
+            reattachNeeded = true
+            return
+        }
+        attaching = true
+        reattachNeeded = false
+        val ctx = context
+        val streams = listening.toList()
+        val labels = notificationLabels.toMap()
+        BgClient.onLane {
+            val connected = BgClient.connect(
+                ctx, uiToken,
+                onFrame = { stream, payload -> onFrame(stream, payload) },
+                onLost = { onBgLost() },
+            )
+            var wire: TunnelState.Wire? = null
+            if (connected) {
+                for (name in streams) {
+                    BgClient.callOr(ctx, "streamListen", mapOf("stream" to name), false)
+                }
+                for ((method, args) in labels) BgClient.callOr(ctx, method, args, true)
+                wire = fetchTunnelWire()
+            }
+            BgClient.onMain { attachFinished(connected, wire) }
+        }
+    }
+
+    /// Главный поток. Итог подключения к `:bg`: принять снимок; если процесс
+    /// за время подключения сменился или `:bg` не ответил — подключиться
+    /// снова (при отказе — с растущей паузой и не бесконечно).
+    private fun attachFinished(connected: Boolean, wire: TunnelState.Wire?) {
+        attaching = false
+        if (!attached) return
+        val ok = connected && wire != null
+        if (wire != null) {
+            // Метка запуска процесса, к которому подключились. Если по
+            // broadcast'у уже видели метку новее — подключились к прежнему.
+            val seen = bgEpoch
+            if (seen != null && seen > wire.epoch) reattachNeeded = true
+            applyTunnelWire(wire)
+        }
+        when {
+            reattachNeeded -> attachToBg()
+            !ok -> {
+                attachFailures++
+                if (attachFailures > ATTACH_RETRIES) {
+                    Log.e(TAG, "[bg] cannot attach to the service process — giving up after $ATTACH_RETRIES retries")
+                    return
+                }
+                val delay = (ATTACH_RETRY_MS shl (attachFailures - 1)).coerceAtMost(ATTACH_RETRY_MAX_MS)
+                Log.w(TAG, "[bg] attach failed (connected=$connected) — retry $attachFailures in ${delay}ms")
+                mainHandler.postDelayed({ if (attached && !attaching) attachToBg() }, delay)
+            }
+            else -> attachFailures = 0
+        }
+    }
+
+    /// Главный поток. Канал событий оборвался, а движок подключён: процесс
+    /// `:bg` ушёл — подключиться к новому.
+    private fun onBgLost() {
+        if (!attached) return
+        Log.i(TAG, "[bg] event channel ended — re-attaching to the service process")
+        attachToBg()
+    }
+
+    /// Главный поток. Кадр канала событий: поток Dart — готовый конверт события
+    /// его `EventChannel` — уходит в движок как есть; служебный кадр
+    /// автоматизации (команда нативного входа или «нативный Stop» из `:bg`) —
+    /// в `AutomationBridge`.
+    private fun onFrame(stream: String, payload: ByteArray) {
+        if (stream == EventFrames.CALL) {
+            reverseCall(payload)
+            return
+        }
+        if (stream == EventFrames.AUTOMATION) {
+            val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
+            val name = m["name"] as? String ?: return
+            val args = (m["args"] as? Map<*, *>).orEmpty().entries
+                .associate { (k, v) -> k.toString() to v }
+            AutomationBridge.handleAutomationAction(name, args)
+            return
+        }
+        if (stream !in listening) return
+        val out = messenger ?: return
+        // Движок ждёт direct-буфер с позицией в конце данных (как у EventChannel).
+        // §155 — движок может быть уже мёртв: глотаем.
+        runCatching {
+            out.send(stream, java.nio.ByteBuffer.allocateDirect(payload.size).apply { put(payload) })
+        }
+    }
+
+    /// Главный поток. §747/§750 — обратный вызов `:bg` → Dart с ответом
+    /// (`UiCalls`): подтвердить получение (окно живо и не заморожено),
+    /// исполнить метод на канале плагина и вернуть итог по номеру. Методы —
+    /// только из [REVERSE_METHODS]. Аргументы и ответ в лог не пишутся.
+    private fun reverseCall(payload: ByteArray) {
+        val m = runCatching { BgCodec.decode(payload) as? Map<*, *> }.getOrNull() ?: return
+        val id = (m["id"] as? Number)?.toLong() ?: return
+        val method = m["method"] as? String ?: return
+        val ctx = context
+        fun reply(kind: String, value: Any? = null, code: String? = null, message: String? = null) {
+            BgClient.onLane {
+                BgClient.callOr(
+                    ctx, "uiCallReply",
+                    mapOf("id" to id, "kind" to kind, "value" to value, "code" to code, "message" to message),
+                    false,
+                )
+            }
+        }
+        BgClient.onLane { BgClient.callOr(ctx, "uiCallAck", mapOf("id" to id), false) }
+        if (method !in REVERSE_METHODS) {
+            reply("missing")
+            return
+        }
+        runCatching {
+            methodChannel.invokeMethod(method, m["args"], object : MethodChannel.Result {
+                override fun success(result: Any?) = reply("ok", value = result)
+                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) =
+                    reply("error", code = errorCode, message = errorMessage)
+                override fun notImplemented() = reply("missing")
+            })
+        }.onFailure {
+            Log.w(TAG, "[bg] reverse call $method failed: ${it.javaClass.simpleName}")
+            reply("missing")
+        }
+    }
+
+    /// Снимок состояния туннеля из `:bg`; null — вызов не удался. Блокирует.
+    private fun fetchTunnelWire(): TunnelState.Wire? = runCatching {
+        (BgClient.call(context, "tunnelSnapshot") as? Map<*, *>)?.let { BgEvents.wireOf(it) }
+    }.getOrNull()
+
+    /// Главный поток. Принять снимок в копию состояния окна. Метка запуска
+    /// `:bg` новее виденной — процесс новый: он не знает ни об окне, ни о его
+    /// подписках, нужно подключиться заново. Снимок со старой меткой
+    /// (запоздавший broadcast прежнего процесса) копия отбрасывает, и
+    /// переподключения он не вызывает — оно оборвало бы идущие долгие вызовы.
+    private fun applyTunnelWire(w: TunnelState.Wire) {
+        val accepted = TunnelState.acceptMirror(w)
+        val prev = bgEpoch
+        if (prev == null || w.epoch > prev) bgEpoch = w.epoch
+        if (accepted && prev != null && w.epoch > prev && !attaching) {
+            Log.i(TAG, "[bg] service process restarted — re-attaching")
+            attachToBg()
+        }
+    }
+
+    /// §747 — переслать вызов Dart в `:bg` под тем же именем (`BgMethods`).
+    private fun toBg(call: MethodCall, result: MethodChannel.Result, long: Boolean = false) =
+        BgClient.forward(context, call.method, call.arguments, result, long)
+
+    private fun mimeOfName(name: String): String {
+        val ext = name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT)
+        return android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+            ?: "application/octet-stream"
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         Log.d(TAG, "[vpn] onDetachedFromEngine: unregisterReceiver(statusReceiver)")
+        attached = false
+        attaching = false
+        BgClient.journal = null
         methodChannel.setMethodCallHandler(null)
         statusEventChannel.setStreamHandler(null)
-        coreLogEventChannel.setStreamHandler(null)
-        ccStatusEventChannel.setStreamHandler(null)
-        ccOutboundsEventChannel.setStreamHandler(null)
-        ccGroupsEventChannel.setStreamHandler(null)
-        ccConnectionsEventChannel.setStreamHandler(null)
-        ccDnsEventChannel.setStreamHandler(null) // §180
-        ccTailscaleEventChannel.setStreamHandler(null) // §579
-        ccTailscalePingEventChannel.setStreamHandler(null) // §581
-        ccConnectionTestEventChannel.setStreamHandler(null) // §687
-        ccOpenConnectEventChannel.setStreamHandler(null) // §654
-        ccTaildropInboxEventChannel.setStreamHandler(null) // §707
+        for (channel in streamChannels) channel.setStreamHandler(null)
+        streamChannels.clear()
+        listening.clear()
+        messenger = null
         statusSink = null
-        BoxVpnService.coreLogSink = null
-        BoxVpnService.ccStatusSink = null
-        BoxVpnService.ccOutboundsSink = null
-        BoxVpnService.ccGroupsSink = null
-        BoxVpnService.ccConnectionsSink = null
-        BoxVpnService.ccDnsQueriesSink = null // §180
-        BoxVpnService.ccTailscaleSink = null // §579
-        BoxVpnService.ccOpenConnectSink = null // §654
-        BoxVpnService.ccTaildropInboxSink = null // §707
         // §047 — обнуляем bridge-ссылки (engine detached).
-        bridgeChannel = null
-        appContext = null
+        AutomationBridge.bridgeChannel = null
+        AutomationBridge.appContext = null
         runCatching { context.unregisterReceiver(statusReceiver) }
+        // §747 — канал событий закрыт; `:bg` узнаёт, что окна больше нет
+        // («окно закрыто»): он снимает потоки данных, закрывает клиента экрана
+        // и больше не держит процесс ради окна.
+        BgClient.disconnect()
+        val ctx = context
+        BgClient.onLane { BgClient.callOr(ctx, "uiDetached", null, true) }
         pluginScope.cancel()
     }
 
@@ -352,42 +437,75 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         Log.d(TAG, "onMethodCall: ${call.method}")
+        if (call.method == "setNotificationTitle" || call.method == "setNotificationText") {
+            @Suppress("UNCHECKED_CAST")
+            notificationLabels[call.method] = call.arguments as? Map<String, Any?>
+        }
         when (call.method) {
+            // §747 — обработчики, которым нужна сервисная сторона (файлы
+            // настроек, состояние туннеля, ядро и его клиенты, проба, Taildrop):
+            // тело — в `BgMethods` / `BgCcMethods`, здесь пересылка под тем же
+            // именем. Форма ответа прежняя. Окно ядро не грузит вовсе.
+            // Быстрые — синхронным вызовом на упорядоченной полосе.
+            "forceStopVPN", "getTunnelUptimeMs", "isForeignVpnActive", "reloadVPN", "resetNetwork",
+            "setQuicKnob", "clearDnsCache", "setNotificationTitle", "setNotificationText",
+            "setAutoStart", "getAutoStart", "setKeepOnExit", "getKeepOnExit",
+            "setNotificationStop", "getNotificationStop", "setNotificationRestart",
+            "getNotificationRestart", "setNotificationSend", "getNotificationSend",
+            "setCoreLogsEnabled", "getCoreLogsEnabled", "setCoreLogsVerbose", "getCoreLogsVerbose",
+            "setAllowBypass", "getAllowBypass", "setAutoRedirect", "getAutoRedirect", "setHasTun",
+            "getCurrentSessionAllowBypass", "startVpnHeadless", "getBackgroundMode",
+            "setBackgroundMode", "getMemoryLimit", "setMemoryLimit", "getAppLanguageState",
+            "setAutomationEnabled", "setAppFunctionsEnabled", "setAutomationActiveState",
+            "taildropServiceStats", "taildropBuildServiceFile", "taildropClipState",
+            "setTaildropTags", "deleteLegacyPrefs", "ccGetOpenConnectStatus",
+            "ccStopOpenConnectCallback", "setAppLanguage", "ccCancelPing", "ccConnectProfiler",
+            "ccConnectScreen", "ccDisconnectProfiler", "ccDisconnectScreen", "ccPauseClients",
+            "ccResumeClients", "ccResyncForReopen", "ccSetStatusFast", "ccStartConnectionTest",
+            "ccStartTaildropInbox", "ccStartTailscalePing", "ccStartTailscaleStatus",
+            "ccStopConnectionTest", "ccStopTaildropInbox", "ccStopTailscalePing",
+            "ccStopTailscaleStatus" -> toBg(call, result)
+            // Долгие (остановка туннеля, блокирующий gRPC к ядру, замеры, проба,
+            // проверка конфига, профиль, отправка) — запуск той же полосой,
+            // исполнение на своём потоке `:bg`, ответ кадром канала событий:
+            // сотня параллельных замеров не занимает пул Binder.
+            "stopVPN", "getMemoryInfo", "ccSubmitOpenConnectForm", "ccCancelOpenConnectChallenge",
+            "ccStartOpenConnectCallback", "ccCloseConnection", "ccCloseConnections",
+            "ccGetDnsGroups", "ccGetGroups", "ccGetImpairStatus", "ccGetOutbounds", "ccGetPool",
+            "ccGetRules", "ccScheduleImpair", "ccSetImpair",
+            "ccGetRunningConfig", "ccGetEffectiveConfig", "ccGetOutboundConfig",
+            "ccGetTailscaleStatus", "ccGetUrlViaOutbound",
+            "ccGetWireGuardStatus", "ccSelectOutbound", "ccSetEndpointEnabled",
+            "ccSetTailscaleExitNode", "ccTaildropCancelReceiving", "ccTaildropDelete",
+            "ccTaildropInboxSnapshot", "ccTaildropMarkRead", "ccTaildropSendBytes",
+            "ccTailscaleLogin", "ccTailscaleLogout", "ccUrlTestGroup", "ccUrlTestOutbound",
+            "checkConfig", "formatConfig", "getCoreVersion", "pprofProfile", "probeCancel",
+            "probeGetUrl", "probeStart", "probeStop", "probeUrlTest",
+            // §750 — операции ассистента (Debug API): исполняет `:bg`.
+            "assistantOverview", "assistantListExits", "assistantCheckUrl", "assistantCheckExit",
+            "assistantFindApps", "assistantAppRoute", "assistantSelectExit" -> toBg(call, result, long = true)
+            // §747 — конфиг бывает больше предела Binder: файл пишет и читает само
+            // окно (запись атомарная), а сервису уходит «конфиг сохранён» — он
+            // сбрасывает кэш. Запись и вызов — на полосе: следующий за ними
+            // `startVPN` / `reloadVPN` увидит уже новый файл.
             "saveConfig" -> {
                 val config = call.argument<String>("config") ?: ""
-                result.success(ConfigManager.save(config))
+                BgClient.onLane {
+                    val ok = ConfigFile.write(context, config) != null
+                    if (ok) BgClient.callOr(context, "configSaved", null, true)
+                    BgClient.onMain { result.success(ok) }
+                }
             }
-            "getConfig" -> result.success(ConfigManager.load())
+            "getConfig" -> BgClient.onLane {
+                val text = ConfigFile.read(context) ?: "{}"
+                BgClient.onMain { result.success(text) }
+            }
             // §316 — РЕАЛЬНЫЙ `Context.filesDir`, куда ядро пишет краш-репорты
             // и stderr. НЕ равен Dart-овскому `getApplicationDocumentsDirectory()`
             // (у Flutter это `app_flutter`, у native — `files`): из-за этой
             // подмены §038-канал stderr и краш-репорты ядра были недостижимы.
             "getFilesDir" -> result.success(context.filesDir.path)
             "startVPN" -> startVpn(result)
-            // §165 — headless-старт (Debug API / automation): без Activity, БЕЗ
-            // consent-диалога. Работает ТОЛЬКО если VPN-разрешение уже выдано
-            // (prepare==null). Тот же путь, что §047 LxBoxIntentReceiver/Tile.
-            // Возвращает {"started":bool, "needs_consent":bool}.
-            "startVpnHeadless" -> {
-                // §192 — proxy-режим без TUN: prepare не нужен (и зря рвёт чужой
-                // VPN). Стартуем напрямую, консент не требуется.
-                val needConsent = BootReceiver.hasTun(context) &&
-                    VpnService.prepare(context.applicationContext) != null
-                if (needConsent) {
-                    result.success(mapOf("started" to false, "needs_consent" to true))
-                } else {
-                    BoxVpnService.start(context)
-                    result.success(mapOf("started" to true, "needs_consent" to false))
-                }
-            }
-            "stopVPN" -> stopVpn(result)
-            "forceStopVPN" -> {
-                // §129 — жёсткая остановка при зависшем-вхолостую ядре. Fire-and-
-                // forget: BoxService.doForceStop сам делает stopSelf() не дожидаясь
-                // setStatus(Stopped) от ядра. Не ждём (в отличие от stopVPN).
-                BoxVpnService.forceStop(context)
-                result.success(true)
-            }
             "getVpnStatus" -> {
                 // Pull-метод для re-sync UI после reattach Flutter-процесса
                 // (broadcast'ятся только переходы — если service уже Started,
@@ -395,235 +513,53 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // §276 — map вместо голой строки: иначе UI, вернувшийся из фона
                 // после перехвата слота, потеряет revoked и покажет нейтральный
                 // Disconnected вместо «Taken by another VPN».
-                result.success(
-                    mapOf(
-                        "status" to BoxVpnService.currentStatus.name,
-                        BoxVpnService.EXTRA_REVOKED to BoxVpnService.currentRevoked,
-                    )
-                )
-            }
-            // Есть ли сейчас активный ЧУЖОЙ VPN (другое приложение)? UI спрашивает
-            // перед ручным стартом, чтобы показать «переключиться?» вместо молчаливого
-            // отзыва чужого туннеля. prepare()==null не различает «чужого нет» и
-            // «чужой активен, но наше разрешение уже выдано» — здесь различаем явно.
-            "isForeignVpnActive" -> result.success(isForeignVpnActive())
-            "getTunnelUptimeMs" -> {
-                // §187 — прошедшие мс с реального старта туннеля (переживает
-                // swipe). 0 = не запущен / только что стартовал. Dart на cold-
-                // start вычисляет честный connectedSince = now - uptime, вместо
-                // обнуления на «сейчас». Монотонные часы (elapsedRealtime).
-                val started = BoxVpnService.tunnelStartedElapsedMs
-                val uptime = if (started > 0L) SystemClock.elapsedRealtime() - started else 0L
-                result.success(uptime)
-            }
-            "getCoreVersion" -> {
-                // Libbox.version() — статический Go-side метод; возвращает
-                // строку вида "1.13.11". Используется в About screen.
-                // Не требует libbox.setup; safe to call в любой момент.
-                try {
-                    result.success(io.nekohasekai.libbox.Libbox.version())
-                } catch (t: Throwable) {
-                    Log.e(TAG, "getCoreVersion failed", t)
-                    result.success("")
-                }
-            }
-            "reloadVPN" -> {
-                // Spec 030: in-place reload sing-box runtime через
-                // CommandServer.startOrReloadService — без recreate'а Android Service.
-                BoxVpnService.reload(context)
-                result.success(true)
-            }
-            "resetNetwork" -> {
-                // Spec 031 (experimental): box.Router().ResetNetwork() — gentle
-                // reset network sub-state без drop'а runtime.
-                BoxVpnService.resetNetwork(context)
-                result.success(true)
-            }
-            "setQuicKnob" -> {
-                // §341 — диагностические env-ручки quic-go (GSO/ECN offload).
-                // Статические Libbox-вызовы (Go-side os.Setenv), эффект — на
-                // следующем (ре)коннекте QUIC-аутбаундов; сервис не нужен.
-                val knob = call.argument<String>("knob")
-                val disabled = call.argument<Boolean>("disabled") ?: false
-                val ok = try {
-                    when (knob) {
-                        "gso" -> {
-                            io.nekohasekai.libbox.Libbox.setQuicGSODisabled(disabled)
-                            true
-                        }
-                        "ecn" -> {
-                            io.nekohasekai.libbox.Libbox.setQuicECNDisabled(disabled)
-                            true
-                        }
-                        else -> false
+                // §747 — правду знает `:bg`: снимок берётся вызовом, заодно
+                // обновляет копию состояния в окне (и клиента ядра по ней).
+                // Вызов не удался — отвечаем по копии.
+                BgClient.onLane {
+                    val wire = fetchTunnelWire()
+                    BgClient.onMain {
+                        if (wire != null) applyTunnelWire(wire)
+                        val st = wire?.snapshot ?: TunnelState.snapshot
+                        result.success(
+                            mapOf(
+                                "status" to st.status.name,
+                                BoxVpnService.EXTRA_REVOKED to st.revoked,
+                            )
+                        )
                     }
-                } catch (t: Throwable) {
-                    // Старый AAR без экспорта — не роняем канал, отвечаем false.
-                    Log.e(TAG, "setQuicKnob($knob) failed", t)
-                    false
                 }
-                result.success(ok)
-            }
-            "clearDnsCache" -> {
-                // §263 — удалить cache.db (FakeIP + DNS RDRC). Running → reload
-                // (ядро создаст чистый cache.db); off → только delete файла.
-                BoxVpnService.clearDnsCache(context)
-                result.success(true)
-            }
-            "setNotificationTitle" -> {
-                val title = call.argument<String>("title")
-                    ?: context.getString(com.leadaxe.lxbox.R.string.app_name)
-                // §223 — лейбл поменялся при живом туннеле → перерисовать шторку
-                // (#20: раньше строка только кэшировалась, рендер был лишь на connect).
-                val changed = title != ConfigManager.notificationTitle
-                ConfigManager.setNotificationTitle(title)
-                if (changed) BoxVpnService.updateNotification(context)
-                result.success(true)
-            }
-            "setNotificationText" -> {
-                // §123 — подтекст уведомления (тег активной ноды / route.final).
-                val text = call.argument<String>("text") ?: ""
-                val changed = text != ConfigManager.notificationText   // §223
-                ConfigManager.setNotificationText(text)
-                if (changed) BoxVpnService.updateNotification(context)
-                result.success(true)
-            }
-            "setAutoStart" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setEnabled(context, enabled)
-                result.success(true)
-            }
-            "getAutoStart" -> {
-                result.success(BootReceiver.isEnabled(context))
-            }
-            "setKeepOnExit" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setKeepOnExit(context, enabled)
-                result.success(true)
-            }
-            "getKeepOnExit" -> {
-                result.success(BootReceiver.isKeepOnExit(context))
-            }
-            // §707 итер. 9 — кнопки уведомления VPN: зеркало native_prefs
-            // (§189), по образцу core_logs_verbose; уведомление — сразу.
-            "setNotificationStop" -> {
-                BootReceiver.setNotificationStop(context, call.argument<Boolean>("enabled") ?: true)
-                BoxVpnService.updateNotification(context)
-                result.success(true)
-            }
-            "getNotificationStop" -> result.success(BootReceiver.isNotificationStop(context))
-            "setNotificationRestart" -> {
-                BootReceiver.setNotificationRestart(context, call.argument<Boolean>("enabled") ?: true)
-                BoxVpnService.updateNotification(context)
-                result.success(true)
-            }
-            "getNotificationRestart" -> result.success(BootReceiver.isNotificationRestart(context))
-            "setNotificationSend" -> {
-                BootReceiver.setNotificationSend(context, call.argument<Boolean>("enabled") ?: true)
-                BoxVpnService.updateNotification(context)
-                result.success(true)
-            }
-            "getNotificationSend" -> result.success(BootReceiver.isNotificationSend(context))
-            "setCoreLogsEnabled" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setCoreLogsEnabled(context, enabled)
-                result.success(true)
-            }
-            "getCoreLogsEnabled" -> {
-                result.success(BootReceiver.isCoreLogsEnabled(context))
-            }
-            // §345 — verbose core-логи: persist + немедленное применение
-            // (volatile в BoxService читается на каждой строке writeDebugMessage,
-            // перезапуск VPN не нужен).
-            "setCoreLogsVerbose" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setCoreLogsVerbose(context, enabled)
-                BoxService.coreLogsVerbose = enabled
-                result.success(true)
-            }
-            "getCoreLogsVerbose" -> {
-                result.success(BootReceiver.isCoreLogsVerbose(context))
-            }
-            // §049 F15 fix: allowBypass opt-in toggle (применяется при следующем
-            // openTun → требует reload VPN после изменения).
-            "setAllowBypass" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setAllowBypass(context, enabled)
-                result.success(true)
-            }
-            "getAllowBypass" -> {
-                result.success(BootReceiver.isAllowBypass(context))
-            }
-            // §189 — auto_redirect (§124 root-only tproxy). Доделана Dart-обёртка
-            // для зеркала native_prefs. UI-тоггла нет (root-only), но в JSON-
-            // зеркале/бэкапе участвует.
-            "setAutoRedirect" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                BootReceiver.setAutoRedirect(context, enabled)
-                result.success(true)
-            }
-            "getAutoRedirect" -> {
-                result.success(BootReceiver.isAutoRedirect(context))
-            }
-            // §192 — зеркало has_tun (производное от vpn_mode §119): гейтит
-            // VpnService.prepare() на всех точках запуска. proxy → false →
-            // prepare не зовётся → чужой VPN не отзывается.
-            "setHasTun" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: true
-                BootReceiver.setHasTun(context, enabled)
-                result.success(true)
-            }
-            // §069: runtime applied value (от последнего establish()), в отличие
-            // от persisted getAllowBypass() который меняется до VPN reload.
-            "getCurrentSessionAllowBypass" -> {
-                result.success(BoxVpnService.currentSessionAllowBypass)
             }
             "quitApp" -> {
-                // §043 follow-up: завершить процесс целиком, чтобы при следующем
-                // запуске `BoxApplication.initialize` пересоздал libbox с новым
-                // флагом `debug` (см. SetupOptions в BoxApplication.kt — setup
-                // зовётся ровно один раз за жизнь процесса).
+                // §043 follow-up: завершить приложение целиком, чтобы следующий
+                // запуск пересоздал libbox с новым флагом `debug` (setup зовётся
+                // один раз за жизнь процесса).
                 //
-                // 1. finishAffinity() закрывает все наши activities,
-                // 2. через 200ms killProcess + exitProcess убивают процесс
-                //    (некоторые OEM-launchers иначе оставляют zombie).
-                //
-                // §638: VPN останавливается вместе с процессом, и это должно
-                // быть окончательно. Сторож §428 (будильник VpnWatchdog +
-                // признак «VPN желателен») иначе через 2–3,5 мин увидит мёртвый
-                // сервис при desired=true и поднимет VPN сам — вопреки диалогу
-                // «VPN service will stop». Поэтому до убийства процесса снимаем
-                // признак и будильник. KEEP_ON_EXIT не реактивируем: если юзер
-                // явно запросил Quit, ему нужен полный рестарт, не fall-through
-                // в keep-alive путь.
-                BootReceiver.setVpnDesired(context, false)
-                VpnWatchdog.disarm(context)
+                // §747 — процессов два. Сервисная половина (`BgMethods.quitApp`):
+                // снять признак «VPN желателен» и будильник сторожа (§638),
+                // остановить сервис штатным путём и дождаться Stopped не дольше
+                // бюджета (§639: иначе уведомление id=1 висит в шторке), затем
+                // завершить `:bg`. Здесь: закрыть activities и завершить `:ui`
+                // (не раньше прежних 250 мс; некоторые OEM-launchers иначе
+                // оставляют zombie). Вызов идёт полосой — записи настроек,
+                // отправленные раньше, дойдут до `:bg` до его завершения.
                 result.success(true)
-                mainHandler.postDelayed({
-                    activity?.finishAffinity()
-                }, 50)
-                // §639: сервис останавливаем штатным путём Stop (тот же
-                // `stopAwait`, что у `stopVPN`) ДО убийства процесса. Иначе он
-                // умирает без `stopForeground`, и уведомление id=1 висит в
-                // шторке «VPN работает» до следующего запуска. `doStop` снимает
-                // foreground сразу при переходе в Stopping; ждём Stopped не
-                // дольше QUIT_STOP_BUDGET_MS, затем страховочно cancel(id=1)
-                // и убиваем процесс (не раньше прежних 250 мс).
-                // Свой scope, не pluginScope: finishAffinity может отсоединить
-                // engine, а onDetachedFromEngine отменяет pluginScope — тогда
-                // процесс не был бы убит.
-                val quitStartedAt = android.os.SystemClock.elapsedRealtime()
-                CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
-                    val stopped = runCatching {
-                        withTimeoutOrNull(QUIT_STOP_BUDGET_MS) {
-                            BoxVpnService.stopAwait(context).await()
-                        }
-                    }.getOrNull()
-                    if (stopped == null) {
-                        Log.w(TAG, "[vpn §639] quitApp: Stopped not reported in ${QUIT_STOP_BUDGET_MS}ms")
-                    }
-                    ServiceNotification.cancelServiceNotification()
-                    val elapsed = android.os.SystemClock.elapsedRealtime() - quitStartedAt
+                val quitStartedAt = SystemClock.elapsedRealtime()
+                val ctx = context
+                BgClient.onLane {
+                    // Окно закрывается только после подтверждения `:bg`, что
+                    // «VPN желателен» и сторож сняты: если вызов не прошёл,
+                    // закрыться и убить себя значило бы оставить сторожу
+                    // повод поднять VPN. Тогда окно остаётся открытым.
+                    val prepared = runCatching { BgClient.call(ctx, "quitPrepare") }
+                        .onFailure { Log.e(TAG, "[vpn] quitApp: the service side did not confirm — not quitting: ${it.message}") }
+                        .isSuccess
+                    if (!prepared) return@onLane
+                    mainHandler.post { activity?.finishAffinity() }
+                    BgClient.callOr(ctx, "quitApp", null, false)
+                    // `:bg` завершается; новых вызовов не делаем.
+                    BgClient.shutDown()
+                    val elapsed = SystemClock.elapsedRealtime() - quitStartedAt
                     mainHandler.postDelayed({
                         android.os.Process.killProcess(android.os.Process.myPid())
                         kotlin.system.exitProcess(0)
@@ -738,57 +674,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             "areNotificationsEnabled" -> {
                 result.success(androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled())
             }
-            "getBackgroundMode" -> {
-                result.success(BootReceiver.getBackgroundMode(context))
-            }
-            "setBackgroundMode" -> {
-                val mode = call.argument<String>("mode") ?: BootReceiver.BG_MODE_NEVER
-                BootReceiver.setBackgroundMode(context, mode)
-                result.success(null)
-            }
-            "getMemoryLimit" -> {
-                result.success(BootReceiver.getMemoryLimit(context))
-            }
-            // §279 Phase 6 (спека §6.3) — язык приложения из Dart (зеркало var
-            // `app_language`): pref + LocaleManager-пуш (33+, "system" = пустой
-            // список) + last_pushed_locale + relabel всех нативных поверхностей
-            // (канал, шторка, shortcuts, тайл, локаль ядра).
-            "setAppLanguage" -> {
-                val tag = call.argument<String>("tag") ?: "system"
-                L10n.applySetting(context, tag)
-                result.success(true)
-            }
-            // §279 (спека §6.4) — снимок per-app-локалей + last_pushed_locale
-            // для трёхстороннего reconciliation на Dart-старте. API < 33 →
-            // {"supported": false}.
-            "getAppLanguageState" -> {
-                result.success(L10n.appLanguageState(context))
-            }
-            "setMemoryLimit" -> {
-                // §271 — persist + мгновенное применение к работающему ядру.
-                // `reloadSetupOptions` читает ТОЛЬКО OOM-поля (setup.go:80-96)
-                // и сразу вызывает debug.SetMemoryLimit — GC-потолок меняется без
-                // переподключения VPN. Порог RSS-мониторинга oom-killer-сервиса
-                // защёлкнут в CommandServer текущей сессии; BoxService создаёт
-                // новый CommandServer на каждый старт сервиса → порог подтянется
-                // при следующем подключении VPN.
-                val value = call.argument<String>("value") ?: BootReceiver.MEMORY_LIMIT_AUTO
-                BootReceiver.setMemoryLimit(context, value)
-                val appContext = context
-                pluginScope.launch(Dispatchers.IO) {
-                    runCatching {
-                        BoxApplication.libboxReady.await()
-                        val opts = io.nekohasekai.libbox.SetupOptions().apply {
-                            oomKillerEnabled = true
-                            oomMemoryLimit = BoxApplication.resolveMemoryLimitBytes(appContext)
-                            // §705 (SPEC 148): порог по памяти рантайма ядра, не по RSS.
-                            oomMemoryLimitHeap = true
-                        }
-                        io.nekohasekai.libbox.Libbox.reloadSetupOptions(opts)
-                    }.onFailure { Log.w(TAG, "reloadSetupOptions failed: ${it.message}") }
-                }
-                result.success(null)
-            }
             "openNotificationSettings" -> {
                 // API 26+ имеет прямой action ACTION_APP_NOTIFICATION_SETTINGS,
                 // он передаёт пакет через extra, а не через data URI.
@@ -812,53 +697,14 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 // текстовую инструкцию вместо кнопки.
                 requestAddQuickSettingsTile(result)
             }
-            // §047 Automation API — Dart → native control + outgoing emit.
-            "setAutomationEnabled" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                LxBoxIntentReceiver.setEnabled(context, enabled)
-                result.success(true)
-            }
-            // §721 — тумблер «AI assistant control»: зеркало + состояние
-            // функций в AppFunctionManager (Android 16+; ниже — только зеркало).
-            "setAppFunctionsEnabled" -> {
-                val enabled = call.argument<Boolean>("enabled") ?: false
-                com.leadaxe.lxbox.appfunctions.AppFunctionsGate.setEnabled(context, enabled)
-                result.success(true)
-            }
             "sendAutomationBroadcast" -> {
                 val action = call.argument<String>("action") ?: ""
                 @Suppress("UNCHECKED_CAST")
                 val extras = (call.argument<Map<String, Any?>>("extras")
                     ?: emptyMap())
                 if (action.isNotEmpty()) {
-                    sendAutomationBroadcast(action, extras)
+                    AutomationBridge.sendAutomationBroadcast(action, extras)
                 }
-                result.success(true)
-            }
-            // §047 Шаг 2 — зеркалим активную ноду/группу + списки нод/групп в
-            // native-кеш. Активное состояние нужно LocaleConditionReceiver
-            // (синхронный ответ на QUERY_CONDITION); списки — edit-Activity
-            // плагина (Spinner выбора ноды/группы вместо ручного ввода).
-            // Flutter-engine при чтении может спать, потому именно prefs.
-            "setAutomationActiveState" -> {
-                val node = call.argument<String>("node")
-                val group = call.argument<String>("group")
-                val nodes = call.argument<List<String>>("nodes")
-                val groups = call.argument<List<String>>("groups")
-                val edit = context
-                    .getSharedPreferences("lxbox_automation", Context.MODE_PRIVATE)
-                    .edit()
-                    .putString("active_node", node)
-                    .putString("active_group", group)
-                // Списки сериализуем как JSON-массив строк. null → не трогаем
-                // (caller мог обновить только активное состояние).
-                if (nodes != null) {
-                    edit.putString("all_nodes", org.json.JSONArray(nodes).toString())
-                }
-                if (groups != null) {
-                    edit.putString("all_groups", org.json.JSONArray(groups).toString())
-                }
-                edit.apply()
                 result.success(true)
             }
             "getApplicationExitInfo" -> result.success(readApplicationExitInfo())
@@ -884,184 +730,6 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                 }
                 result.success(true)
             }
-
-            // ───── §122 Фаза 0 — CommandClient lifecycle + императивы ─────
-            // §185 — cold-start после swipe-keep: ВСЕ CC-клиенты осиротели
-            // (PERSISTENT поля на companion, пережили swipe; Dart-движок умер,
-            // disconnect/pause не вызвались). resyncForReopen переподнимает
-            // screenClient (groups/connections, сброс протухшего refcount) +
-            // statusClient (трафик/память, минуя ранний return setStatusFast)
-            // на свежий движок — иначе стримы привязаны к мёртвым sink'ам →
-            // пустой UI. Идемпотентно при первом старте. Профайлер: чистая
-            // остановка осиротевшего клиента (буфер в Dart потерян by design).
-            "ccResyncForReopen" -> {
-                BoxService.commandClient?.apply {
-                    resyncForReopen()
-                    disconnectProfiler()
-                }
-                result.success(true)
-            }
-            "ccConnectScreen" -> {
-                BoxService.commandClient?.connectScreen(); result.success(true)
-            }
-            "ccDisconnectScreen" -> {
-                BoxService.commandClient?.disconnectScreen(); result.success(true)
-            }
-            "ccConnectProfiler" -> {
-                BoxService.commandClient?.connectProfiler(); result.success(true)
-            }
-            "ccDisconnectProfiler" -> {
-                BoxService.commandClient?.disconnectProfiler(); result.success(true)
-            }
-            // §175 — отмена масс-пинга: disconnect pingClient → ядро рвёт per-call
-            // ctx in-flight тестов (не дожидаясь TCPTimeout), другие стримы целы.
-            // §579 — подписка SubscribeTailscaleStatus. Старт стрима — gRPC,
-            // поэтому на Dispatchers.IO; ответ сразу (данные придут стримом).
-            "ccStartTailscaleStatus" -> {
-                val cc = BoxService.commandClient
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscaleStatus() }
-                result.success(cc != null)
-            }
-            "ccStopTailscaleStatus" -> {
-                val cc = BoxService.commandClient
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscaleStatus() }
-                result.success(true)
-            }
-            // §581 — exit node на ходу и выход из аккаунта: блокирующий gRPC
-            // на Dispatchers.IO; ответ — null (успех) или текст ошибки ядра.
-            "ccSetTailscaleExitNode" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val id = call.argument<String>("stable_id") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        cc?.setTailscaleExitNode(tag, id) ?: "no command client"
-                    }
-                    result.success(err)
-                }
-            }
-            // §645 — одиночный GetTailscaleStatus для опроса вкладки Network:
-            // map записи, null — пропуск тика, ядро без метода — error
-            // `unimplemented` (Dart останавливает опрос).
-            "ccGetTailscaleStatus" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        runCatching { cc?.getTailscaleStatus(tag) }
-                    }
-                    r.fold(
-                        onSuccess = { result.success(it) },
-                        onFailure = {
-                            if (it is UnsupportedOperationException) {
-                                result.error("unimplemented", null, null)
-                            } else {
-                                result.success(null)
-                            }
-                        },
-                    )
-                }
-            }
-            "ccTailscaleLogout" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        cc?.tailscaleLogout(tag) ?: "no command client"
-                    }
-                    result.success(err)
-                }
-            }
-            // §706 (ядро SPEC 149) — вход узла с новым ключом на лету. Успех →
-            // null; отказ ядра → PlatformException с кодом как у
-            // ccSetEndpointEnabled.
-            "ccTailscaleLogin" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val key = call.argument<String>("auth_key") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        if (cc == null) {
-                            mapOf("error" to "error", "message" to "no command client")
-                        } else {
-                            cc.tailscaleLogin(tag, key)
-                        }
-                    }
-                    if (r == null) {
-                        result.success(null)
-                    } else {
-                        result.error(r["error"] ?: "error", r["message"], null)
-                    }
-                }
-            }
-            "ccStartTailscalePing" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val ip = call.argument<String>("peer_ip") ?: ""
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTailscalePing(tag, ip) }
-                result.success(cc != null)
-            }
-            "ccStopTailscalePing" -> {
-                val cc = BoxService.commandClient
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTailscalePing() }
-                result.success(true)
-            }
-            // §687 — тест соединения: события идут в EventChannel connection_test.
-            "ccStartConnectionTest" -> {
-                val cc = BoxService.commandClient
-                val link = call.argument<String>("link") ?: ""
-                val pkg = call.argument<String>("package_name") ?: ""
-                val depth = call.argument<Int>("depth") ?: 0
-                val fresh = call.argument<Boolean>("fresh") ?: false
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startConnectionTest(link, pkg, depth, fresh) }
-                result.success(cc != null)
-            }
-            "ccStopConnectionTest" -> {
-                val cc = BoxService.commandClient
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopConnectionTest() }
-                result.success(true)
-            }
-            // §654 C — openconnect: снапшот статуса, ответ на челлендж,
-            // отмена, слушатель SSO. Блокирующий gRPC — на Dispatchers.IO;
-            // ответ — null (успех) или текст ошибки.
-            "ccGetOpenConnectStatus" -> {
-                result.success(BoxService.commandClient?.openConnectSnapshot())
-            }
-            // §707 — Taildrop: входящие узла, сохранение, удаление, отправка
-            // из строки пира. Блокирующий gRPC — на Dispatchers.IO.
-            "ccStartTaildropInbox" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.startTaildropInbox(tag) }
-                result.success(cc != null)
-            }
-            "ccStopTaildropInbox" -> {
-                val cc = BoxService.commandClient
-                if (cc != null) pluginScope.launch(Dispatchers.IO) { cc.stopTaildropInbox() }
-                result.success(true)
-            }
-            "ccTaildropDelete", "ccTaildropCancelReceiving", "ccTaildropMarkRead" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val name = call.argument<String>("name") ?: ""
-                val sender = call.argument<String>("sender_id") ?: ""
-                val method = call.method
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        if (cc == null) {
-                            "no command client"
-                        } else {
-                            when (method) {
-                                "ccTaildropDelete" -> cc.taildropDelete(tag, name)
-                                    .also { if (it == null) Taildrop.dismissReceived(context, tag, name) }
-                                "ccTaildropCancelReceiving" -> cc.taildropCancelReceiving(tag, sender, name)
-                                else -> cc.taildropMarkRead(tag)
-                            }
-                        }
-                    }
-                    result.success(err)
-                }
-            }
             "ccTaildropSave" -> {
                 val tag = call.argument<String>("tag") ?: ""
                 val name = call.argument<String>("name") ?: ""
@@ -1079,7 +747,7 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                         pendingTaildropSave = Triple(tag, name, result)
                         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                             addCategory(Intent.CATEGORY_OPENABLE)
-                            type = Taildrop.mimeOf(name)
+                            type = mimeOfName(name)
                             putExtra(Intent.EXTRA_TITLE, name)
                         }
                         runCatching { act.startActivityForResult(intent, TAILDROP_SAVE_CODE) }
@@ -1121,593 +789,19 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
                     }
                 }
             }
-            // §707 итер. 5 — Debug API: отправка из байтов / заметки тем же
-            // путём, что «Send file…» (уведомление, Cancel), с ожиданием итога.
-            "ccTaildropSendBytes" -> {
-                val tag = call.argument<String>("tag") ?: ""
-                val peerId = call.argument<String>("peer_id") ?: ""
-                val peerName = call.argument<String>("peer_name") ?: ""
-                val text = call.argument<String>("text")
-                val bytes = call.argument<ByteArray>("bytes")
-                val name = call.argument<String>("name") ?: ""
-                val waitMs = (call.argument<Number>("wait_ms") ?: 60_000).toLong()
-                val item = when {
-                    text != null -> Taildrop.noteItem(text)
-                    bytes != null && name.isNotEmpty() ->
-                        Taildrop.Item(name, bytes.size.toLong(), java.io.ByteArrayInputStream(bytes))
-                    else -> null
-                }
-                if (item == null || tag.isEmpty() || peerId.isEmpty()) {
-                    result.success(mapOf("status" to "error", "error" to "bad arguments"))
-                } else {
-                    val ctx = context
-                    pluginScope.launch {
-                        val out = withContext(Dispatchers.IO) {
-                            val latch = java.util.concurrent.CountDownLatch(1)
-                            val outcome = java.util.concurrent.atomic.AtomicReference<Pair<String, String?>>(null)
-                            val started = Taildrop.send(ctx, tag, peerId, peerName, listOf(item)) { status, err ->
-                                outcome.set(status to err)
-                                latch.countDown()
-                            }
-                            if (!started) {
-                                mapOf("status" to "error", "error" to "vpn_off", "name" to item.name)
-                            } else if (!latch.await(waitMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                                mapOf("status" to "in_progress", "name" to item.name)
-                            } else {
-                                val (status, err) = outcome.get()
-                                mapOf("status" to status, "error" to (err ?: ""), "name" to item.name)
-                            }
-                        }
-                        result.success(out)
-                    }
-                }
-            }
-            // §707 итер. 5 — Debug API: снимок входящих узла с sha256 файлов
-            // на диске (каталог узла — из последнего собранного конфига).
-            "ccTaildropInboxSnapshot" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                if (cc == null || tag.isEmpty()) {
-                    result.success(null)
-                } else {
-                    pluginScope.launch {
-                        val snap = withContext(Dispatchers.IO) { taildropInboxWithHashes(cc, tag) }
-                        result.success(snap)
-                    }
-                }
-            }
-            "taildropServiceStats" -> result.success(TaildropServiceFiles.stats())
-            // §707 итер. 7 — служебный файл собирает натив (тот же сборщик,
-            // что окно «Send clipboard»): Debug API `POST /taildrop/send` с
-            // `commands`. Команды не проверяются; предел max_bytes — да.
-            "taildropBuildServiceFile" -> {
-                val commands = call.argument<List<Any?>>("commands") ?: emptyList()
-                val spec = TaildropServiceFiles.spec(context)
-                result.success(
-                    if (spec == null) {
-                        mapOf("error" to "no_registry")
-                    } else {
-                        when (val b = TaildropServiceFiles.build(
-                            spec, org.json.JSONArray(commands), System.currentTimeMillis(),
-                            java.security.SecureRandom(),
-                        )) {
-                            is TaildropServiceFiles.Built.Ok -> mapOf("name" to b.name, "bytes" to b.bytes)
-                            is TaildropServiceFiles.Built.TooLarge ->
-                                mapOf("error" to "too_large", "size" to b.size, "max_bytes" to b.maxBytes)
-                            TaildropServiceFiles.Built.Unsupported -> mapOf("error" to "unsupported_format")
-                        }
-                    },
-                )
-            }
-            // §707 итер. 7 — окно «Send clipboard» для Debug API: запомненный
-            // получатель и число сообщений лент (текст не отдаётся).
-            "taildropClipState" -> result.success(TaildropClip.state(context))
             "ccTakeTaildropOpenRequest" -> {
-                val tag = BoxVpnService.taildropOpenRequest
-                BoxVpnService.taildropOpenRequest = null
+                val tag = UiLaunchRequests.taildropOpenRequest
+                UiLaunchRequests.taildropOpenRequest = null
                 result.success(tag)
-            }
-            // §707 итер. 9 — производные множества итоговых тегов узлов с
-            // галками Taildrop (зеркало boxvpn_boot), заменяются целиком.
-            // Множество autosave выросло — забрать и то, что уже лежит.
-            "setTaildropTags" -> {
-                // §707 итер. 9 (контракт 1.1.159) — множества ВЫКЛЮЧЕННЫХ тегов.
-                val commandsOff = call.argument<List<String>>("commands_off") ?: emptyList()
-                val autosaveOff = call.argument<List<String>>("autosave_off") ?: emptyList()
-                val enabled = BootReceiver.setTaildropTags(context, commandsOff, autosaveOff)
-                if (enabled && Taildrop.autoSaveSupported()) Taildrop.sweepInboxesAsync(context)
-                result.success(true)
-            }
-            // §707 итер. 9 — старые файлы SharedPreferences Taildrop и кнопок
-            // уведомления удаляются (настройки Taildrop из rc.3 не переносятся,
-            // контракт 1.1.159).
-            "deleteLegacyPrefs" -> {
-                val ok = runCatching {
-                    context.deleteSharedPreferences(LEGACY_TAILDROP_PREFS)
-                    context.deleteSharedPreferences(LEGACY_NOTIFICATION_BUTTONS_PREFS)
-                    true
-                }.getOrDefault(false)
-                result.success(ok)
             }
             "ccTakeOpenConnectOpenRequest" -> {
-                val tag = BoxVpnService.openConnectOpenRequest
-                BoxVpnService.openConnectOpenRequest = null
+                val tag = UiLaunchRequests.openConnectOpenRequest
+                UiLaunchRequests.openConnectOpenRequest = null
                 result.success(tag)
-            }
-            "ccSubmitOpenConnectForm" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val id = call.argument<String>("challenge_id") ?: ""
-                val raw = call.argument<List<Any?>>("values") ?: emptyList()
-                val values = raw.mapNotNull { e ->
-                    val m = e as? Map<*, *> ?: return@mapNotNull null
-                    val k = m["key"] as? String ?: return@mapNotNull null
-                    k to (m["value"] as? String ?: "")
-                }
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        cc?.submitOpenConnectForm(tag, id, values) ?: "no command client"
-                    }
-                    result.success(err)
-                }
-            }
-            "ccCancelOpenConnectChallenge" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val id = call.argument<String>("challenge_id") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        cc?.cancelOpenConnectChallenge(tag, id) ?: "no command client"
-                    }
-                    result.success(err)
-                }
-            }
-            "ccStartOpenConnectCallback" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val id = call.argument<String>("challenge_id") ?: ""
-                val port = call.argument<Int>("port") ?: 8020
-                val prefixes = call.argument<List<String>>("prefixes") ?: emptyList()
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) {
-                        cc?.startOpenConnectCallback(tag, id, port, prefixes) ?: "no command client"
-                    }
-                    result.success(err)
-                }
-            }
-            "ccStopOpenConnectCallback" -> {
-                BoxService.commandClient?.stopOpenConnectCallback()
-                result.success(true)
-            }
-            "ccCancelPing" -> {
-                BoxService.commandClient?.cancelPing(); result.success(true)
-            }
-            // §164 — энергомодель. ccSetStatusFast: FAST 0.1с (Stats открыт) /
-            // NORMAL 0.5с (главный). ccPauseClients: фон — гасим status+screen
-            // (profilerClient НЕ трогаем, recording живёт в фоне). ccResumeClients:
-            // возврат из фона — поднимаем status(NORMAL)+screen(если refs>0).
-            "ccSetStatusFast" -> {
-                val fast = call.argument<Boolean>("fast") ?: false
-                BoxService.commandClient?.setStatusFast(fast); result.success(true)
-            }
-            "ccPauseClients" -> {
-                BoxService.commandClient?.apply { pauseStatus(); pauseScreen() }
-                result.success(true)
-            }
-            "ccResumeClients" -> {
-                BoxService.commandClient?.apply { resumeStatus(); resumeScreen() }
-                result.success(true)
-            }
-            // §122 — unary CommandClient-RPC БЛОКИРУЮТ (gRPC ждёт ответ ядра до
-            // timeout). Вызов прямо в handleMethodCall = на platform main thread →
-            // mass-ping (worker-pool=10 блокирующих urlTestOutbound) подвешивал
-            // приложение в ANR. Выносим на Dispatchers.IO; result.success обратно
-            // на main (pluginScope = Dispatchers.Main).
-            "ccUrlTestOutbound" -> {
-                val cc = BoxService.commandClient
-                if (cc == null) { result.success(mapOf("delay" to 0, "error" to "not connected")); return }
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc.urlTestOutbound(tag, link, timeoutMs) }
-                    result.success(r)
-                }
-            }
-            // §392 — диагностический GET через узел боевого ядра (kernel SPEC
-            // 058). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound:
-            // на main thread обмен с телом ответа = гарантированный ANR.
-            "ccGetUrlViaOutbound" -> {
-                val cc = BoxService.commandClient
-                if (cc == null) { result.success(mapOf("error" to "not connected")); return }
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                val maxBytes = call.argument<Int>("maxBytes") ?: 0
-                val userAgent = call.argument<String>("userAgent") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc.getUrlViaOutbound(tag, link, timeoutMs, maxBytes, userAgent)
-                    }
-                    result.success(r)
-                }
-            }
-            // §308 — групповой URLTest (force-тест всех членов + переселект в
-            // ядре). Blocking unary → Dispatchers.IO, как ccUrlTestOutbound.
-            "ccUrlTestGroup" -> {
-                val cc = BoxService.commandClient
-                if (cc == null) { result.success(false); return }
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val ok = withContext(Dispatchers.IO) { cc.urlTestGroup(tag) }
-                    result.success(ok)
-                }
-            }
-            // §236 — headless probe-сессия (Test servers в папке при
-            // ВЫКЛЮЧЕННОМ VPN). start/urlTest/cancel/stop; гейт «VPN не запущен» —
-            // внутри ProbeSession. Все вызовы блокирующие → Dispatchers.IO.
-            // §669 — probeStart отдаёт {error, runId}; остальные вызовы несут
-            // runId владельца прогона, чужой/устаревший — no-op («stale run»).
-            "probeStart" -> {
-                val config = call.argument<String>("config") ?: ""
-                pluginScope.launch {
-                    val err = withContext(Dispatchers.IO) { ProbeSession.start(config) }
-                    result.success(err)
-                }
-            }
-            "probeUrlTest" -> {
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        ProbeSession.urlTest(probeRunId(call), tag, link, timeoutMs)
-                    }
-                    result.success(r)
-                }
-            }
-            // §392 — тот же диагностический GET, но в probe-сессии (VPN
-            // выключен). Форма результата идентична ccGetUrlViaOutbound.
-            "probeGetUrl" -> {
-                val tag = call.argument<String>("tag") ?: ""
-                val link = call.argument<String>("link") ?: ""
-                val timeoutMs = call.argument<Int>("timeoutMs") ?: 0
-                val maxBytes = call.argument<Int>("maxBytes") ?: 0
-                val userAgent = call.argument<String>("userAgent") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        ProbeSession.getUrl(probeRunId(call), tag, link, timeoutMs, maxBytes, userAgent)
-                    }
-                    result.success(r)
-                }
-            }
-            // §669 — обрыв начатых замеров (disconnect клиента сессии, §175).
-            "probeCancel" -> {
-                val runId = probeRunId(call)
-                pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.cancel(runId) } }
-                    result.success(null)
-                }
-            }
-            "probeStop" -> {
-                val runId = probeRunId(call)
-                pluginScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { ProbeSession.stop(runId) } }
-                    result.success(null)
-                }
-            }
-            // §209 — null = клиент недоступен (различаем от [] = правил нет).
-            // Dart getRules превращает null в пустой список (диагностика —
-            // отсутствие данных там не отличают от пустых, см. CcChannel.getRules).
-            "ccGetRules" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRules() }
-                    result.success(r)
-                }
-            }
-            // §122/SPEC015 — unary pull-снапшот групп. null = не смогли прочитать
-            // (не-STARTED/нет клиента) → Dart различает от пустого списка и не
-            // трогает state. Закрывает потерянный стартовый push (pull-vs-push).
-            "ccGetGroups" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getGroups() }
-                    result.success(r)
-                }
-            }
-            // §535 (ядро SPEC 097) — unary pull плоского списка: единственный
-            // источник endpointState/idleSinceSeconds (дерево групп и поток
-            // SubscribeOutbounds их не несут). null = не смогли прочитать.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccGetOutbounds" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getOutbounds() }
-                    result.success(r)
-                }
-            }
-            // §311/SPEC036 — unary снапшот конфига работающего ядра. null =
-            // недоступен (down / не-STARTED / attached / ядро < lx.16-rc.3) —
-            // обёртка BoxCommandClient no-throw (runCatching внутри), Dart
-            // различает null от строки и деградирует к saved-файлу.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            // §312/SPEC035 — unary снапшот состояния DNS-групп. null =
-            // недоступен (Dart различает от [] «групп нет»); обёртка no-throw.
-            // Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccGetDnsGroups" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getDnsGroups() }
-                    result.success(r)
-                }
-            }
-            "ccGetRunningConfig" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getRunningConfig() }
-                    result.success(r)
-                }
-            }
-            // §324 — каноническая форма конфига: `Libbox.formatConfig()` прогоняет
-            // текст через ТОТ ЖЕ парсер и энкодер, которым ядро делает снапшот
-            // работающего конфига (kernel SPEC 037 §3). Даёт сравнимые формы без
-            // клиентского списка «различий, которые игнорируем».
-            //
-            // Статический Go-метод: НЕ требует живого сервиса и libbox.setup —
-            // safe в любой момент (как getCoreVersion выше). На Dispatchers.IO:
-            // парс большого конфига на main = ANR (§122).
-            //
-            // КОНТРАКТ: null = ядро не смогло (невалидный конфиг, метод
-            // отсутствует в старом .aar, любой throw). Caller деградирует
-            // консервативно — «изменилось» (§324).
-            "formatConfig" -> {
-                val text = call.argument<String>("config") ?: ""
-                if (text.isBlank()) {
-                    result.success(null)
-                } else {
-                    pluginScope.launch {
-                        val r = withContext(Dispatchers.IO) {
-                            try {
-                                io.nekohasekai.libbox.Libbox.formatConfig(text)?.value
-                            } catch (t: Throwable) {
-                                // Невалидный конфиг — ожидаемый случай, не шумим error'ом.
-                                Log.d(TAG, "formatConfig failed: ${t.message}")
-                                null
-                            }
-                        }
-                        result.success(r)
-                    }
-                }
-            }
-            // §455 — проверка тела узла ядром: `Libbox.checkConfig()` = parse +
-            // box.New со стабом платформы (experimental/libbox/config.go). Ворота
-            // Save для узла с JSON-источником, который уходит в конфиг дословно
-            // и гейты модели не проходит. Статический Go-метод, живой сервис не
-            // нужен; на Dispatchers.IO — box.New на main = ANR (§122).
-            //
-            // КОНТРАКТ: {"ok": true} — ядро приняло; {"ok": false, "error": текст
-            // ядра} — отвергло. Throw без сообщения — тоже отказ (текст класса).
-            "checkConfig" -> {
-                val text = call.argument<String>("config") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        try {
-                            io.nekohasekai.libbox.Libbox.checkConfig(text)
-                            mapOf("ok" to true)
-                        } catch (t: Throwable) {
-                            Log.d(TAG, "checkConfig rejected: ${t.message}")
-                            mapOf("ok" to false, "error" to (t.message ?: t.toString()))
-                        }
-                    }
-                    result.success(r)
-                }
-            }
-            // §208/§209 — unary снапшот пула round_robin-группы. На Dispatchers.IO
-            // (RPC может блокировать). КОНТРАКТ: null = клиент недоступен (сервис
-            // down / pingClient не поднялся) → Dart рендерит «Pool unavailable» /
-            // Debug API → 409. [] = пул пуст (не round_robin / нет данных). НЕ
-            // затираем null на emptyList — различение критично (§209).
-            "ccGetPool" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.getPool(tag) }
-                    result.success(r)
-                }
-            }
-            "ccSelectOutbound" -> {
-                val cc = BoxService.commandClient
-                val group = call.argument<String>("group") ?: ""
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.selectOutbound(group, tag) ?: false }
-                    result.success(r)
-                }
-            }
-            // §557 (ядро SPEC 106) — вкл/выкл WG/AWG-узла на лету. Успех →
-            // строка состояния узла; отказ ядра → PlatformException с кодом
-            // (not_found / invalid_argument / failed_precondition / unavailable
-            // / error). Dispatchers.IO — unary RPC на main = ANR (§122).
-            "ccSetEndpointEnabled" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                val enabled = call.argument<Boolean>("enabled") ?: true
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc?.setEndpointEnabled(tag, enabled)
-                            ?: mapOf("error" to "error", "message" to "no command client")
-                    }
-                    val err = r["error"]
-                    if (err != null) {
-                        result.error(err, r["message"], null)
-                    } else {
-                        result.success(r["state"] ?: "")
-                    }
-                }
-            }
-            // §613 (ядро SPEC 114) — статус WG/AWG-узла и его пиров. Успех →
-            // map состояния; отказ ядра → PlatformException с кодом
-            // (not_found / invalid_argument / failed_precondition /
-            // unavailable / unimplemented / error).
-            "ccGetWireGuardStatus" -> {
-                val cc = BoxService.commandClient
-                val tag = call.argument<String>("tag") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) {
-                        cc?.getWireGuardStatus(tag)
-                            ?: mapOf("error" to "error", "message" to "no command client")
-                    }
-                    val err = r["error"]
-                    if (err != null) {
-                        result.error(err.toString(), r["message"]?.toString(), null)
-                    } else {
-                        result.success(r)
-                    }
-                }
-            }
-            "ccCloseConnection" -> {
-                val cc = BoxService.commandClient
-                val id = call.argument<String>("id") ?: ""
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.closeConnection(id) ?: false }
-                    result.success(r)
-                }
-            }
-            "ccCloseConnections" -> {
-                val cc = BoxService.commandClient
-                pluginScope.launch {
-                    val r = withContext(Dispatchers.IO) { cc?.closeConnections() ?: false }
-                    result.success(r)
-                }
-            }
-
-            // §207 — обобщённый pprof-снимок через встроенный libbox
-            // `PProfServer` (Способ 1): по требованию поднимаем pprof-http на
-            // loopback, GET /debug/pprof/<pathAndQuery>, гасим. http в проде
-            // не висит. Dart передаёт готовый `pathAndQuery` (профиль + query,
-            // напр. `heap?gc=1`, `goroutine?debug=1`, `profile?seconds=10`) —
-            // вся query-логика в одном месте (Dart), Kotlin лишь проксирует.
-            // Формат файла решает Dart по флагу text/binary (см. writeProfile).
-            //
-            // Безопасность: разбираем имя профиля до `?` и проверяем по
-            // allowlist'у — наружу пропускаем только известные pprof-профили,
-            // не произвольный path.
-            //
-            // CPU `profile?seconds=N` держит соединение N секунд → read-timeout
-            // масштабируем (N*1000 + запас); прочие снимки мгновенны (5s).
-            // result.error на ошибке (занятые порты / pprof активен). IO-поток:
-            // сетевой GET (и до 60s ожидания CPU) нельзя на main.
-            "pprofProfile" -> {
-                val pathAndQuery = call.argument<String>("pathAndQuery")
-                    ?: "goroutine?debug=2"
-                val name = pathAndQuery.substringBefore('?')
-                pluginScope.launch {
-                    try {
-                        if (name !in PPROF_PROFILES) {
-                            throw IllegalArgumentException("unknown pprof profile: $name")
-                        }
-                        val bytes = withContext(Dispatchers.IO) {
-                            // CPU держит соединение `seconds`; вытащим N из query
-                            // для масштабирования read-timeout, иначе мгновенные 5s.
-                            val secs = if (name == "profile") {
-                                Regex("seconds=(\\d+)").find(pathAndQuery)
-                                    ?.groupValues?.get(1)?.toIntOrNull()
-                                    ?.coerceIn(1, 60) ?: 10
-                            } else 0
-                            val readTimeout =
-                                if (name == "profile") secs * 1000 + 5000 else 5000
-                            PProfClient.fetch(pathAndQuery, readTimeoutMs = readTimeout)
-                        }
-                        result.success(bytes)
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "pprofProfile($pathAndQuery) failed", t)
-                        result.error("PPROF_FAILED",
-                            t.message ?: t.javaClass.simpleName, null)
-                    }
-                }
-            }
-
-            // §242/§507 — разбивка PSS процесса для Stats → Memory. AMS, не
-            // Debug.getMemoryInfo: на Android 10+ summary.* у Debug — нули.
-            // IO-поток: обход smaps на большом RSS — сотни мс, на main = ANR.
-            "getMemoryInfo" -> {
-                val appContext = context
-                pluginScope.launch {
-                    try {
-                        val out = withContext(Dispatchers.IO) {
-                            collectProcessMemoryInfo(appContext)
-                        }
-                        result.success(out)
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "getMemoryInfo failed", t)
-                        result.error("MEMINFO_FAILED",
-                            t.message ?: t.javaClass.simpleName, null)
-                    }
-                }
             }
 
             else -> result.notImplemented()
         }
-    }
-
-    /// §669 — runId владельца probe-прогона. Dart-int приезжает Integer или
-    /// Long по величине, поэтому через Number; нет аргумента → 0 (ни одна
-    /// сессия такого id не получает — вызов уйдёт в «stale run»).
-    private fun probeRunId(call: MethodCall): Long =
-        call.argument<Number>("runId")?.toLong() ?: 0L
-
-    /// §242/§507 — PSS-разбивка своего процесса для Stats → Memory sheet.
-    ///
-    /// `Debug.getMemoryInfo()` читает `/proc/self` и на Android 10+ (тем более
-    /// 15+) не заполняет `otherStats`, из которых `getMemoryStat("summary.*")`
-    /// считает java-heap / native-heap / graphics / …. Документация Android
-    /// прямо говорит брать `ActivityManager.getProcessMemoryInfo`. AMS ходит
-    /// dumpsys-путём и видит protected-аллокации.
-    ///
-    /// Если AMS пуст (rate-limit Q+, эмулятор без memtrack) — запас
-    /// `Debug.getMemoryInfo`. Для нулевых `summary.*` — грубые поля той же
-    /// структуры (`dalvikPss` / `nativePss` / `otherPss` / `totalPss`), чтобы
-    /// sheet не показывал семь нулей при живом RSS.
-    ///
-    /// Значения в байтах (фреймворк отдаёт KB). Звать с IO-потока.
-    private fun collectProcessMemoryInfo(context: Context): Map<String, Any> {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE)
-            as? android.app.ActivityManager
-        val fromAm = runCatching {
-            am?.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid()))
-                ?.firstOrNull()
-        }.getOrNull()
-        val mi = if (fromAm != null && fromAm.totalPss > 0) {
-            fromAm
-        } else {
-            android.os.Debug.MemoryInfo().also { android.os.Debug.getMemoryInfo(it) }
-        }
-
-        fun kb(statName: String, fallbackKb: Int = 0): Long {
-            val parsed = mi.getMemoryStat(statName)?.toLongOrNull() ?: 0L
-            val value = if (parsed > 0L) parsed else fallbackKb.toLong()
-            return value * 1024L
-        }
-
-        return hashMapOf(
-            "totalPss" to kb("summary.total-pss", mi.totalPss),
-            // Swap — только summary.total-swap: getTotalSwappedOut{,Pss} @hide,
-            // в public android.jar нет (compileSdk 36).
-            "totalSwap" to kb("summary.total-swap"),
-            "javaHeap" to kb("summary.java-heap", mi.dalvikPss),
-            "nativeHeap" to kb("summary.native-heap", mi.nativePss),
-            "code" to kb("summary.code"),
-            "stack" to kb("summary.stack"),
-            "graphics" to kb("summary.graphics"),
-            "privateOther" to kb("summary.private-other", mi.otherPss),
-            "system" to kb("summary.system"),
-            // Аллоцированный native heap (Go-память ядра + прочая нативка) —
-            // прямой счётчик malloc, не PSS-категория. На Debug.getMemoryInfo
-            // не завязан, в 2.25 не ломался.
-            "nativeHeapAllocated" to android.os.Debug.getNativeHeapAllocatedSize(),
-            "nativeHeapSize" to android.os.Debug.getNativeHeapSize(),
-        )
     }
 
     /// §038 — `getHistoricalProcessExitReasons` lazy reader. На API <30 →
@@ -1930,110 +1024,48 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         }
     }
 
-    /// true, если прямо сейчас активен VPN ДРУГОГО приложения. Наш сервис ещё
-    /// не поднят (мы только собираемся стартовать) → сеть с VPN-транспортом,
-    /// которой владеем НЕ мы, = чужая. Если наш сервис уже не в Stopped — это мы
-    /// сами, не чужой.
-    /// Источник истины: ConnectivityManager + NetworkCapabilities.TRANSPORT_VPN
-    /// (тот же приём, что DefaultNetworkMonitor.isVpn).
-    ///
-    /// §361 — владельца проверяем ЯВНО, а не выводим из статуса сервиса. Прежнее
-    /// допущение «наш сервис в Stopped ⇒ любой VPN чужой» ломается на осиротевшем
-    /// tun: VpnService умер, а его интерфейс остался в системе (в dumpsys —
-    /// `ni{VPN CONNECTED}` c нашим `OwnerUid`). Приложение видело собственный
-    /// брошенный туннель и на каждый Start предлагало «переключиться» с самого
-    /// себя. Всплыло это на §361-фиксе `stopAwait`: тот честно переводит статус в
-    /// Stopped, когда сервиса нет, — и ранний `return false` по статусу перестал
-    /// прикрывать дыру (раньше статус залипал в Started и метод выходил первой
-    /// строкой).
-    ///
-    /// §427 (issue #115) — смотрим ТОЛЬКО `activeNetwork`, а не `allNetworks`.
-    /// `allNetworks` отдаёт все сети фреймворка, включая VPN соседнего профиля
-    /// (Shelter / work profile); Android держит по одному VPN-слоту на ПРОФИЛЬ,
-    /// такой туннель нам не мешает и нашим `establish()` не отзывается, а
-    /// диалог §211 на него срабатывал ложно. `activeNetwork` — дефолтная сеть
-    /// для нашего uid: VPN другого профиля в неё не попадает никогда, VPN
-    /// нашего профиля попадает, если не исключил нас из туннеля (тот редкий
-    /// случай мы перебьём молча, как до §211 — слот всё равно один).
-    /// Публичного API «относится ли сеть к моему профилю» нет, а `ownerUid`
-    /// для чужих сетей редактируется в INVALID_UID.
-    ///
-    /// `getOwnerUid()` публичен с API 30 (в android-10 есть только скрытый
-    /// `getEstablishingVpnAppUid()`): на Android 10 обращение бросает
-    /// `NoSuchMethodError` — это `Error`, не `Exception`, прежний catch его не
-    /// ловил и Start ронял приложение. Гейт на R, ловим Throwable. На 24-29
-    /// деталь недоступна — считаем чужим (консервативно: лишний вопрос юзеру
-    /// безопаснее молчаливого отзыва чужого туннеля).
-    private fun isForeignVpnActive(): Boolean {
-        if (BoxVpnService.currentStatus != VpnStatus.Stopped) return false
-        val cm = BoxApplication.connectivity
-        return try {
-            val n = cm.activeNetwork ?: return false
-            val caps = cm.getNetworkCapabilities(n) ?: return false
-            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-                caps.ownerUid == android.os.Process.myUid()
-            ) {
-                Log.d(TAG, "[vpn §361] skipping our own orphaned VPN network (uid=${caps.ownerUid})")
-                return false
-            }
-            true
-        } catch (t: Throwable) {
-            Log.w(TAG, "isForeignVpnActive: $t")
-            false
-        }
-    }
-
     private fun startVpn(result: MethodChannel.Result) {
-        val act = activity
-        if (act == null) {
+        if (activity == null) {
             result.error("NO_ACTIVITY", "No activity", null)
             return
         }
         // §192 — proxy-режим (port-only, без TUN): НЕ зовём VpnService.prepare()
         // — он зря забирает системный VPN-слот и отзывает чужой активный VPN
         // (onRevoke). Стартуем сервис напрямую; ядро в proxy не зовёт openTun.
-        if (!BootReceiver.hasTun(context)) {
-            BoxVpnService.start(context)
-            result.success(true)
-            return
-        }
-        val intent = VpnService.prepare(act)
-        if (intent != null) {
-            pendingVpnResult = result
-            act.startActivityForResult(intent, VPN_REQUEST_CODE)
-        } else {
-            BoxVpnService.start(context)
-            result.success(true)
+        // §747 — `has_tun` хранит `:bg`; вопрос идёт той же полосой, что
+        // предшествующий `setHasTun`, диалог согласия — на главном потоке.
+        BgClient.onLane {
+            val hasTun = BgClient.callOr(context, "getHasTun", null, true)
+            if (!hasTun) {
+                val ok = startService()
+                BgClient.onMain { result.success(ok) }
+                return@onLane
+            }
+            BgClient.onMain {
+                val act = activity
+                if (act == null) {
+                    result.error("NO_ACTIVITY", "No activity", null)
+                    return@onMain
+                }
+                val intent = VpnService.prepare(act)
+                if (intent != null) {
+                    pendingVpnResult = result
+                    act.startActivityForResult(intent, VPN_REQUEST_CODE)
+                } else {
+                    BgClient.onLane {
+                        val ok = startService()
+                        BgClient.onMain { result.success(ok) }
+                    }
+                }
+            }
         }
     }
 
-    /// Blocking stop: на native-стороне ждём пока setStatus(Stopped) реально
-    /// отработает (после async cleanup libbox-ресурсов), чтобы caller в Dart
-    /// мог последовательно сделать `await stopVPN()` → `await startVPN()`
-    /// без race'а в onStartCommand guard (`status != Stopped` → silent).
-    ///
-    /// §415 — бюджет `BoxVpnService.STOP_AWAIT_TIMEOUT_MS` (9с): если doStop не
-    /// доиграл, возвращаем `false`. Caller (обычно reconnect) сам решит отменить
-    /// или повторить. Значение — общая константа, а не литерал: связь
-    /// «нативный бюджет < Dart-бюджет `_Timeouts.stopVpn`» описана там же.
-    private fun stopVpn(result: MethodChannel.Result) {
-        pluginScope.launch {
-            val ok = try {
-                withTimeout(BoxVpnService.STOP_AWAIT_TIMEOUT_MS) {
-                    BoxVpnService.stopAwait(context).await()
-                }
-                true
-            } catch (e: TimeoutCancellationException) {
-                Log.w(TAG, "[vpn] stopVPN: ${BoxVpnService.STOP_AWAIT_TIMEOUT_MS}ms timeout — native did not report Stopped")
-                false
-            } catch (e: Exception) {
-                Log.e(TAG, "[vpn] stopVPN: exception $e")
-                false
-            }
-            result.success(ok)
-        }
-    }
+    /// Команда старта сервису — вызовом `:bg` на полосе: к этому моменту до
+    /// него дошли все предыдущие записи настроек и «конфиг сохранён».
+    /// Блокирует; звать с полосы.
+    private fun startService(): Boolean =
+        BgClient.callOr(context, "startVpnService", null, false)
 
     // -------------------------------------------------------------------------
     // ActivityAware
@@ -2057,56 +1089,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
 
     /// §707 — сохранить принятый файл (в Downloads или в [target]) и
     /// ответить Dart `{status, where?, name?, error?}`; `name` — имя записи
-    /// в Downloads (итер. 5, Debug API).
+    /// в Downloads (итер. 5, Debug API). §747 — сохраняет `:bg` (сервисный
+    /// клиент ядра); доступ к документу [target] выдан UID приложения.
     private fun taildropSave(tag: String, name: String, target: android.net.Uri?, result: MethodChannel.Result) {
-        val ctx = context
-        pluginScope.launch {
-            val (err, savedName) = withContext(Dispatchers.IO) {
-                runCatching {
-                    if (target == null) Taildrop.saveToDownloads(ctx, tag, name)
-                    else Taildrop.save(ctx, tag, name, target) to null
-                }.getOrElse { (it.message ?: "failed") to null }
-            }
-            if (err == null) Taildrop.dismissReceived(ctx, tag, name)
-            result.success(
-                if (err == null) mapOf(
-                    "status" to "saved",
-                    "where" to (if (target == null) "downloads" else "document"),
-                    "name" to (savedName ?: ""),
-                )
-                else mapOf("status" to "error", "error" to err)
-            )
-        }
+        BgClient.forward(
+            context, "taildropSave",
+            mapOf("tag" to tag, "name" to name, "target" to target?.toString()),
+            result, long = true,
+        )
     }
-
-    /// §707 итер. 5 — снимок входящих [tag] (форма потока вкладки Network) +
-    /// `sha256` у каждого принятого файла (пусто — файла на диске нет или
-    /// каталог узла неизвестен). Блокирующий — звать с IO.
-    private fun taildropInboxWithHashes(cc: BoxCommandClient, tag: String): Map<String, Any>? {
-        val snap = cc.taildropInboxOnce(tag, 3000L) ?: return null
-        val dir = Taildrop.taildropDirectories(ConfigManager.load()).firstOrNull { it.first == tag }?.second
-        @Suppress("UNCHECKED_CAST")
-        val files = (snap["files"] as? List<Map<String, Any>>).orEmpty().map { f ->
-            val name = f["name"] as? String ?: ""
-            val hash = if (dir == null || name.isEmpty()) "" else sha256Hex(java.io.File(dir, name))
-            f + ("sha256" to hash)
-        }
-        return snap + ("files" to files)
-    }
-
-    private fun sha256Hex(f: java.io.File): String = runCatching {
-        if (!f.isFile) return ""
-        val md = java.security.MessageDigest.getInstance("SHA-256")
-        f.inputStream().use { input ->
-            val buf = ByteArray(64 * 1024)
-            while (true) {
-                val n = input.read(buf)
-                if (n < 0) break
-                md.update(buf, 0, n)
-            }
-        }
-        md.digest().joinToString("") { "%02x".format(it) }
-    }.getOrDefault("")
 
     /// §707 — ответы выбора файлов и «Сохранить как».
     private fun onTaildropResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -2138,15 +1129,15 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
             return
         }
         val (tag, peerId, peerName) = p.first
-        val items = Taildrop.openUris(context, uris)
-        if (items.isEmpty()) {
-            result.success(mapOf("status" to "error", "error" to "cant_read"))
-            return
-        }
-        val ok = Taildrop.send(context, tag, peerId, peerName, items)
-        result.success(
-            if (ok) mapOf("status" to "started", "count" to items.size)
-            else mapOf("status" to "error", "error" to "vpn_off")
+        // §747 — файлы открывает и отправляет `:bg` (сервисный клиент ядра);
+        // доступ к выбранным документам выдан UID приложения, не процессу.
+        BgClient.forward(
+            context, "taildropSendUris",
+            mapOf(
+                "tag" to tag, "peer_id" to peerId, "peer_name" to peerName,
+                "uris" to uris.map { it.toString() },
+            ),
+            result, long = true,
         )
     }
 
@@ -2159,8 +1150,10 @@ class VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, ActivityAware,
         val r = pendingVpnResult
         pendingVpnResult = null
         if (resultCode == Activity.RESULT_OK) {
-            BoxVpnService.start(context)
-            r?.success(true)
+            BgClient.onLane {
+                val ok = startService()
+                BgClient.onMain { r?.success(ok) }
+            }
         } else {
             r?.success(false)
         }

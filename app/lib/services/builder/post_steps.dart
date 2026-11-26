@@ -25,7 +25,11 @@ import 'detour_yields.dart' show yieldToBuildDetour;
 import 'domain_resolver_ref.dart';
 import 'if_engine.dart' show Dropped, walk;
 import 'preset_expand.dart';
+import '../../models/rule_tree.dart';
+import '../contract/rule_conditions.dart';
 import 'rule_set_registry.dart';
+import 'rule_tree_emit.dart';
+import 'rule_tree_tags.dart';
 import 'server_list_build.dart' show groupDefaultDropped;
 
 // Barrel stitching the post-step part files into one library via `part`/`part of`.

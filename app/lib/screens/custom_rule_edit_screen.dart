@@ -6,7 +6,7 @@ import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
 import '../services/builder/preset_expand.dart' show PresetNode;
 import '../services/settings_storage.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/url_launcher.dart' as ul;
 import '../widgets/outbound_picker.dart';
 import '../widgets/wifi_entry.dart';
@@ -15,10 +15,14 @@ import '../widgets/wifi_permission_dialog.dart';
 import '../widgets/wifi_saved_picker_sheet.dart';
 import 'app_picker_screen.dart';
 import 'custom_rule_edit/edit_controller.dart';
+import 'custom_rule_edit/sections/conditions_section.dart'
+    show ConditionAssist;
 import 'custom_rule_edit/sections/wifi_section.dart' show WifiHint, wifiHintFromError;
+import 'custom_rule_edit/tabs/dns_tab.dart';
 import 'custom_rule_edit/tabs/params_tab.dart';
 import 'custom_rule_edit/tabs/view_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// Редактор `CustomRule` (spec §030).
 ///
@@ -69,8 +73,12 @@ class CustomRuleEditScreen extends StatefulWidget {
 }
 
 class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late final CustomRuleEditController _ctrl;
+
+  /// §757 — вкладки Params | DNS | View (у пресета — Params | View).
+  late final TabController _tabs;
+  int _tabIndex = 0;
 
   /// §567 — почему SSID сейчас не читается (null — всё в порядке или
   /// причина без подсказки). Проверяется при открытии экрана и при
@@ -88,13 +96,38 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
       displayName: widget.displayName,
       presetNodes: widget.presetNodes,
     );
+    _tabs = TabController(
+        length: _ctrl.kind == CustomRuleKind.preset ? 2 : 3, vsync: this)
+      ..addListener(_onTabChanged);
     WidgetsBinding.instance.addObserver(this);
     unawaited(_refreshWifiHint());
+  }
+
+  /// §757 — уход с Params на DNS / View из JSON-вида (как у окна правила
+  /// лаунчера): тело раскладывается в форму, чтобы DNS видел актуальные
+  /// условия; не раскладывается — Discard (остаться на выбранной вкладке
+  /// без правок JSON) / Keep editing (назад на Params). У json-правила без
+  /// формы вопроса нет — вкладки показывают то, что есть.
+  void _onTabChanged() {
+    final from = _tabIndex;
+    if (_tabs.index == from) return;
+    _tabIndex = _tabs.index;
+    if (from != 0 || !_ctrl.jsonMode) return;
+    final reason = _ctrl.applyJsonToForm();
+    if (reason == null || !_ctrl.formAvailable) return;
+    unawaited(() async {
+      if (await askDiscardJson(context, reason)) {
+        _ctrl.discardJson();
+      } else if (mounted) {
+        _tabs.animateTo(0);
+      }
+    }());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _tabs.dispose();
     _ctrl.dispose();
     super.dispose();
   }
@@ -160,7 +193,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
     // условия. Без NEARBY_WIFI_DEVICES + ACCESS_BACKGROUND_LOCATION sing-box
     // не сможет прочитать SSID и rule не сматчится. Лучше предупредить
     // СЕЙЧАС чем юзер удивится «правило сохранил а не работает».
-    if (_ctrl.wifiNetworks.isNotEmpty) {
+    if (_ctrl.hasWifiCondition) {
       final missing = <String>[];
       if (!await ul.UrlLauncher.checkBackgroundLocationPermission()) {
         missing.add('android.permission.ACCESS_BACKGROUND_LOCATION');
@@ -263,13 +296,15 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
 
   // ─── Wi-Fi pickers (§051 Phase 2) ────────────────────────────────────
 
-  Future<void> _addCurrentWifi() async {
+  /// §757 — Wi-Fi для условия Wi-Fi: текущая сеть, сохранённые, вручную.
+  /// Рамка условия сама дописывает строки SSID / BSSID.
+  Future<List<WifiEntry>> _addCurrentWifi() async {
     final result = await ul.UrlLauncher.getCurrentWifiInfo();
-    if (!mounted) return;
+    if (!mounted) return const [];
     switch (result) {
       case ul.WifiInfoSuccess(:final ssid, :final bssid):
-        _ctrl.addWifiEntry(WifiEntry(ssid, bssid));
         await SettingsStorage.addToWifiHistory(ssid, bssid);
+        return [WifiEntry(ssid, bssid)];
       case ul.WifiInfoError(:final reason, :final missing):
         if (reason == 'permission_missing' ||
             reason == 'fine_location_missing') {
@@ -278,13 +313,13 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
             missing: missing.isNotEmpty ? missing : _defaultWifiMissing,
           );
           if (mounted) unawaited(_refreshWifiHint());
-          return;
+          return const [];
         }
         if (reason == 'location_disabled') {
           _showLocationOffSnackBar();
-          return;
+          return const [];
         }
-        if (!mounted) return;
+        if (!mounted) return const [];
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             duration: const Duration(seconds: 3),
@@ -295,6 +330,7 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
             }),
           ),
         );
+        return const [];
     }
   }
 
@@ -319,20 +355,20 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
     );
   }
 
-  Future<void> _pickSavedWifi() async {
+  Future<List<WifiEntry>> _pickSavedWifi() async {
     final result = await showWifiSavedPickerSheet(
       context,
       excludeRuleId: widget.initial.id,
     );
-    if (result == null || result.isEmpty || !mounted) return;
-    _ctrl.addWifiEntries(result);
+    if (result == null || !mounted) return const [];
+    return result.toList();
   }
 
-  Future<void> _manualAddWifi() async {
+  Future<List<WifiEntry>> _manualAddWifi() async {
     final result = await showWifiManualAddDialog(context);
-    if (result == null || !mounted) return;
-    _ctrl.addWifiEntry(result);
+    if (result == null || !mounted) return const [];
     await SettingsStorage.addToWifiHistory(result.ssid, result.bssid);
+    return [result];
   }
 
   /// §567 — tap по подсказке секции Wi-Fi ведёт туда, где причина
@@ -355,15 +391,16 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
     if (mounted) unawaited(_refreshWifiHint());
   }
 
-  Future<void> _openAppPicker() async {
+  /// §757 — выбор приложений для поля пакетов условия Apps.
+  Future<List<String>?> _openAppPicker(List<String> selected) async {
     final result = await Navigator.push<AppPickerResult>(
       context,
       MaterialPageRoute(
-        builder: (_) => AppPickerScreen(selected: _ctrl.packages.toSet()),
+        builder: (_) => AppPickerScreen(selected: selected.toSet()),
       ),
     );
-    if (result == null || !mounted) return;
-    _ctrl.setPackages(result.packages);
+    if (result == null || !mounted) return null;
+    return result.packages;
   }
 
   void _onBoolVarFailed(String varDisplay) {
@@ -382,12 +419,14 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
     final actions = ParamsTabActions(
       onSave: _save,
       onDelete: _delete,
-      onPickApps: _openAppPicker,
-      onAddCurrentWifi: _addCurrentWifi,
-      onPickSavedWifi: _pickSavedWifi,
-      onManualAddWifi: _manualAddWifi,
-      onOpenWifiPermissions: _onTapWifiHint,
-      wifiHint: _wifiHint,
+      assist: ConditionAssist(
+        pickApps: _openAppPicker,
+        addCurrentWifi: _addCurrentWifi,
+        pickSavedWifi: _pickSavedWifi,
+        manualWifi: _manualAddWifi,
+        onOpenWifiPermissions: _onTapWifiHint,
+        wifiHint: _wifiHint,
+      ),
       onShowCloudMenu: _showCloudMenu,
       onBoolVarFailed: _onBoolVarFailed,
     );
@@ -400,43 +439,44 @@ class _CustomRuleEditScreenState extends State<CustomRuleEditScreen>
           if (didPop) return;
           unawaited(_handleBack());
         },
-        child: DefaultTabController(
-          length: 2,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(getLocalText.s("Edit rule")),
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _handleBack,
-              ),
-              actions: [
-                // §264 — locked-пресет (traffic-processing) нельзя удалить:
-                // delete-иконку скрываем.
-                if (!(_ctrl.preset?.locked ?? false))
-                  IconButton(
-                    tooltip: getLocalText.s("Delete rule"),
-                    icon: Icon(Icons.delete_outline,
-                        color: Theme.of(context).colorScheme.error),
-                    onPressed: _delete,
-                  ),
-                _SaveIconButton(controller: _ctrl, onPressed: _save),
-              ],
-              bottom: TabBar(
-                tabs: [
-                  Tab(text: getLocalText.s("Params")),
-                  Tab(text: getLocalText.s(1, "View")),
-                ],
-              ),
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(getLocalText.s("Edit rule")),
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: _handleBack,
             ),
-            body: TabBarView(
-              children: [
-                ParamsTab(
-                  outboundOptions: widget.outboundOptions,
-                  actions: actions,
+            actions: [
+              // §264 — locked-пресет (traffic-processing) нельзя удалить:
+              // delete-иконку скрываем.
+              if (!(_ctrl.preset?.locked ?? false))
+                IconButton(
+                  tooltip: getLocalText.s("Delete rule"),
+                  icon: Icon(Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error),
+                  onPressed: _delete,
                 ),
-                const ViewTab(),
+              _SaveIconButton(controller: _ctrl, onPressed: _save),
+            ],
+            bottom: TabBar(
+              controller: _tabs,
+              tabs: [
+                Tab(text: getLocalText.s("Params")),
+                if (_tabs.length == 3) Tab(text: getLocalText.s("DNS")),
+                Tab(text: getLocalText.s(1, "View")),
               ],
             ),
+          ),
+          body: FocusSafeTabBarView(
+            controller: _tabs,
+            children: [
+              ParamsTab(
+                outboundOptions: widget.outboundOptions,
+                actions: actions,
+              ),
+              if (_tabs.length == 3) const DnsTab(),
+              const ViewTab(),
+            ],
           ),
         ),
       ),

@@ -207,7 +207,9 @@ class DnsAspectRow {
 /// (inline/srs) внутри [DnsMirrorGroupCard]. Правило может нести до двух
 /// независимых DNS-аспектов — каждый со своим свитчем:
 /// - «Server» — mirror на dedicated DNS-сервер (`RuleDns.enabled`, §117);
-/// - «Force IPv4» — AAAA-глушилка (`RuleDns.forceIpv4`, §256).
+/// - «Force IPv4» — AAAA-глушилка (`RuleDns.forceIpv4`, §256);
+/// - «Block HTTPS/SVCB records» — HTTPS/SVCB-глушилка (`RuleDns.blockHttps`,
+///   §755).
 /// Общий заголовок = имя правила (владелец: один блок, не две карточки).
 class DnsRuleAspectsTile extends StatelessWidget {
   const DnsRuleAspectsTile({
@@ -216,6 +218,7 @@ class DnsRuleAspectsTile extends StatelessWidget {
     this.serverRow,
     this.forceIpv4Row,
     this.fixedIpRow,
+    this.blockHttpsRow,
   });
 
   final String title;
@@ -224,6 +227,9 @@ class DnsRuleAspectsTile extends StatelessWidget {
 
   /// §683 — Answer = Fixed IP (`predefined` с адресами правила).
   final DnsAspectRow? fixedIpRow;
+
+  /// §755 — Block HTTPS/SVCB records (`predefined` на HTTPS/SVCB-запросы).
+  final DnsAspectRow? blockHttpsRow;
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +257,9 @@ class DnsRuleAspectsTile extends StatelessWidget {
             _aspectRow(context, getLocalText.s("Server"), serverRow!),
           if (fixedIpRow != null)
             _aspectRow(context, getLocalText.s("Fixed IP"), fixedIpRow!),
+          if (blockHttpsRow != null)
+            _aspectRow(context, getLocalText.s("Block HTTPS/SVCB records"),
+                blockHttpsRow!),
           if (forceIpv4Row != null)
             _aspectRow(context, getLocalText.s("Force IPv4 (drop AAAA)"), forceIpv4Row!),
           const SizedBox(height: 4),

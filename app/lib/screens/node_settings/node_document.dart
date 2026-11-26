@@ -36,6 +36,7 @@ import '../../models/source_dialect.dart';
 import '../../services/builder/verbatim_body.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
+import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/parser/source_classify.dart';
 
@@ -49,11 +50,7 @@ final class NodeDocumentReady extends NodeDocumentPrep {
       {required this.dialect,
       required this.isDocument,
       this.droppedExtras = false,
-      this.commentsRemoved = false,
       this.nameHint});
-
-  /// §585 — во входе были комментарии `//` или `/* */`; в [text] их нет.
-  final bool commentsRemoved;
 
   /// Текст источника записи в своём диалекте.
   final String text;
@@ -153,7 +150,6 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
     dialect: item.dialect,
     isDocument: isDocument,
     droppedExtras: dropped,
-    commentsRemoved: c.commentsRemoved,
   );
 }
 
@@ -174,7 +170,6 @@ NodeDocumentPrep renameRecordNode(
       dialect: next.dialect,
       isDocument: next.isDocument,
       droppedExtras: base.droppedExtras || next.droppedExtras,
-      commentsRemoved: base.commentsRemoved || next.commentsRemoved,
       nameHint: base.nameHint);
 }
 
@@ -183,7 +178,7 @@ NodeDocumentPrep renameRecordNode(
 bool documentHasNodeTag(String text, SourceDialect dialect, String tag) {
   final Object? v;
   try {
-    v = jsonDecode(text);
+    v = jsonDecode(jsonSourceText(text));
   } catch (_) {
     return false;
   }
@@ -214,7 +209,7 @@ bool _textHasOwnTag(String text, SourceDialect dialect) {
   }
   final Object? v;
   try {
-    v = jsonDecode(text);
+    v = jsonDecode(jsonSourceText(text));
   } catch (_) {
     return false;
   }
@@ -234,7 +229,7 @@ bool _textHasOwnTag(String text, SourceDialect dialect) {
 
 bool _isEmptyArray(String text) {
   try {
-    final v = jsonDecode(text.trim());
+    final v = jsonDecode(jsonSourceText(text.trim()));
     return v is List && v.isEmpty;
   } catch (_) {
     return false;
@@ -243,12 +238,18 @@ bool _isEmptyArray(String text) {
 
 /// Правило тега по виду для JSON-диалектов. Тег не меняется — [text] как
 /// есть (байт в байт); [reencode] — элемент массива (JSON с отступом).
+///
+/// §741 — голое тело с комментариями получает тег правкой текста
+/// ([withJsonTag]): пометки автора остаются. Документ с комментариями при
+/// смене тега пересобирается (комментарии теряются — известное ограничение,
+/// как у правки формой).
 String _withTag(String text, SourceDialect dialect, String newTag,
     {String? oldTag, bool reencode = false}) {
   if (newTag.isEmpty) return text;
+  final plain = uncommentedJson(text);
   final Object? parsed;
   try {
-    parsed = jsonDecode(text);
+    parsed = jsonDecode(plain ?? text);
   } catch (_) {
     return text;
   }
@@ -259,6 +260,10 @@ String _withTag(String text, SourceDialect dialect, String newTag,
       map[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
   if (!isDocument) {
     if (map['tag'] == newTag) return text;
+    if (plain != null && !reencode) {
+      final edited = withJsonTag(text, newTag);
+      if (edited != null) return edited;
+    }
     map['tag'] = newTag;
     return reencode
         ? const JsonEncoder.withIndent('  ').convert(map)

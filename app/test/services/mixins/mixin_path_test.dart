@@ -104,13 +104,16 @@ void main() {
     });
 
     test('список скаляров — «содержит»', () {
-      expect(paths('route.rules[rule_set=Geo sets-2]'), ['route.rules[7]']);
+      // §757 — тег второй ссылки по схеме §6.13 (контракт 1.1.182): `<имя>:<stem>`.
+      expect(paths('route.rules[rule_set=Geo sets:b]'), ['route.rules[7]']);
       expect(paths('route.rules[inbound=mixed-in]'),
           ['route.rules[0]', 'route.rules[2]']);
     });
 
     test('число и bool', () {
-      expect(paths('route.rules[port=443]'), ['route.rules[7]']);
+      // §755 — порты inline-правила на маршрутном правиле (All groups ×2).
+      expect(paths('route.rules[port=443]'),
+          ['route.rules[4]', 'route.rules[5]', 'route.rules[7]']);
       expect(paths('route.rules[ip_is_private=true]'),
           ['route.rules[4]', 'route.rules[5]']);
       expect(paths('route.rules[ip_is_private=1]'), isEmpty);

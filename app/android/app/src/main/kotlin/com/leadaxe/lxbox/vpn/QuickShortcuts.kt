@@ -44,7 +44,7 @@ object QuickShortcuts {
         val sm = ctx.getSystemService(ShortcutManager::class.java) ?: return
 
         val list = mutableListOf<ShortcutInfo>()
-        when (BoxVpnService.currentStatus) {
+        when (TunnelState.status) {
             VpnStatus.Stopped -> list += buildConnect(ctx)
             VpnStatus.Started -> list += buildDisconnect(ctx)
             VpnStatus.Starting, VpnStatus.Stopping -> {

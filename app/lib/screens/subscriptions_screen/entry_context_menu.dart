@@ -14,6 +14,7 @@ import 'folder_picker.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/file_import.dart';
 import '../../widgets/app_bottom_sheet.dart';
+import '../../widgets/dpad_radio_group.dart';
 
 /// Long-press bottom-sheet для записи подписки/сервера. Поведение 1:1 с
 /// прежним `_showContextMenu` — копировать URL, share, update,
@@ -240,7 +241,7 @@ Future<void> showEditSourceDialog(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            RadioGroup<bool>(
+            DpadRadioGroup<bool>(
               groupValue: fileMode,
               onChanged: (v) => setLocal(() => fileMode = v ?? false),
               child: Column(

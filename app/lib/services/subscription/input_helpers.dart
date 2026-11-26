@@ -4,8 +4,11 @@
 
 import 'dart:convert';
 
+import '../../models/node_spec.dart';
+import '../contract/registry.dart';
 import '../parser/engine/section_loader.dart' show MapperSections;
 import '../parser/mappers/uri_pipeline.dart' show pipelineSchemes;
+import '../parser/uri_parsers.dart';
 
 /// URL подписки — то, что приложение СКАЧИВАЕТ своим HTTP-клиентом.
 ///
@@ -17,6 +20,35 @@ import '../parser/mappers/uri_pipeline.dart' show pipelineSchemes;
 bool isSubscriptionUrl(String input) {
   final t = input.trim();
   return t.startsWith('http://') || t.startsWith('https://');
+}
+
+/// Имя параметра кода отказа, в котором едет адрес подписки (контракт
+/// 1.1.176, MAPPER_ENGINE §2.1).
+const kSubscriptionUrlParam = 'subscription_url';
+
+/// Ссылка-УКАЗАТЕЛЬ на подписку: адрес, по которому её надо завести, либо
+/// `null` — вход указателем не является.
+///
+/// Признак — не схема, а КОД ОТКАЗА: ссылка узлом не стала, и первый
+/// параметр, объявленный кодом в реестре, назван [kSubscriptionUrlParam].
+/// Принимает его сторона, которой источник ВСТАВИЛИ (буфер, QR, поле ввода);
+/// в списке ссылок и в теле чужой подписки такая строка остаётся отказом.
+String? subscriptionUrlOfLink(String input) {
+  final t = input.trim();
+  if (!isDirectLink(t)) return null;
+  final verdict = XrayDropVerdict();
+  NodeSpec? node;
+  try {
+    node = parseUri(t, dropped: verdict);
+  } catch (_) {
+    return null;
+  }
+  final reason = verdict.reason;
+  if (node != null || reason == null) return null;
+  final own = ContractRegistry.I.declaredParams(reason.code);
+  if (own.isEmpty || own.first != kSubscriptionUrlParam) return null;
+  final url = reason.params[kSubscriptionUrlParam]?.trim() ?? '';
+  return isSubscriptionUrl(url) ? url : null;
 }
 
 /// §129 — файловая подписка. `url` = `file:<uuid>` (синтетический ключ, а не

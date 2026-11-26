@@ -821,6 +821,27 @@
   "0 (no limit)": {
     "value": "0 (без лимита)"
   },
+  "Datagrams per read": {
+    "value": "Датаграмм за одно чтение"
+  },
+  "How many datagrams a tunnel without a detour reads at once (Linux and Android). Each one keeps a 64 KiB buffer: 8 costs about 1 MiB per tunnel, 128 (the core's own default) about 16 MiB. With many WireGuard nodes choose 1 or 2.": {
+    "value": "Сколько датаграмм туннель без detour читает за раз (Linux и Android). Под каждую держится буфер 64 КБ: 8 стоят около 1 МБ на туннель, 128 (умолчание самого ядра) — около 16 МБ. Если узлов WireGuard много — 1 или 2."
+  },
+  "8 (default)": {
+    "value": "8 (по умолчанию)"
+  },
+  "MTU-sized send buffers": {
+    "value": "Буферы отправки по MTU"
+  },
+  "Diagnostic switch. On: packets read from the tunnel stack get buffers sized for the tunnel MTU. Off: 64 KiB buffers, as in cores before 1.14.4-lx.36.": {
+    "value": "Диагностический переключатель. Вкл.: пакетам из стека туннеля выделяются буферы по MTU туннеля. Выкл.: буферы по 64 КБ, как в ядрах до 1.14.4-lx.36."
+  },
+  "Connected tunnel socket": {
+    "value": "Подключённый сокет туннеля"
+  },
+  "Faster upload for a tunnel with one peer, a fixed server address and no listen port (Linux and Android). Not yet tested on a phone that switches between Wi-Fi and mobile data, so it is off by default.": {
+    "value": "Быстрее отдача у туннеля с одним пиром, постоянным адресом сервера и без listen_port (Linux и Android). На телефоне, который переключается между Wi-Fi и мобильной сетью, пока не проверено, поэтому по умолчанию выключено."
+  },
   "QUIC": {
     "value": "QUIC"
   },
@@ -874,5 +895,11 @@
   },
   "Keep what the core has learned about each encrypted relay across restarts and config changes. Off: every start begins from the defaults and learns again.": {
     "value": "Сохранять то, что ядро узнало о каждом зашифрованном релее, между перезапусками и сменами конфига. Выключено — каждый старт начинает с умолчаний и учится заново."
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "Блокировать записи HTTPS/SVCB"
+  },
+  "Reply empty to HTTPS/SVCB DNS records (RFC 9460) for every domain, so apps such as Chrome do not use ECH and the site name stays visible to domain rules. Turn off to allow ECH; domain rules then miss ECH sites unless FakeIP is on.": {
+    "value": "Отвечать пусто на DNS-записи HTTPS/SVCB (RFC 9460) для всех доменов: приложения вроде Chrome не используют ECH, и имя сайта остаётся видно правилам по домену. Выключите, чтобы разрешить ECH; тогда правила по домену не видят сайты с ECH, если не включён FakeIP."
   }
 }

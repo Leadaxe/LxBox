@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/models/dns_ref.dart';
-import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
+import 'package:lxbox/services/dns/dns_server_resolver.dart';
 
 /// §117 задача 4b — rename тега DNS-сервера: каскад по всем ссылкам
 /// (`renameDnsServerTagRefs` + `renameRuleDnsServerTag`), чтобы
@@ -168,18 +168,18 @@ void main() {
   group('renameRuleDnsServerTag', () {
     test('dns.serverTag правил обновляется; без ссылок — identical', () {
       final rules = <CustomRule>[
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'tg',
           domains: ['t.me'],
           outbound: 'vpn-1',
           dns: const RuleDns(enabled: true, serverTag: 'my-dns'),
         ),
-        CustomRuleSrs(
+        CustomRuleTree.flat(
           name: 'cn',
           srsUrl: 'https://e/x.srs',
           dns: const RuleDns(enabled: false, serverTag: 'my-dns'),
         ),
-        CustomRuleInline(name: 'plain', domains: ['a.com']),
+        CustomRuleTree.flat(name: 'plain', domains: ['a.com']),
       ];
 
       final renamed = renameRuleDnsServerTag(rules, 'my-dns', 'home-router');

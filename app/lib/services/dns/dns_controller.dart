@@ -19,8 +19,8 @@ import '../../models/parser_config.dart';
 // §300 — resolver/ResolvedServer живут в screens/ (§294 их VIEW-слой);
 // контроллер их ВЫЗЫВАЕТ (pure-функции, односторонняя зависимость, не цикл).
 // Перенос в services/ — отдельный шаг, не расширяем scope D1.
-import '../../screens/dns_settings_screen/dns_server_resolver.dart';
-import '../../widgets/outbound_picker.dart' show OutboundOption;
+import 'dns_server_resolver.dart';
+import '../../models/outbound_option.dart' show OutboundOption;
 import '../builder/build_config.dart' show varIntInBounds;
 import '../builder/post_steps.dart';
 import '../builder/preset_expand.dart';
@@ -254,9 +254,7 @@ class DnsController {
       for (final cr in activeRules)
         if (cr.dnsMirrorEligible && !(cr.dns?.enabled ?? false))
           switch (cr) {
-            CustomRuleInline() =>
-              cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
-            CustomRuleSrs() =>
+            CustomRuleTree() =>
               cr.copyWith(dns: cr.dns!.copyWith(enabled: true)),
             _ => cr,
           }
@@ -265,7 +263,8 @@ class DnsController {
     ];
     final mirrorSrsPaths = <String, String>{
       for (final cr in previewRules)
-        if (cr is CustomRuleSrs) cr.id: '<srs>',
+        // §757 — ключ — id кэша набора по ссылке.
+        for (final c in cr.cacheIds) c: '<srs>',
     };
     final unifiedMirrors = applyAllCustomRules(
       RuleSetRegistry(),

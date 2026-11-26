@@ -89,7 +89,7 @@ void main() {
     final r = await chainsHandler(
       req('POST', '/chains', body: {
         'hops': ['direct-out', 'vpn-1'],
-        'idle_timeout': '30s',
+        'enabled': false,
       }),
       ctx(),
     );
@@ -98,7 +98,7 @@ void main() {
     expect(body['tag'], 'chain-1');
     expect(body.containsKey('label'), isFalse); // §594
     expect(body['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
-    expect(body['idle_timeout'], '30s');
+    expect(body['enabled'], isFalse);
 
     final stored = await SettingsStorage.getChains();
     expect(stored.single.tag, 'chain-1');
@@ -212,10 +212,10 @@ void main() {
 
     test('частичный update не трогает прочие поля', () async {
       final r = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'idle_timeout': '1m'}),
+        req('PATCH', '/chains/chain-1', body: {'enabled': false}),
         ctx(),
       );
-      expect(asMap(r)['idle_timeout'], '1m');
+      expect(asMap(r)['enabled'], isFalse);
       expect(asMap(r)['hops'], [{'tag': 'direct-out'}, {'tag': 'vpn-1'}]);
     });
 
@@ -251,39 +251,22 @@ void main() {
       );
     });
 
-    test('strip_evasion трёхзначен: bool / null / отсутствие', () async {
-      final off = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'strip_evasion': false}), ctx());
-      expect(asMap(off)['strip_evasion'], isFalse);
-      // Отсутствие ключа — сохранить явный выбор.
-      final keep = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'enabled': true}), ctx());
-      expect(asMap(keep)['strip_evasion'], isFalse);
-      // null — вернуть умолчание ядра: ключа в storage-форме больше нет.
-      final cleared = await chainsHandler(
-        req('PATCH', '/chains/chain-1', body: {'strip_evasion': null}), ctx());
-      expect(asMap(cleared).containsKey('strip_evasion'), isFalse);
-      final stored = (await SettingsStorage.getChains()).single;
-      expect(stored.stripEvasion, isNull);
-    });
-
-    test('strip — только ключи каталога, неизвестный → 400', () async {
+    test('§761: idle_timeout / strip_evasion / strip не читаются и не хранятся',
+        () async {
       final r = await chainsHandler(
         req('PATCH', '/chains/chain-1', body: {
+          'enabled': false,
+          'idle_timeout': '1m',
+          'strip_evasion': false,
           'strip': {'tls.utls': false},
         }),
         ctx(),
       );
-      expect((asMap(r)['strip'] as Map)['tls.utls'], isFalse);
-      await expectLater(
-        chainsHandler(
-          req('PATCH', '/chains/chain-1', body: {
-            'strip': {'tls.nonsense': true},
-          }),
-          ctx(),
-        ),
-        throwsA(isA<BadRequest>()),
-      );
+      final m = asMap(r);
+      expect(m['enabled'], isFalse);
+      expect(m.containsKey('idle_timeout'), isFalse);
+      expect(m.containsKey('strip_evasion'), isFalse);
+      expect(m.containsKey('strip'), isFalse);
     });
 
     test('rewrite переживает round-trip дословно (null внутри — значимый)',

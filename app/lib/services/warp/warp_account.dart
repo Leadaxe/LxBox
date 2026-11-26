@@ -120,16 +120,15 @@ class WarpAccount {
   ///
   /// Адреса: оба (v4 + v6); allowed_ips = весь трафик. MTU=1280 — рекомендация
   /// Cloudflare для WARP (избегает фрагментации). Тег `WARP`/`WARP+`.
-  /// §142 — [includeReserved]: класть ли client_id в reserved. Plain WARP —
-  /// true (своя регистрация, §025). Обфускация — обычно false (привязка к
-  /// устройству режется; рабочие конфиги все БЕЗ reserved).
+  /// §142 — `reserved` (client_id) генератор не пишет никогда (ни plain, ни
+  /// AWG): DPI режет WARP по client_id (диагностика 2026-11-24). Геттер
+  /// [reserved] остаётся для данных аккаунта, в узел он не идёт.
   ///
   /// §304 — [persistentKeepalive] (секунды) держит NAT-маппинг открытым при
   /// простое (без него UDP-маппинг оператора закрывается за 30–120с → пинг в
   /// err). `null`/`<=0` = не писать keepalive (дефолт: как раньше; генератор
   /// §284 идёт этим путём). Ручная регистрация подставляет 25 из Advanced.
-  String toWireguardUri({bool includeReserved = true, int? persistentKeepalive}) {
-    final res = includeReserved ? reserved : null;
+  String toWireguardUri({int? persistentKeepalive}) {
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(',');
     // §137 — тег с эмодзи (plain = облако). Коллизию контроллер чинит ре-тегом.
     final tag = nodeTag(warpPlus: warpPlus, hasAwg: false);
@@ -138,7 +137,6 @@ class WarpAccount {
       'address': addrs,
       'allowedips': '0.0.0.0/0,::/0',
       'mtu': '1280',
-      if (res != null) 'reserved': res.join(','),
       if (persistentKeepalive != null && persistentKeepalive > 0)
         'keepalive': '$persistentKeepalive',
     };
@@ -154,18 +152,17 @@ class WarpAccount {
   /// Используется когда [awg] задан (обфускация включена): `i1` ~1700b в hex
   /// дружелюбнее провести через INI (`parseWireguardIni` уже читает AWG из
   /// `[Interface]` и эскейпит `<>`/пробелы), формат 1:1 совпадает с тем, что
-  /// эмитит генератор Amnezia 1.5. `reserved` (client_id) идёт в `[Peer]`.
+  /// эмитит генератор Amnezia 1.5.
   ///
   /// Для plain WARP (awg==null) используем короткий [toWireguardUri].
   ///
-  /// §142 — [includeReserved]: обфусцированный узел обычно БЕЗ reserved
-  /// (привязка к устройству режется, рабочие конфиги все без него).
+  /// §142 — `reserved` (client_id) в `[Peer]` не пишется никогда: DPI режет
+  /// WARP по client_id (диагностика 2026-11-24).
   ///
   /// §304 — [persistentKeepalive] (секунды) в `[Peer]` держит NAT-маппинг/сессию
   /// живыми при простое. `null`/`<=0` = не писать (дефолт; генератор §284 идёт
   /// без keepalive). Ручная регистрация подставляет 25 из Advanced.
-  String toWireguardConf({bool includeReserved = true, int? persistentKeepalive}) {
-    final res = includeReserved ? reserved : null;
+  String toWireguardConf({int? persistentKeepalive}) {
     final tag = warpPlus ? 'WARP+' : 'WARP';
     final addrs = [clientV4, if (clientV6.isNotEmpty) clientV6].join(', ');
     final b = StringBuffer()
@@ -197,9 +194,6 @@ class WarpAccount {
       ..writeln('Endpoint = $endpoint');
     if (persistentKeepalive != null && persistentKeepalive > 0) {
       b.writeln('PersistentKeepalive = $persistentKeepalive');
-    }
-    if (res != null) {
-      b.writeln('Reserved = ${res.join(',')}');
     }
     return b.toString();
   }

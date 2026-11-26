@@ -12,6 +12,7 @@ import '../../services/tag_resolver.dart';
 import '../../widgets/lx_code_editor.dart';
 import '../../widgets/node_diagnostics_tab.dart';
 import '../../widgets/tailscale_network_tab.dart';
+import '../../widgets/focus_safe_tab_bar_view.dart';
 
 /// §302 — экран разбора одной ноды подписки: две вкладки.
 ///
@@ -148,7 +149,7 @@ class _NodeInspectScreenState extends State<NodeInspectScreen> {
             ],
           ),
         ),
-        body: TabBarView(
+        body: FocusSafeTabBarView(
           children: [
             _monoBody(context, _json),
             _sourceTab(context),

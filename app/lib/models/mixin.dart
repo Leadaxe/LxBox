@@ -10,6 +10,8 @@ library;
 
 import 'dart:convert';
 
+import '../services/mixins/mixin_legacy_lx_wg.dart';
+import '../services/mixins/mixin_legacy_lx_detour.dart';
 import '../services/parser/uri_utils.dart' show newUuidV4;
 
 /// Глагол миксина. Имя в хранилище = [name] enum'а.
@@ -109,19 +111,27 @@ class Mixin {
       };
 
   /// Терпимое чтение: битые поля — дефолты, отсутствующий `id` — новый.
+  /// §758: старые ключи сна `lx.wg.*` переписываются в `lx.wg.idle.*`
+  /// ([migrateLegacyLxWgMixin]) — ядро с lx.36 их не загружает.
+  /// §761: `lx.mtu_align` → `lx.detour.mtu_align`
+  /// ([migrateLegacyLxDetourMixin]) — ядро с lx.37-rc.2.
   factory Mixin.fromJson(Map<String, dynamic> j) {
     final id = j['id'];
     final name = j['name'];
     final enabled = j['enabled'];
     final target = j['target'];
     final op = j['op'];
+    final opName = op is String ? op : '';
+    final wg = migrateLegacyLxWgMixin(
+        target is String ? target : '', opName, j['value']);
+    final migrated = migrateLegacyLxDetourMixin(wg.target, opName, wg.value);
     return Mixin(
       id: id is String ? id : null,
       name: name is String ? name : '',
       enabled: enabled is bool ? enabled : true,
-      target: target is String ? target : '',
-      op: op is String ? op : '',
-      value: j['value'],
+      target: migrated.target,
+      op: opName,
+      value: migrated.value,
     );
   }
 

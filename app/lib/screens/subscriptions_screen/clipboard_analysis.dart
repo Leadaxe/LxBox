@@ -1,7 +1,6 @@
 import '../../models/node_warning.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/parser/body_decoder.dart';
-import '../../services/parser/json_comments.dart';
 import '../../services/parser/parse_all.dart';
 import '../../services/subscription/input_helpers.dart';
 
@@ -61,6 +60,9 @@ List<NodeWarning> _droppedOf(DecodedBody decoded) {
 }
 
 ClipboardAnalysis analyzeClipboard(String text) {
+  // Контракт 1.1.176 — ссылка-указатель на подписку показывается подпиской:
+  // импорт заведёт её по адресу из ссылки (`addFromInput`).
+  text = subscriptionUrlOfLink(text) ?? text;
   if (isSubscriptionUrl(text)) {
     final uri = Uri.tryParse(text);
     return ClipboardAnalysis(
@@ -117,9 +119,9 @@ ClipboardAnalysis analyzeClipboard(String text) {
   // Раньше здесь была своя эвристика (`startsWith('{') && contains('"type"')`),
   // третья по счёту, и она разошлась с гейтом контроллера: превью обещало
   // «Outbound JSON» там, где импорт отказывал.
-  // §585 — комментарии `//` и `/* */` снимаются тем же правилом, что у
+  // §585/§741 — комментарии `//`, `/* */`, `#` снимает сам `decode`, как у
   // импорта (`addFromInput`).
-  final decoded = decode(uncommentedJson(text) ?? text);
+  final decoded = decode(text);
   if (decoded is JsonConfig) {
     final analysis = _analyzeJson(decoded);
     if (analysis != null) return analysis.withDropped(_droppedOf(decoded));

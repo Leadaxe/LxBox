@@ -53,6 +53,10 @@ class WorkspaceController extends ChangeNotifier {
 
   bool _pendingAutoConnect = false;
 
+  /// §748 — закрыть экраны поверх корня перед [remountAfterExternalWrite].
+  /// Ставит `main()`: навигатором владеет `LxBoxApp`.
+  void Function()? onExternalRemount;
+
   /// Одноразовый флаг «VPN был поднят до загрузки — поднять снова». Читает
   /// новый `HomeScreen` после bootstrap-пересборки.
   /// Сброс к состоянию свежего процесса — между тест-файлами в общей сборке.
@@ -114,6 +118,29 @@ class WorkspaceController extends ChangeNotifier {
     }
   }
 
+  /// §748 — сцену переписали в обход контроллеров `HomeScreen` (импорт LX
+  /// Backup, restore, `POST /backup/import`). Перечитать всё тем же путём,
+  /// что загрузка слота: статические шаги + [generation]++ → `HomeScreen`
+  /// и его контроллеры пересоздаются и читают хранилище заново, а прежние
+  /// становятся `stale` и не пишут (барьер §515) — их снимок в памяти
+  /// затёр бы импортированное первой же мутацией.
+  ///
+  /// VPN не останавливается: меняются настройки, а не слот. Поднятый
+  /// `configDirty` заставляет новый `HomeScreen` пересобрать конфиг.
+  ///
+  /// Экраны поверх `HomeScreen` (Servers, Backup…) получили контроллеры
+  /// прежнего: их список устарел, а правки молча не пишутся (stale). Их
+  /// закрывает [onExternalRemount]. У загрузки слота хука нет: она идёт с
+  /// главного экрана и сама закрывает свой диалог прогресса.
+  Future<void> remountAfterExternalWrite() async {
+    await SettingsStorage.flushToDisk();
+    SettingsStorage.markConfigDirty();
+    await _reloadStateFromDisk();
+    onExternalRemount?.call();
+    _generation++;
+    notifyListeners();
+  }
+
   /// Скопировать сцену в слот [name] и сделать его `current`.
   Future<void> saveAs(String name) async {
     await SettingsStorage.flushToDisk();
@@ -146,6 +173,8 @@ class WorkspaceController extends ChangeNotifier {
         t.groupTemplates,
         varDefaults: {for (final v in t.vars) v.name: v.defaultValue},
       );
+      // §757 — слот без маркера несёт ссылки на прежние теги наборов правил.
+      await SettingsStorage.migrateRuleSetTagRefsIfNeeded(t);
     });
     // §605 — гейты + receiver'ы: набор мог принести другой тумблер приёма.
     await _step('automation', syncAutomationFromStorage);

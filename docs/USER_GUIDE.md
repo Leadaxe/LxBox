@@ -5,6 +5,10 @@ code — about the logic and the order in which to set things up.
 
 > Русская версия: [USER_GUIDE.ru.md](USER_GUIDE.ru.md)
 
+> First time with L×Box: the setup takes seven steps —
+> [Setting up from scratch](#setting-up-from-scratch). When something does
+> not work: [Common problems](#common-problems-symptom-cause-action).
+
 > Advanced tools — Lock config, Raw JSON rules, import rules, Debug API,
 > Automation API, mixins — are described in the
 > [Advanced user guide](ADVANCED_USER_GUIDE.md).
@@ -28,8 +32,9 @@ code — about the logic and the order in which to set things up.
 - [2. Directions sets the exits](#2-directions-sets-the-exits)
   - [Interrupt connections on switch — two checkboxes for two events](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 - [3. Rules sets exceptions and the default exit](#3-rules-sets-exceptions-and-the-default-exit)
+  - [Conditions in different sections must all match](#conditions-in-different-sections-must-all-match)
   - [Presets — a catalog of ready-made rules to copy into Rules](#presets--a-catalog-of-ready-made-rules-to-copy-into-rules)
-  - [A rule can assign a DNS server to its own domains](#a-rule-can-assign-a-dns-server-to-its-own-domains)
+  - [DNS & Resolve decides how a rule's domains resolve](#dns--resolve-decides-how-a-rules-domains-resolve)
   - [Raw JSON and the View tab cover fields the form lacks](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks)
 - [4. DNS decides which server resolves each name](#4-dns-decides-which-server-resolves-each-name)
   - [Group and Shield DNS combine several servers under one tag](#group-and-shield-dns-combine-several-servers-under-one-tag)
@@ -52,7 +57,7 @@ code — about the logic and the order in which to set things up.
   - [A chain needs a recent core and compatible hops](#a-chain-needs-a-recent-core-and-compatible-hops)
 - [IPv6 in the tunnel is off; turn it on only if your network supports it](#ipv6-in-the-tunnel-is-off-turn-it-on-only-if-your-network-supports-it)
 - [VPN Settings configures the core and the tunnel, not servers and routes](#vpn-settings-configures-the-core-and-the-tunnel-not-servers-and-routes)
-  - [System controls tunnel sleep and core memory](#system-controls-tunnel-sleep-and-core-memory)
+  - [System controls core memory and tunnel sleep](#system-controls-core-memory-and-tunnel-sleep)
   - [Core passes settings to the sing-box core](#core-passes-settings-to-the-sing-box-core)
   - [Mode selects the operating mode and tunnel options](#mode-selects-the-operating-mode-and-tunnel-options)
 - [App Settings controls the app's behavior, not the traffic path](#app-settings-controls-the-apps-behavior-not-the-traffic-path)
@@ -61,6 +66,7 @@ code — about the logic and the order in which to set things up.
   - [Subscriptions sets when subscriptions download and which client fetches them](#subscriptions-sets-when-subscriptions-download-and-which-client-fetches-them)
   - [Diagnostics shows Android permissions and turns on debugging](#diagnostics-shows-android-permissions-and-turns-on-debugging)
   - [Automation opens the VPN to commands from other apps](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps)
+- [The app runs as two processes: the window and the VPN](#the-app-runs-as-two-processes-the-window-and-the-vpn)
 - [Common problems: symptom, cause, action](#common-problems-symptom-cause-action)
 - [If something goes wrong — where to look](#if-something-goes-wrong--where-to-look)
 - [Speed Test measures speed to a test server over the current route](#speed-test-measures-speed-to-a-test-server-over-the-current-route)
@@ -71,8 +77,10 @@ code — about the logic and the order in which to set things up.
   - [Share the VPN with other devices over Wi-Fi](#share-the-vpn-with-other-devices-over-wi-fi)
   - [ByeDPI and other local proxies connect as an ordinary server](#byedpi-and-other-local-proxies-connect-as-an-ordinary-server)
   - [Double hop: the last server does not see your IP](#double-hop-the-last-server-does-not-see-your-ip)
+  - [A service closed in your country goes through its own direction](#a-service-closed-in-your-country-goes-through-its-own-direction)
 - [Get WARP adds a server without a subscription](#get-warp-adds-a-server-without-a-subscription)
 - [The server list filters, labels and copies servers as links](#the-server-list-filters-labels-and-copies-servers-as-links)
+  - [Ping is a request through the node, not a TCP check](#ping-is-a-request-through-the-node-not-a-tcp-check)
 - [Regular expressions (regex)](#regular-expressions-regex)
   - [The ! toggle negates the whole pattern](#the--toggle-negates-the-whole-pattern)
   - [Patterns use JavaScript syntax](#patterns-use-javascript-syntax)
@@ -189,6 +197,10 @@ Where: Routing → Tunnel apps. Three modes:
 An app left out of L×Box (not in the Allow-list, or in the Deny-list) goes out
 directly, as without a VPN; L×Box does not see it, and Rules do not apply to it.
 
+The app picker hides system apps; ⋮ → **Show system apps** shows them. In
+Proxy mode there is no tunnel, and the list has no effect. Android reads the
+list when it creates the tunnel, so a change applies after a VPN restart.
+
 L×Box itself does not need to be in the Allow-list: its service connections and
 DNS go past the tunnel over the physical network, and the entry changes
 nothing. If the VPN started working after you added L×Box to the Allow-list,
@@ -268,6 +280,21 @@ directions carry the traffic (section below).
 You add a standalone server by link (`vless://…`, `vmess://…`, `wg://…`),
 QR code or file. It has nothing to update: the entry is static.
 
+Links the app reads: `vless`, `vmess`, `trojan`, `ss`, `hysteria`/`hy`,
+`hysteria2`/`hy2`, `tuic`, `anytls`, `ssh`, `masque`, `socks`/`socks5`,
+`proxy-http`/`proxy-https`, `naive+https`/`naive+quic`, `wireguard`/`wg`,
+`awg`/`amneziawg`, TrustTunnel `tt://` and Amnezia `vpn://`. WireGuard
+`.conf` files and sing-box or Xray JSON go in as text or a file. Service
+lines such as `happ://routing/…` in a subscription are skipped. Other
+schemes are rejected with a note on the entry. A uTLS fingerprint like
+`hellochrome_120` is shortened to `chrome`; an unknown one becomes `chrome`
+with a warning.
+
+A TrustTunnel subscription is the address a TrustTunnel server gives out
+(`https://user:password@host/path`): add it as any subscription URL, the login
+and password from the address are sent to the server. A `tt://` link that
+carries only such an address is added as that subscription.
+
 The **Masquerade** section of your own WireGuard or AmneziaWG server adds
 decoy packets before the handshake: the client sends packets that look like
 QUIC, DNS, STUN or SIP. Where: server screen → Settings → Masquerade.
@@ -296,6 +323,15 @@ gets its own `[Peer]` section; masquerade and AmneziaWG keys are kept.
 A JSON body can hold keys a `.conf` has no place for; the tab lists them
 under the text as "Not in INI". **Edit INI** makes this text the server's
 source and opens Source; the tag and the detour server stay as they are.
+
+The **Source** tab of your own server and of a folder's server shows the
+text it came from: a link, a `.conf` or JSON. Comments in JSON — `//`,
+`/* */` and `#` to the end of the line — are kept with the text: your notes
+on a server stay on Source after pasting, saving and restoring a backup.
+If you paste a whole config, only its nodes (`outbounds`, `endpoints`) are
+kept; the text is then rebuilt and has no comments. The same happens when
+the JSON text is rewritten by the app: Edit JSON on the JSON tab, the
+masquerade section, the Tailscale exit node.
 
 ### Subscription — a provider's server list that updates itself
 
@@ -415,6 +451,15 @@ node appears dimmed and does not reach the config. The choice survives
 subscription updates and provider-side renames. The master switch at the
 left of the bar above the list turns all nodes on or off at once.
 
+A provider sometimes lists the same server several times under different
+names. The app keeps the first entry and drops the repeats: two entries are
+one server when everything except the name matches — address, port, keys,
+transport, TLS settings and the detour. The same server with another SNI or
+transport stays a separate node. Merging works inside one subscription only,
+and there is no switch to turn it off. The line `N duplicates merged into K
+nodes` above the list opens a sheet with a card for every kept server: how
+many repeats it absorbed and under which names.
+
 A short tap on a node opens its breakdown. The JSON tab shows how the node
 goes into the config; the Source tab shows the original subscription
 fragment the node was built from. If import rules changed the node, a
@@ -484,6 +529,22 @@ are checked directly.` In a folder, members' own detours count
 the same way as in the tunnel; when only some of them can be followed, the
 line gives the count. The Diagnostics tab of a node, run with the VPN off,
 follows the same rule and shows the same line under the response.
+
+The **Test actions** button (⋮ next to the speedometer) acts on the results
+of the last test; its items stay grey until a test has produced results.
+**Disable slower than…** turns off the nodes slower than the number you enter
+(Slower than, ms; the orange threshold by default). **Disable unreachable**
+turns off the nodes that failed the test. A folder's menu also has **Delete
+unreachable**, which removes failed members from the folder, and **Sort by
+ping**. Disabled nodes stay in the list dimmed; turn a node back on with its
+switch. Enable rules on the Filters tab turn such nodes back on at the next
+update, and the dialog warns about it.
+
+The test uses the Test URL and timeout of the home-screen ping (see
+[Ping](#ping-is-a-request-through-the-node-not-a-tcp-check)); a folder can set
+its own through a long press on its speedometer → Ping URL & timeout….
+How many nodes are tested at once is set by **Parallel checks** in App
+Settings → General: 10 by default.
 
 The **Settings** tab holds Tag prefix, detour, Update interval, Replace
 with a group (section
@@ -583,7 +644,7 @@ There are three kinds of exit:
 
 A fresh install lists two directions: `vpn-1` is on, `vpn-2` is off. You can
 neither turn off nor delete `vpn-1`; when you delete another direction,
-references to it move to `vpn-1`. The **Add direction** button adds
+references to it move to `vpn-1`, so a working exit always exists. The **Add direction** button adds
 directions: for example, different servers for different jobs.
 
 A direction does not store servers; it selects them from the common pool: all
@@ -620,7 +681,7 @@ options:
 | Mode | How the node is chosen |
 |---|---|
 | **Fastest** | All traffic goes to the single node with the lowest measured latency. |
-| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; latencies of all nodes in the list come from Auto-ping after connect. |
+| **Load balance** | Connections spread across a pool of several live nodes. A session stays on one node by the keys in Sticky session by, by default by app and domain, so rotation does not break connections. With no keys ticked, nodes alternate freely. Only the pool is health-checked; the other nodes in the list show latencies from Auto-ping after connect or the core's own measurements, marked `~`. **View pool** in the auto node's long-press menu lists the pool's slots with their nodes and latencies. When the pool repairs itself, the same list shows it: `quarantine` on a node taken out of rotation for dropping connections, the slot's connections and confirmed failures, and above the slots — how many sticky keys were moved to another slot, how many addresses were marked as the problem, and a freeze with the seconds left — for 15 s after the device wakes, the network changes or the clock jumps the group draws no conclusions. |
 | **Hold until failure** | The current node stays while it works; after a failure the choice moves to the next live one. Auto-ping after connect does not move it. |
 
 How Load balance fills its pool depends on Pool tolerance (ms):
@@ -665,8 +726,9 @@ refuses such an order the same way, with code 409.
 
 ### Interrupt connections on switch — two checkboxes for two events
 
-To move open connections to the new server as soon as the node changes, turn
-on **Interrupt connections on switch**. Without this option, open connections
+**Interrupt connections on switch** moves open connections to the new server
+as soon as the node changes; in a direction it is on by default. With the
+option off, open connections
 keep running through the old server until they close on their own: a download
 finishes through the same exit, a messenger's long-lived socket stays where it
 is. Usually that is what you want.
@@ -698,38 +760,28 @@ in every direction where it was off.
 The **Rules** tab sets which traffic goes to which direction and where the
 rest goes. Where: Routing → Rules → Add rule.
 
-A rule consists of conditions and an action. The **Source** switch sets where
-the conditions come from: Inline — form fields, Remote (.srs) — an external
-list, Raw JSON — a config fragment. The form groups its conditions into
-sections:
+A rule consists of an action and conditions. The **Action** list at the top
+of the editor sets where matched traffic goes: direct, any enabled direction
+or Reject. For a rule with domains the list also has **Resolve only**: the
+rule only resolves the domain, and later rules or Default traffic pick the
+route. Resolve only is for advanced setups.
+
+The **Source** switch sets where the conditions come from: Inline — form
+fields, Remote (.srs) — an external list, Raw JSON — a config fragment. The
+form groups its conditions into sections:
 
 | Section | What it checks |
 |---|---|
-| MATCH | Domains (exact name, suffix, substring), IP subnets (CIDR), Private IP — destination on the local network, Private source IP — source with a local address. Shown when Source = Inline. |
+| APPS | Specific apps, and Package name regex — a pattern on the package name, one per line: `^com\.oplus\.` catches every app of that vendor. |
+| MATCH | Domains (exact name, suffix, substring, Domain regex), IP subnets (CIDR), Private IP — destination on the local network, Private source IP — source with a local address. Shown when Source = Inline. |
 | RULE-SET URL | An external list of domains and IPs in `.srs` format. The app downloads it and checks for updates at the interval in Check for updates; matching runs locally. Shown when Source = Remote (.srs). |
 | PORT | Ports and port ranges. |
-| APPS | Specific apps. |
 | NETWORK & PROTOCOL | Traffic type TCP, UDP or ICMP and the application protocol recognised from the first packets: tls, quic, bittorrent, dns and others. |
+| NETWORK | The type of the current network: Any, Wi-Fi, Cellular or Ethernet. With Wi-Fi you can list networks by name (SSID) or BSSID: "at home → direct". **Metered networks only** limits the rule to mobile data and Wi-Fi marked as metered in Android settings. |
 | INBOUND | The entrance through which the packet reached L×Box: the VPN tunnel or the local proxy. The proxy option appears in the Proxy and VPN + Proxy modes. |
-| WI-FI NETWORK | Name (SSID) or BSSID of the current Wi-Fi network: "at home → direct". |
 
-Fields inside MATCH combine with OR; sections combine with each other with
-AND. The rule "app Chrome, domain `*.youtube.com`, network UDP" fires only when
-all three conditions match.
-
-The **Action & Resolve** gear next to the direction picker sets the rule's
-action. There are two modes:
-
-- **Route to outbound** — matched traffic goes to the chosen direction, direct
-  or block. The Resolve first box resolves the domain first and then picks the
-  route.
-- **Resolve only** — the rule only resolves; later rules or Default traffic
-  pick the route. The mode is for advanced setups.
-
-When Resolve first or Resolve only is on, the Resolve options panel opens.
-Strategy sets the address family (`ipv4_only`); DNS server is auto by default,
-following the route; Advanced DNS options cover cache, TTL, timeout and client
-subnet.
+Below the conditions sits the **DNS & Resolve** section: it sets how the
+rule's domains resolve, see [DNS & Resolve](#dns--resolve-decides-how-a-rules-domains-resolve).
 
 Typical rules:
 
@@ -749,6 +801,23 @@ install `vpn-1` is selected.
 > directly, and the VPN looks broken. The Allow-list decides whether traffic
 > enters L×Box; Default traffic decides where it goes next. To send traffic
 > through the tunnel, choose a direction in Default traffic.
+
+### Conditions in different sections must all match
+
+A rule fires only when every filled-in section matches; inside MATCH one
+matching field is enough. A rule with an app and a domain list catches only
+that app's connections to those domains. To send an app through a direction
+**or** send domains through it, make two rules with the same action.
+
+Three more facts decide whether a rule catches the traffic you expect:
+
+- Domain suffix `youtube.com` covers `youtube.com` and all its subdomains;
+  the field does not accept `*.` and a leading dot is dropped.
+- The first matching rule wins, so a narrow rule goes above a broad one: a
+  rule that sends one Russian site through the tunnel sits above Ru internet
+  segment.
+- Domain conditions need the domain. Traffic Processing detects it from the
+  first packets; an app that connects by bare IP matches only IP rules.
 
 ### Presets — a catalog of ready-made rules to copy into Rules
 
@@ -803,7 +872,7 @@ The **Outbound** parameter sets the exit for matching traffic: direct, block
 or a direction. Ru internet segment, Russia-only services, BitTorrent,
 Private IPs, VoWiFi and Google push have it, with direct as the default. On
 Unknown traffic the parameter label is lowercase — `outbound` — and the
-default is reject. The same exit changes right in the preset's row on the
+default is direct too; Reject is the strict option. The same exit changes right in the preset's row on the
 Rules tab, without opening the editor.
 
 The other parameters:
@@ -844,27 +913,60 @@ A preset missing from the installed app version opens with the message
 Preset not found: the config build skips the rule. Delete it with the Delete
 rule button or update the app to a version that has this preset.
 
-### A rule can assign a DNS server to its own domains
+### DNS & Resolve decides how a rule's domains resolve
 
-To have one rule decide both where traffic goes and which server resolves its
-domains, turn on **Send DNS to dedicated server** in the DNS section of the
-rule editor. The box adds a paired DNS rule: DNS queries for this rule's
-domains go to the chosen server, `google_udp` by default. You do not build the
-DNS rule by hand. Choosing a dedicated server also turns on **Resolve before
-routing** with the same server: with FakeIP above the rule, the DNS rule alone
-never sees the query, and the resolver that matters is the one used before
-routing. Clear the box if you do not want that.
+The **DNS & Resolve** section at the bottom of the rule editor sets which
+answer apps get for the rule's domains. The section appears when the rule has
+a condition DNS can check: a domain, an app, a source address, a network or
+an inbound. A rule of bare IP subnets has no DNS section: a DNS query carries
+no destination IP to match.
 
-In the same section, the **Force IPv4 (drop AAAA)** box answers AAAA queries
-for the rule's domains locally, and traffic goes over IPv4. It needs no
-dedicated DNS server. The box helps on networks with broken IPv6.
+**Answer** has three modes:
+
+- **Default — queries go to DNS Final**: the rule does not touch DNS.
+- **Dedicated server**: DNS queries for the rule's domains go to the chosen
+  server, `google_udp` by default. The app builds the paired DNS rule itself.
+  The choice also turns on Resolve before routing with the same server: with
+  FakeIP above the rule, the DNS rule alone never sees the query. Clear the
+  box if you do not want that.
+- **Fixed IP**: the rule answers its domains with the given addresses, like
+  a line in a hosts file. The field takes one IPv4 or IPv6 address; the + button
+  turns it into a list, one address per line. With only IPv4 given, AAAA
+  queries get an empty answer, and the other way round.
+
+Fixed IP is the way to point a name at an address: `nas.home` → `192.168.1.10`,
+or a site → the address of a server you trust. The DNS tab lists such a rule in
+the From routing rules group; its ✕ returns Answer to Default.
+
+**Force IPv4 (drop AAAA)** answers AAAA queries for the rule's domains
+locally, and traffic goes over IPv4. It needs no dedicated server and helps on
+networks with broken IPv6. With Fixed IP the box is inactive: the addresses
+already set the family.
+
+**Block HTTPS/SVCB records** answers HTTPS and SVCB queries for the rule's
+domains with an empty response. Chrome and other browsers take the ECH key
+from these records and hide the real site name behind a shared one such as
+`cloudflare-ech.com`; the rule then never sees its domain, and the traffic
+leaves by the default route. With the box on, the browser sends the name in
+the clear and the rule matches. The box ticks itself when you fill in
+domains; it is unavailable without a domain condition. To block these records
+for every site, add the **Block HTTPS/SVCB records** preset (Routing → Rules →
++). Apps that run their own DNS-over-HTTPS (a fixed Secure DNS provider in
+Chrome, DoH in Firefox) ask past the tunnel's DNS and are not affected.
+
+**Resolve before routing** looks up the domain's address before the rule
+picks a route, so IP rules and the address family apply. **Strategy** sets
+the family (`ipv4_only` and others); by default it follows the DNS settings.
+The collapsed **Advanced** block holds the DNS server for this lookup (auto —
+by the route), Disable cache, Disable optimistic cache, Rewrite TTL, Query
+timeout and Client subnet.
 
 Limitations the editor itself warns about:
 
-- the pairing is unavailable with port and protocol filters: they are unknown
-  at the time of the DNS query;
-- with a rule-set the pairing works only if the list contains domains: IP-only
-  lists do not match DNS queries.
+- with port, protocol or network filters the DNS options still work, but on
+  the rule's domains on any port and protocol: a DNS query carries neither;
+- with a rule-set they work only if the list contains domains: IP-only lists
+  do not match DNS queries.
 
 A rule can also be written as a raw sing-box JSON fragment (Raw JSON in
 Source): [Advanced user guide → Raw JSON](ADVANCED_USER_GUIDE.md#raw-json-and-the-view-tab-cover-fields-the-form-lacks).
@@ -969,16 +1071,16 @@ them, and each has a switch. Rules in the list come from four sources:
   `dns.rules` JSON fragment, an advanced-level tool;
 - from presets — an enabled routing preset brings its own DNS rules;
 - from the template — the baseline configuration rules;
-- mirrors of routing rules — rules with Send DNS to dedicated server (see the
-  Rules section); they appear as the From routing rules group, and you edit
+- mirrors of routing rules — rules whose DNS & Resolve section sets
+  Dedicated server, Fixed IP or Force IPv4; they appear as the From routing rules group, and you edit
   them in the parent rule.
 
 The Ru internet segment preset resolves ru domains with its own `dns_ru` group
 of three paths: UDP through the preset's direction, DoT through `vpn-1`, DoH
 direct. A failed node on one path does not stop ru sites.
 
-For the task "these domains → that DNS", enabling the DNS section in a routing
-rule is simpler than writing a DNS rule by hand.
+For the task "these domains → that DNS", Dedicated server in the DNS & Resolve
+section of a routing rule is simpler than writing a DNS rule by hand.
 
 ---
 
@@ -1024,14 +1126,28 @@ from the settings of whatever you assign the detour to.
 | A whole folder | Folder → **Settings** tab | All folder members |
 | One folder member | Folder → the member | This member only |
 
-The window has four sections:
+The window has five sections:
 
 - **None (direct)** — no detour;
 - **This folder** — members of the same folder; the section appears in the
   settings of a folder and of its members;
 - **Directions** — detour directions; the section appears when such
   directions exist;
+- **Replace groups** — subscriptions and folders replaced with a group by
+  Replace with a group, in any mode; the section appears when such groups
+  exist. The group of the source you are assigning the detour to is not
+  shown;
 - **Standalone servers** — standalone servers.
+
+The window does not offer servers of a subscription, members of another
+folder or auto nodes. A subscription's servers change with every
+update, and a member of another folder lives under that folder's settings;
+a detour through a rotating pool gives an unpredictable path. The Directions
+section lists only enabled directions with Use as detour. To go out through
+such a server anyway, add it as a standalone server (Copy URI in its
+long-press menu, then add the link), or select it in a direction with Use as
+detour and pick that direction. To go out through a whole subscription,
+replace it with a group and pick the group in Replace groups.
 
 A subscription or folder whose servers go through intermediate links shows
 two more boxes in its Settings tab. A link is a server another server of the
@@ -1080,6 +1196,12 @@ pinned to one server.
 
 The checkbox takes no other role away from the direction: it stays a target
 for rules and for Default traffic. Pickers mark it with the ⚙ icon.
+
+`vpn-1` has no Use as detour checkbox. It is the main direction: the
+default exit, and the place where references go when another direction is
+deleted, so it stays a plain exit and never becomes an intermediate server.
+Use `vpn-2` or a direction of your own as the switchable intermediate
+server.
 
 ### The whole detour chain runs inside one tunnel
 
@@ -1343,8 +1465,8 @@ Resolve strategy: you change it by hand in the Traffic Processing preset (which
 cannot be turned off), and Strategy in Routing → DNS. `prefer_ipv6` suits a
 network with full IPv6.
 
-A user rule has its own resolve strategy: Action & Resolve (the gear next to
-Action) → Resolve first → Strategy. By default the rule inherits Strategy
+A user rule has its own resolve strategy: rule editor → DNS & Resolve →
+Resolve before routing → Strategy. By default the rule inherits Strategy
 from Routing → DNS.
 
 Order of enabling:
@@ -1373,8 +1495,8 @@ The screen has three tabs:
 
 | Tab | What it configures |
 |---|---|
-| System | Dropping connections on a node switch, WireGuard tunnel sleep, core memory, tunnel pause while the screen is off |
-| Core | sing-box core parameters: log, certificates, network, virtual interface, TLS fragmentation |
+| System | Core memory, tunnel pause while the screen is off |
+| Core | sing-box core parameters: log, certificates, network, virtual interface, TLS fragmentation, sniff guard, WireGuard tunnel sleep, MASQUE idle timeout |
 | Mode | Operating mode, local proxy, tunnel options |
 
 The defaults work without changes; the sign that a group needs changing is
@@ -1383,71 +1505,28 @@ named under each group below. Changes take effect at different times:
 | What you changed | When it applies |
 |---|---|
 | Memory limit, Keep VPN on exit | Immediately |
-| WireGuard connections, the Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
+| The Core tab, local proxy options, System HTTP proxy | After a VPN restart. These changes alter the config, and while the VPN runs the home screen shows the banner `Config changed — restart VPN to apply`. |
 | Tunnel sleep mode, Allow VPN bypass | After a VPN restart that you make yourself: the home screen shows the same banner, but Auto-restart VPN on settings change does not apply these settings. |
 
 You can leave the restart after config changes to the app: App Settings →
 General → **Auto-restart VPN on settings change**. The app then restarts the
 running VPN itself whenever the new config differs from the running one.
 
-### System controls tunnel sleep and core memory
+### System controls core memory and tunnel sleep
 
 The **System** tab decides how much of the phone's resources the VPN spends
 while traffic is low or absent. Where: VPN Settings → System. The tab holds
-two groups: WireGuard connections and Optimization.
-
-#### WireGuard connections puts idle WireGuard tunnels to sleep
-
-The **WireGuard connections** group puts WireGuard and AmneziaWG tunnels to
-sleep when no traffic has passed through them for a while, and wakes them on
-the first request. Sleep frees memory and saves battery; the cost is that the
-first connection through a woken tunnel waits longer than usual. Where: VPN
-Settings → System → WireGuard connections.
-
-The group splits tunnels into two kinds. A tunnel on the active route is the
-node selected in a direction, or a node in the pool of an auto twin: the group
-that picks the direction's node by itself when the Include auto (urltest)
-checkbox is on in the direction editor (see
-[Directions](#2-directions-sets-the-exits)). The other
-WireGuard nodes from subscriptions and folders are off the route: no traffic
-goes to them until someone selects them.
-
-| Option | What it does | Default |
-|---|---|---|
-| **Suspend idle tunnels** | Puts off-route tunnels to sleep after idle time. Options: Off, 30 seconds, 2 minutes, 5 minutes. | 30 seconds |
-| **Suspend active-route tunnels** | Also puts tunnels on the active route to sleep after a long silence, for example at night. Options: Off, 5, 15, 30 minutes, 1 hour. The first connection after sleep takes one extra round trip to the server. | 5 minutes |
-| **Lazy tunnel build** | Builds a tunnel on the first request to the node, not at VPN start. With dozens of WireGuard nodes it saves memory; the first connection to a node waits for the build. | On |
-| **Built tunnels limit** | How many tunnels stay built at the same time: 0 (no limit), 3, 5, 8, 12. The core tears down the extra ones and builds them again on request. | 5 |
-
-The three lower options work only while Suspend idle tunnels is on. At Off
-their rows grey out, tunnels do not sleep, and the app does not pass lazy
-build to the core: the core builds tunnels by its own rules. Built tunnels
-limit also requires Lazy tunnel build to be on. After a change the app shows
-`Applies on next connect.`
-
-A direction's auto twin has its own node check. Where: direction editor →
-Include auto (urltest). The group tests the pool's nodes once per Interval
-(`15m` by default). Idle timeout (`30m` by default) is the time without
-traffic through the group after which the tests stop. If Suspend active-route
-tunnels is shorter than Idle timeout, a test wakes a sleeping tunnel for one
-handshake. With the defaults this is what happens: pool tunnels fall asleep
-after 5 minutes of silence and wake for every test while traffic goes through
-the group.
-
-| Situation | What to do |
-|---|---|
-| The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
-| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3 |
-| Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
-| Tunnels must not sleep at all | Suspend idle tunnels → Off |
+one group, Optimization, with two settings: Memory limit and Tunnel sleep
+mode. WireGuard tunnel sleep is on the Core tab:
+[WireGuard](#wireguard-puts-idle-wireguard-tunnels-to-sleep).
 
 #### Memory limit is a threshold for the core's own memory
 
 The **Memory limit** setting is a memory threshold the VPN core watches.
 The number is compared with the memory of the core itself (its Go runtime),
-not with the whole app process: the core, the interface and the loaded
-libraries share one process, and the libraries alone take about 140 MB, so
-the figure on the Statistics card is never the core's alone. The core's own
+not with the whole app process: the process that runs the core also holds
+the loaded libraries, about 140 MB, so the figure on the Statistics card is
+never the core's alone. The core's own
 figure is in Statistics → Memory → **Core memory**, with the threshold next
 to it when a number is chosen. Where: VPN Settings → System → Optimization →
 Memory limit. The default is Auto (recommended); a change applies to the
@@ -1469,7 +1548,7 @@ Debug → OOM, set Auto first; what else to check is described in
 #### Tunnel sleep mode pauses the whole tunnel on a screen event
 
 The **Tunnel sleep mode** setting decides when the core pauses the tunnel to
-save battery. Unlike WireGuard connections, it acts on the whole tunnel and
+save battery. Unlike the WireGuard settings, it acts on the whole tunnel and
 fires not on idle time but when the screen turns off or Doze starts. Where:
 VPN Settings → System → Optimization → Tunnel sleep mode. Applies from the
 next VPN connection.
@@ -1486,8 +1565,8 @@ notifications go missing, switch back to Never sleep (recommended).
 
 ### Core passes settings to the sing-box core
 
-The **Core** tab shows the sing-box core parameters, grouped into four
-sections: General, Network, TUN and TLS Fragmentation. Where: VPN Settings →
+The **Core** tab shows the sing-box core parameters as seven cards: General,
+Network, TUN, TLS Fragmentation, Sniff guard, WireGuard and QUIC. Where: VPN Settings →
 Core. The app saves the values when you leave the screen and rebuilds the
 config on the home screen. What it reports depends on two conditions:
 
@@ -1534,6 +1613,12 @@ and on a mobile network that loses connection setup packets it is not enough.
 If sites through direct on a mobile network do not open on the first try,
 raise the value to `20s` or `30s`.
 
+The **Align MTU to the path** setting picks the packet size for a node that
+runs over a tunnel: behind a detour or in a chain. **Clamp** (default) sets
+the size where the node has none and lowers values that do not fit; **Fill**
+only sets it where it is missing; **Off** leaves node values as they are.
+The core never raises a value.
+
 #### TUN sets the addresses and parameters of the virtual interface
 
 The **TUN** section describes the virtual network interface through which the
@@ -1546,14 +1631,25 @@ turned on here too, but the decision and the order of steps are described in
 | **IPv4 address** | The tunnel's IPv4 address in CIDR form | `172.16.0.1/30` |
 | **Enable IPv6** | Gives the tunnel an IPv6 address; see the IPv6 section | Off |
 | **IPv6 address** | The tunnel's IPv6 address; applies only when Enable IPv6 is on | `fdfe:dcba:9876::1/126` |
-| **Custom tunnel routes** | Sends all IPv4 and IPv6 into the tunnel with explicit range halves (`0.0.0.0/1`, `128.0.0.0/1`, `::/1`, `8000::/1`) instead of the core's default routes | Off |
+| **Split default route** | Sends all traffic into the tunnel as two half-ranges per address family instead of one default route. The traffic is the same; the setting adds no routes of its own. | Off |
+| **Bypass the tunnel** | Address ranges (CIDR) that skip the tunnel and the core entirely. Suggestions: `192.168.0.0/16` home LAN, `10.0.0.0/8`, `169.254.0.0/16`, `fe80::/10`. | Empty |
 | **TUN interface** | The system name of the interface | `lxbox` |
 | **MTU** | The largest packet size on the tunnel interface; 9000 is the sing-box default and fits any network, since the core re-sends TCP at the real network MTU | `9000` |
 | **Auto route** | The core manages the routing table by itself | On |
 | **Strict route** | The on-screen hint warns: `May break connectivity on some devices` | Off |
 | **Stack** | The tunnel's network stack: `system`, `gvisor` (in user space), `mixed` | `system` |
 
-Turn on Custom tunnel routes only if the default routing works incorrectly.
+Turn on Split default route only if the device ignores the VPN's default
+route.
+
+**Bypass the tunnel** suits a home NAS or a media server on the local
+network: large transfers go straight to the network and do not load the
+core. Traffic to these addresses goes without the VPN, and routing rules,
+DNS hijack and Statistics do not see it. Do not add networks you reach
+through a VPN server, the FakeIP pool (`198.18.0.0/15`) or the tunnel's own
+address: the app drops an entry that is not a CIDR or covers the tunnel
+address and warns about it in the build report. The list applies after a
+full VPN restart.
 
 #### TLS Fragmentation splits the first hop's TLS handshake
 
@@ -1570,13 +1666,15 @@ off by default. Where: VPN Settings → Core → TLS Fragmentation.
 | **Fallback delay** | The wait time when automatic detection fails. Applies only if TLS Fragment or TLS Record Fragment is on. The app replaces a value the core cannot parse with `500ms`. | `500ms` |
 | **Mixed-case SNI** | Changes the letter case in the server name: `WwW.gOoGle.CoM`. Servers accept any case (RFC 6066); it helps only against letter-by-letter name matching. | Off |
 
-The options act on the first hop only: the server the phone connects to
-directly. Hops behind a detour and in a chain run inside the tunnel, and the
-classifier does not see their TLS. Exceptions:
+The options act only on servers the phone connects to directly. A server
+with a detour runs its TLS inside the hop, where the classifier does not see
+it; there [Sniff guard](#sniff-guard-hides-the-server-name-from-relays-that-redirect-by-it)
+decides. Exceptions:
 
-- REALITY nodes get neither fragmentation nor Mixed-case SNI: a REALITY server
-  does not accept a split ClientHello, and the server name must match byte for
-  byte;
+- REALITY nodes do not get Mixed-case SNI: the server matches the name byte
+  for byte. Fragmentation applies to them like to other nodes; if a REALITY
+  server stops accepting the split handshake, set the option to **Off** on
+  that server or its subscription;
 - NaiveProxy and MASQUE nodes over HTTP/3 do not get fragmentation;
 - Mixed-case SNI leaves Punycode parts of the name (`xn--…`) untouched.
 
@@ -1589,10 +1687,89 @@ and for one server (the server's Settings tab, **TLS** section, under
 Detour). Each option is resolved on its own: server, then
 subscription or folder, then the global section; **Default** takes the value
 from the level above, and the row shows which one. **Off** on a server turns
-the option off for it even when it is on globally. A checkbox set on a REALITY
-server itself does fragment it; the global and subscription/folder levels
-still skip REALITY. A server behind a detour gets nothing — its section says
-so.
+the option off for it even when it is on globally. A server behind a detour
+gets nothing — its section says so.
+
+#### Sniff guard hides the server name from relays that redirect by it
+
+The **Sniff guard** section protects a node behind a relay or router that
+reads the server name (SNI) from the first handshake packet and redirects
+the connection by that name. Such a relay sends a node with a masked SNI
+(REALITY, WARP, a fake SNI) to the wrong address, and the node looks dead.
+The core hides the first packet and learns from connection outcomes which
+paths need it. Where: VPN Settings → Core → Sniff guard.
+
+| Option | What it does | Default |
+|---|---|---|
+| **TLS method** | Record fragment — several TLS records, no delay; Fragment — TCP segments with a pause; Delay — two pieces with a 300 ms pause; Off — no protection. | Record fragment |
+| **QUIC method** | For MASQUE, Hysteria2, TUIC, XHTTP over HTTP/3 and AWG with QUIC masquerade. Decoy byte — one junk byte before the first packet, servers drop it; Delay — the second handshake packet waits 300 ms; Off. | Decoy byte |
+| **Only nodes with a masked SNI** | Protects only nodes whose SNI differs from the server address. Off: every node that supports the protection gets it. | On |
+| **Remember relays across restarts** | Keeps what the core has learned about each relay across restarts and config changes. Off: every start learns again. | Off |
+
+Paths through direct, SSH and SOCKS start unprotected; paths through other
+relays start protected. The core switches a path when a node fails one way
+and connects the other. The decoy byte is never sent through a SOCKS relay.
+Node checks use the same protection as the tunnel.
+
+#### WireGuard puts idle WireGuard tunnels to sleep
+
+The **WireGuard** card puts WireGuard and AmneziaWG tunnels to
+sleep when no traffic has passed through them for a while, and wakes them on
+the first request. Sleep frees memory and saves battery; the cost is that the
+first connection through a woken tunnel waits longer than usual. Where: VPN
+Settings → Core → WireGuard.
+
+The card splits tunnels into two kinds. A tunnel on the active route is the
+node selected in a direction, or a node in the pool of an auto twin: the group
+that picks the direction's node by itself when the Include auto (urltest)
+checkbox is on in the direction editor (see
+[Directions](#2-directions-sets-the-exits)). The other
+WireGuard nodes from subscriptions and folders are off the route: no traffic
+goes to them until someone selects them.
+
+| Option | What it does | Default |
+|---|---|---|
+| **Suspend idle tunnels** | Puts off-route tunnels to sleep after idle time. Options: Off, 30 seconds, 2 minutes, 5 minutes. | 30 seconds |
+| **Suspend active-route tunnels** | Also puts tunnels on the active route to sleep after a long silence, for example at night. Options: Off, 5, 15, 30 minutes, 1 hour. The first connection after sleep takes one extra round trip to the server. | 5 minutes |
+| **Lazy tunnel build** | Builds a tunnel on the first request to the node, not at VPN start. With dozens of WireGuard nodes it saves memory; the first connection to a node waits for the build. | On |
+| **Built tunnels limit** | How many tunnels stay built at the same time: 0 (no limit), 3, 5, 8, 12. The core tears down the extra ones and builds them again on request. | 5 |
+
+The three lower options work only while Suspend idle tunnels is on. At Off
+their rows grey out, tunnels do not sleep, and the app does not pass lazy
+build to the core: the core builds tunnels by its own rules. Built tunnels
+limit also requires Lazy tunnel build to be on.
+
+Three more options work whether or not tunnels sleep. They apply to tunnels
+without a detour, on Android (and Linux):
+
+| Option | What it does | Default |
+|---|---|---|
+| **Datagrams per read** | How many datagrams a tunnel reads at once: 128, 32, 8, 2, 1. Each one keeps a 64 KiB buffer: 8 costs about 1 MiB of memory per tunnel, 128 (the core's own default) about 16 MiB. | 8 |
+| **MTU-sized send buffers** | A diagnostic switch. Off returns 64 KiB send buffers per packet, as in cores before 1.14.4-lx.36. | On |
+| **Connected tunnel socket** | More upload speed for a tunnel with one peer, a fixed server address and no listen port. A server that moves to a new address is heard only after the next handshake retry. Not yet tested on a phone that switches between Wi-Fi and mobile data. | Off |
+
+A direction's auto twin has its own node check. Where: direction editor →
+Include auto (urltest). The group tests the pool's nodes once per Interval
+(`15m` by default). Idle timeout (`30m` by default) is the time without
+traffic through the group after which the tests stop. If Suspend active-route
+tunnels is shorter than Idle timeout, a test wakes a sleeping tunnel for one
+handshake. With the defaults this is what happens: pool tunnels fall asleep
+after 5 minutes of silence and wake for every test while traffic goes through
+the group.
+
+| Situation | What to do |
+|---|---|
+| The first connection through a WireGuard node after a pause waits noticeably longer | Suspend active-route tunnels → Off: the selected node does not sleep |
+| There are dozens of WireGuard nodes, and the core hits Memory limit | Built tunnels limit → 3; Datagrams per read → 1 or 2 |
+| Every new node answers with a delay when you switch | Lazy tunnel build → off: the app stops passing lazy build to the core, and the core builds tunnels by its own rules |
+| Tunnels must not sleep at all | Suspend idle tunnels → Off |
+
+#### QUIC closes idle MASQUE tunnels
+
+The **QUIC** card holds **MASQUE idle timeout**: a MASQUE tunnel that
+carried no traffic for this long closes and reconnects on next use. Options:
+Off (default), 2, 5, 15 and 30 minutes. A node's own idle timeout wins.
+Where: VPN Settings → Core → QUIC.
 
 ### Mode selects the operating mode and tunnel options
 
@@ -1645,6 +1822,7 @@ App Settings → General.
 | Home-screen shortcut | A hint without a switch: shortcuts on the app icon. | — |
 | Check for updates on launch | Asks github.com for a new version once every 24 hours. | set by your answer to the question on first launch |
 | Auto-ping after connect | Pings the nodes of the current direction 5 seconds after connecting. | on |
+| Parallel checks | How many servers the ping and Test servers measure at once, 1 to 100. Fewer requests look quieter to the network; more finish faster. | 10 |
 | Node budget | How many nodes the app holds in all: manual servers and folder members first, the rest is shared between enabled subscriptions. A subscription above its share keeps its first nodes and shows «N of M nodes» with ⚠. Above 1000 the app may freeze or be killed by the system. | 1000 |
 | Haptic feedback | Vibrates when you tap the connect button, pick a node, refresh a subscription by hand, and when the core stops responding. | on |
 | Backup & restore | Opens the screen that moves settings through a file. | — |
@@ -1809,7 +1987,7 @@ to the screen, the app re-reads the state.
 |---|---|---|
 | Battery optimization | Whether L×Box is excluded from battery optimization | Android may suspend the VPN while idle. A tap brings up the system prompt to exclude L×Box; on some firmware, the general optimization list opens instead. |
 | Notifications | Whether notifications are allowed | Android may restrict the VPN service. A tap requests the permission; after a refusal, it opens the app settings. |
-| Location (background) | Background location access | Rules with the WI-FI NETWORK condition cannot see the network name. The caption names the cause: Precise location permission missing — precise location is not selected; Location is turned off — location is off. |
+| Location (background) | Background location access | Rules that list Wi-Fi networks in the NETWORK section cannot see the network name. The caption names the cause: Precise location permission missing — precise location is not selected; Location is turned off — location is off. |
 | Nearby Wi-Fi devices | Access to nearby Wi-Fi devices, required on Android 13 and later | The network name and BSSID are unavailable. |
 | App info (OEM power settings) | Nothing: the row leads to the system App info screen | — |
 
@@ -1820,10 +1998,11 @@ battery restrictions. Where these switches are depends on the manufacturer:
 Xiaomi, Samsung, Oppo, Huawei and Google Pixel hide them in different
 places.
 
-Location (background) and Nearby Wi-Fi devices are required by rules with
-the WI-FI NETWORK condition and by recording of visited networks: without
-them, Android returns `<unknown ssid>` instead of the network name. The
-condition is described in [Rules](#3-rules-sets-exceptions-and-the-default-exit).
+Location (background) and Nearby Wi-Fi devices are required by rules that
+list Wi-Fi networks by name and by recording of visited networks: without
+them, Android returns `<unknown ssid>` instead of the network name. A rule
+that checks only the network type (Wi-Fi, Cellular, Ethernet) or Metered
+networks only needs neither permission. The NETWORK section is described in [Rules](#3-rules-sets-exceptions-and-the-default-exit).
 
 The **Developer** section is for troubleshooting — your own or at the
 developer's request in an issue:
@@ -1834,7 +2013,7 @@ developer's request in an issue:
 | Lock config (debug) | Actions in the interface do not rebuild the config. Visible while Debug API is on. | off |
 | Forward sing-box logs | Writes the core log to Debug → Log, Core filter. Applies after an app restart. | off |
 | Verbose (TRACE/DEBUG) | Adds the detailed TRACE and DEBUG levels to the core log. The switch is active while Forward sing-box logs is on; no lines appear until the app restarts after Forward sing-box logs is turned on. | off |
-| Auto-record visited Wi-Fi networks | Remembers Wi-Fi networks for WI-FI NETWORK rules. | off |
+| Auto-record visited Wi-Fi networks | Remembers Wi-Fi networks for the NETWORK section of rules. | off |
 
 **Debug API** and **Lock config (debug)** serve debugging from a computer:
 the server, token, port and config pin — [Advanced user guide → Debug API](ADVANCED_USER_GUIDE.md#debug-api).
@@ -1860,10 +2039,10 @@ while you reproduce the problem and turn it off right after.
 6. Copy the log with Copy log in the Debug screen menu and turn off
    Verbose (TRACE/DEBUG).
 
-**Auto-record visited Wi-Fi networks** builds the network list for rules
-with the WI-FI NETWORK condition. A network where the phone stayed for 5
+**Auto-record visited Wi-Fi networks** builds the network list for the
+NETWORK section of rules. A network where the phone stayed for 5
 minutes or longer enters the Pick saved list of the rule editor: Routing →
-Rules → rule → WI-FI NETWORK → Pick saved. Short connections in passing are
+Rules → rule → NETWORK → Wi-Fi → Pick saved. Short connections in passing are
 not recorded. The list is stored only on the phone. Without the option, only
 the Add current and Manual buttons add to it.
 
@@ -1873,6 +2052,83 @@ the Add current and Manual buttons add to it.
 
 The **Automation** tab opens the VPN to commands and events of Tasker,
 MacroDroid and other apps: [Advanced user guide → Automation tab](ADVANCED_USER_GUIDE.md#automation-opens-the-vpn-to-commands-from-other-apps).
+The AI assistants section of the same tab lets an AI assistant check why an
+address does not open, route an app and switch connections:
+[AI assistants and your network](AI_ASSISTANT.md).
+
+---
+
+## The app runs as two processes: the window and the VPN
+
+Since 2.25.23 L×Box is two Android processes, and each one ends when it is no
+longer needed. A loaded library cannot be unloaded from a live process; only
+ending the process returns its memory. Before the split, the interface stayed
+in memory next to the tunnel after the window was closed.
+
+| Process | What lives in it |
+|---|---|
+| `com.leadaxe.lxbox:bg` | The VPN service and the sing-box core, the notification, the Quick Settings tile, automation, the Taildrop windows. |
+| `com.leadaxe.lxbox:ui` | The window: every screen of the app. It does not load the core and gets its data from `:bg`. |
+
+Which process is alive depends on two things: whether the VPN is on and
+whether the window is open.
+
+| State | Processes | Memory, MB |
+|---|---|---|
+| VPN on, window never opened (started from the tile or by automation) | `:bg` | about 105 |
+| VPN on, window open | `:ui` + `:bg` | about 220 |
+| VPN on, window closed | `:bg` | about 110 |
+| VPN off, window open | `:ui` + `:bg` without the core | about 115 |
+| VPN off, window closed | none | 0 |
+
+The figures were measured on an Android 16 emulator; on a phone they differ
+with the config and the load. While the window is open, two processes take
+more than one did. The gain comes when the window is closed: memory returns
+to the `:bg` figure, where it used to stay at about 240 MB.
+
+Swiping the app away from the recent apps closes the window and leaves the
+VPN running. Stop and then swipe frees everything.
+
+**What the memory of `:bg` consists of.** The core takes most of it: its code
+(the `libbox` library, about 29 MB) and its working memory — connections, DNS
+cache, rules — shown as **Core memory** in Statistics → Memory. The rest is
+the Android runtime and the system libraries every process loads; the app's
+own service code is about 1.5 MB. Memory limit is compared with Core memory,
+not with the process figure (see
+[Memory limit](#memory-limit-is-a-threshold-for-the-cores-own-memory)).
+
+**What the Memory sheet shows.** A tap on the memory card in Statistics opens
+the Memory sheet. Every figure belongs to `:bg`, the process that runs the
+core, not to the window. A tap on a row copies its value.
+
+| Group, row | What it means |
+|---|---|
+| Process → RSS | All physical memory of the process; the same figure as on the card. Libraries shared with other apps are counted in full, so it is the largest number. |
+| Process → Core memory | The core's own memory, reported by its Go runtime. With a Memory limit set, the threshold stands next to it: `42 MB / 200 MB`. |
+| Process → Total PSS | The process memory with shared libraries divided among the apps that use them. Android's Running services shows this figure. |
+| Process → Swap | Memory the system moved to compressed swap. Shown only when above zero. |
+| Breakdown → Native heap | Memory of native code. The core's working memory is here: WireGuard buffers, connections, caches. |
+| Breakdown → Java/Dalvik heap | Memory of the app's own service code. |
+| Breakdown → Graphics | Graphics buffers; close to zero, since `:bg` has no interface. |
+| Breakdown → Code | Loaded code: the core library `libbox` and system libraries. |
+| Breakdown → Stack, System, Other | Thread stacks, memory the system attributes to the process, and what fits no other category. |
+| Native heap → Allocated | Native memory in use right now. |
+| Native heap → Reserved | Native memory taken from the system; larger than Allocated, the spare is kept for the next requests. |
+| Core runtime → Goroutines | Parallel tasks inside the core; grows with connections and tunnels. |
+| Core runtime → Connections in / out | Open connections: incoming from apps, outgoing to servers. |
+
+"How much the app takes" is Total PSS; "how much the core takes" is Core
+memory. If Core memory is small while Native heap and RSS keep growing,
+send a dump (Debug → Share dump): it looks like a leak or too many WireGuard
+tunnels.
+
+**How to check.** Android Settings → Developer options → Running services →
+L×Box lists the live processes by name. With the VPN on and the window
+closed it shows "1 process and 1 service" and the process
+`com.leadaxe.lxbox:bg`. The line "Main process in use" under it is Android's
+standard caption for the process that holds the service; it does not mean
+the window is still alive. A live window is a second row,
+`com.leadaxe.lxbox:ui`.
 
 ---
 
@@ -1888,6 +2144,20 @@ That was not the cause: Default traffic = VPN was, if it changed at the same
 time. L×Box's own service traffic and DNS bypass the tunnel; L×Box does not
 need the tunnel.
 
+**You picked a direction or a server on the home screen, but traffic goes elsewhere.**
+The direction list on the home screen chooses which direction you see and
+which server that direction uses; it does not send traffic there. Traffic
+goes where Rules send it, and the rest goes to Default traffic. A tap on a
+server changes the server of the direction shown, and traffic reaches it
+only if a rule or Default traffic points to that direction. To move all
+traffic, change **Default traffic** (Routing → Rules, the last row).
+
+**Different apps need to go through different servers.**
+Make one direction per exit: Routing → Directions → Add direction, then pick
+its server on the home screen or limit it with Node filter (regex). Then add
+one rule per app in Routing → Rules: the app in APPS, Action = its
+direction. Apps without a rule follow Default traffic.
+
 **Only the browser needs the VPN; everything else goes direct.**
 Tunnel apps → Allow-list with only the browser in the list; Default traffic =
 VPN. L×Box does not see the other apps.
@@ -1897,10 +2167,12 @@ Tunnel apps → Off; Default traffic = VPN; two rules in Rules: ads → Block,
 `.ru` → Direct.
 
 **After a node switch, a download or call keeps going through the old server.**
-Open connections stay on the server where they started until they close. To
-make a node switch break them, turn on **Interrupt connections on switch**.
-There are two checkboxes: in a direction for any switch, in an auto group for
-automatic switches. Which one to turn on is in the
+Open connections stay on the server where they started until they close,
+unless **Interrupt connections on switch** breaks them. There are two
+checkboxes: in a direction for any switch (on by default), in an auto group
+for automatic switches (off by default). If connections stay on the old
+server after a manual switch, check that the box in the direction was not
+turned off. Details are in the
 [Directions](#interrupt-connections-on-switch--two-checkboxes-for-two-events)
 section.
 
@@ -1938,8 +2210,9 @@ update the subscription.
 
 **After a direction switch, pings disappeared or turned grey with `~`.**
 Each direction has its own measurements: directions have different test
-addresses and timeouts. A grey number with `~` is the latest measurement from
-another direction, shown for reference. Run a mass ping in the current
+addresses and timeouts. A dimmed number with `~` is the latest measurement from
+another direction or from the core's check of an auto group, shown for
+reference. Run a mass ping in the current
 direction, and the numbers become its own.
 
 **The subscription's "Auto | Best server" entry shows as a single row.**
@@ -1947,6 +2220,91 @@ This is an auto node: one entry with a pool of servers inside and automatic
 selection. The row shows the mode and contents, for example `🔀 [15/7]`. You
 do not need to expand it into separate servers: the core keeps to the live
 ones by itself.
+
+**All servers show ERR, yet the same servers work in another client.**
+L×Box resolves server names with **Default Domain Resolver** (Routing →
+DNS). A resolver that goes through the tunnel cannot answer before the tunnel
+is up, and the tunnel needs the server's address first: no node connects.
+Set Default Domain Resolver to a server that goes direct and works on this
+network: `dns_shield` (default), `google_doh` or `cloudflare_dot`. Plain UDP
+servers go through the tunnel and do not fit there. If names resolve, check
+the ping itself:
+[Ping is a request through the node](#ping-is-a-request-through-the-node-not-a-tcp-check).
+
+**The VPN stops in the background on Xiaomi, Samsung, Oppo, Huawei and similar phones.**
+The manufacturer's firmware closes background apps on top of Android's battery
+optimization. Check four things:
+
+1. App Settings → Diagnostics → **Battery optimization** is green.
+2. App Settings → Diagnostics → **App info (OEM power settings)** → battery:
+   no restrictions. On Xiaomi and HyperOS also turn on Autostart.
+3. Lock L×Box in the recent apps list, so the firmware cleaner does not close
+   it.
+4. VPN Settings → Mode → **Keep VPN on exit** is on: without it a swipe from
+   the recent apps stops the VPN.
+
+An empty Debug → Crashes after such a stop points at the firmware: the list
+records only crashes of the core, and a kill by the system leaves no report.
+The stop reason `Another VPN app took the system VPN slot` means something
+else: another VPN app, often one with Always-on, took the only system VPN
+slot.
+
+**The VPN does not start: `validate dns rule[N]: Legacy Address Filter Fields in DNS rules is deprecated`.**
+A DNS rule points at a rule-set of IP ranges only, and with FakeIP or Force
+IPv4 in the config the core refuses such a rule. Form rules of bare IPs get
+no DNS section, so the error comes from a Remote (.srs) rule whose list holds
+only IPs (GeoIP) with Dedicated server, Fixed IP or Force IPv4, or from a user
+rule on the DNS tab that points at such a list. In that rule set Answer =
+Default and clear Force IPv4, or delete the DNS rule.
+
+**The VPN does not start: `initialize cache-file: timeout`.**
+The previous core instance has not released its cache file yet. The app
+deletes the cache file and tries once more by itself; FakeIP addresses,
+nodes chosen in groups and the cache of downloaded rule lists start over.
+If the start still fails, stop L×Box from Android settings (App info → Force
+stop) and start the VPN again. Routing → DNS → **Clear DNS cache** clears
+FakeIP addresses and cached answers from inside the app and reloads the VPN.
+
+**Rules for apps do not work in Proxy mode.**
+In Proxy mode apps connect to the local proxy, and the core does not learn
+which app opened the connection. Conditions in APPS and the Tunnel apps list
+have no effect there. Use VPN or VPN + Proxy mode for rules by app. To tell
+proxy traffic apart, use the INBOUND section of a rule. A second proxy port
+is added with a mixin: [Mixins](#mixins-keep-your-edits-through-rebuilds).
+
+**Apps on the Deny-list have no internet while Android's "Block connections without VPN" is on.**
+A Deny-list app goes past the tunnel, and with this Android setting nothing
+goes past the VPN. Remove the app from the Deny-list and add a rule for it
+in Routing → Rules with Action = direct: its traffic enters L×Box and goes
+out directly.
+
+**A foreign site goes direct through Ru internet segment.**
+The preset also checks the address against Russian IP ranges (GeoIP
+IP-range fallback): a site hosted in Russia matches even with a foreign
+domain. Add a rule with the site's domains and the direction you need, and
+drag it above Ru internet segment. Turning off GeoIP IP-range fallback in
+the preset's Params removes the check for every site.
+
+**A leak test shows the address 172.16.0.1.**
+It is the address of the tunnel interface on the phone itself (VPN Settings
+→ Core → TUN → IPv4 address), not your public IP. Browsers reveal local
+addresses over WebRTC. To stop WebRTC from reaching STUN servers past the
+proxy, add a rule with protocol `stun` in NETWORK & PROTOCOL and Action =
+Reject.
+
+**Statistics shows 400 MB and more, while Memory limit is lower.**
+The Statistics card shows the memory of the whole app process. Memory limit
+is compared with the core's own memory: Statistics → Memory → Core memory.
+The VPN runs in the process `com.leadaxe.lxbox:bg`, and the window in
+`com.leadaxe.lxbox:ui`; closing the window ends the second one. Details:
+[The app runs as two processes](#the-app-runs-as-two-processes-the-window-and-the-vpn).
+
+**A new version does not install: "App not installed" or signatures do not match.**
+The Google Play build is signed with Google's key; builds from GitHub and
+F-Droid are signed with the developer's key and replace each other freely.
+One cannot be installed over the other. To change the channel: Backup &
+restore → Export, remove the app, install it from the other source and
+import the file.
 
 **After an app crash, the VPN does not start.**
 After a core crash, the app resets the core's service caches on the next start:
@@ -1965,15 +2323,20 @@ Diagnostic tools, from simple to detailed:
 | Ping and the ⚠ icon | Home screen | ERR: the node does not answer. ⚠: other servers go out through the node and fail with it; tap to see which ones. `no route`: a tunnel without a route to the internet (WireGuard whose allowed IPs cover less than half of the address space, for example a couple of private networks; OpenVPN or OpenConnect with Only its own networks); the ping goes to an internet address, so such a node is not pinged. |
 | Stats | Statistics, while the VPN is on | Traffic per direction: where the bytes go. |
 | Conns | Statistics | Live connections: app, host, rule, chain of exits. Connections with traffic in one direction only are highlighted: replies get lost on the way, for example when the carrier cuts the protocol. |
+| URL Check | ≡ → Diagnostics, with the VPN on | A real request to an address through the current routing, from any app or a chosen one: DNS, route, connection and HTTP answer step by step; the step that failed is marked. From scratch skips the DNS cache and opened connections. |
 | Profiler | Statistics | A real-time recording of connections and DNS resolves, with filters by app, domain and IP: which domain fails to resolve, which direction a request took, where an app connects. For DNS groups you see which members answered and which stayed silent. |
 | Log | Debug (side menu) | The app and core log. **Verbose (TRACE/DEBUG)** in App Settings → Diagnostics turns on the detailed log; the switch is inactive until Forward sing-box logs is on, and the lines appear after the app restarts. The Log tab links there. |
 | Crashes, OOM, Profiling | Debug | Core crash reports, core memory snapshots on low memory, pprof profiles for the developer. |
 
+For an issue, the **Share dump** button in the top bar of the Debug screen
+sends one file with the config, settings, subscriptions and the log. The file
+holds server keys and subscription links as they are: send it only to the
+developer, not to a public chat.
+
 If the phone gets hot or uses too much memory, open VPN Settings → System →
 Optimization → **Memory limit**: Auto sets no threshold and is the right
 choice in most cases; a number there is compared with the core's own
-memory, shown as Core memory in Statistics → Memory. The System →
-WireGuard connections section puts idle
+memory, shown as Core memory in Statistics → Memory. The Core → WireGuard card puts idle
 WireGuard tunnels to sleep.
 
 ---
@@ -1981,7 +2344,7 @@ WireGuard tunnels to sleep.
 ## Speed Test measures speed to a test server over the current route
 
 The **Speed Test** screen measures latency, download speed and upload speed
-between the phone and a test server. Where: ≡ → Speed Test. With the VPN on,
+between the phone and a test server. Where: ≡ → Diagnostics → Speed Test. With the VPN on,
 requests go through the tunnel and the routing rules decide where each one
 exits; with it off, they go directly. The line above the results shows the
 route:
@@ -2226,6 +2589,28 @@ the config keeps no direct path to it.
 If a chain `[A, B]` already exists, delete it: it adds nothing to the detour,
 and B stays in sight as a standalone server.
 
+### A service closed in your country goes through its own direction
+
+Services such as Gemini, AI Studio, ChatGPT and Claude check the country of
+the address they see and refuse some countries. Send only them through a
+server in a country where they work; the rest keeps its usual route.
+
+1. Routing → Directions → Add direction, for example `ai`. On the home screen
+   pick a server in a suitable country for it.
+2. Routing → Rules → Add rule: Action = `ai`, MATCH → Domain suffix — the
+   service's domains, one per line: `gemini.google.com`,
+   `aistudio.google.com`, `generativelanguage.googleapis.com` for Google;
+   `chatgpt.com`, `openai.com` for ChatGPT; `claude.ai`, `anthropic.com` for
+   Claude.
+3. Drag the rule above Ru internet segment and other broad rules.
+4. For the service's app add a second rule: the app in APPS, Action = `ai`.
+   One rule with both the app and the domains would catch only that app's
+   connections to those domains.
+
+If a page loads only in part, Statistics → Conns shows which hosts it opens:
+add the missing ones to the rule. A service can refuse a server's address
+even in the right country; then try a server of another provider.
+
 ---
 
 ## Get WARP adds a server without a subscription
@@ -2269,12 +2654,40 @@ Cancel and a tap outside the dialog leave the clipboard untouched. The key
 stays in the link: the node is stored in this same form, and without the key it
 would not survive a restart.
 
+### Ping is a request through the node, not a TCP check
+
+The ping in the server list is the time of an HTTP request to the **Test
+URL** made through the node: the core connects to the server, the server
+opens the address, and the answer comes back. The default Test URL is
+`https://www.gstatic.com/generate_204` with a 5000 ms timeout. A long press
+on the speedometer button on the home screen opens **Ping Settings**: preset
+addresses (Google 204, Cloudflare, Apple, Firefox, Yandex, YouTube), the Test
+URL and Timeout (ms) fields, for all directions or only the current one.
+The home-screen ping works while the VPN is on; with the VPN off, test nodes
+with the speedometer of a subscription or folder.
+
+`ERR` means the request did not finish within the timeout: the server did not
+answer, refused the connection, or could not open the Test URL. Other clients
+often show a TCP ping — the time to open a connection to the server's port.
+That number is lower, and it is there even when the protocol behind the port
+does not work. A node with `ERR` here can still carry traffic, and the other
+way round:
+
+- the server's side blocks the Test URL (some servers block Google) — every
+  node shows `ERR`, yet sites open. Pick another preset in Ping Settings;
+- the timeout is too short for a slow chain or mobile network — raise
+  Timeout (ms);
+- the server names of the nodes cannot be resolved — see
+  [All servers show ERR](#common-problems-symptom-cause-action) in Common
+  problems.
+
 Latency measurements are stored per direction. Each direction has its own test
 URL and timeout, so "180 ms" from different tests are different quantities.
 Switching directions does not wipe the other results. If a node has no
-measurement in the current direction yet, the row shows the latest measurement
-from another direction — dimmed and marked `~`: the number exists, but a
-different test produced it.
+measurement in the current direction yet, the row shows the latest
+measurement from another direction or from the core's own checks of an auto
+group — dimmed and marked `~`: the number exists, but a different test
+produced it.
 
 ---
 
@@ -2455,7 +2868,8 @@ While connected, the notification carries **Stop** and **🔄 Restart** buttons.
 With a running Tailscale node that allows Taildrop it also carries **📋 Send**: a
 small window over the current app sends the clipboard text (or a link, to open
 it there) to one of your devices. App Settings → General → Quick connect chooses
-which buttons are shown; all by default.
+which buttons are shown; all by default. The notification text names the
+active node or group; it has no speed counters.
 
 Automation apps — Tasker, MacroDroid and others — turn the VPN on and off
 and switch servers by events: [Advanced user guide → Automation](ADVANCED_USER_GUIDE.md#automation-the-vpn-turns-on-by-events).
@@ -2523,7 +2937,7 @@ check box. Where: Backup & restore → Export.
 | Category | What it includes | Default |
 |---|---|---|
 | Server lists | Subscriptions, folders, standalone servers, hop chains. The file holds no subscription nodes: subscriptions download again. | On |
-| Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard connections parameters. | On |
+| Routing | Rules, directions, Default traffic, Tunnel apps, operating mode (Mode), DNS settings, WireGuard tunnel sleep parameters. | On |
 | App settings | App settings and VPN Settings values, ping parameters, subscription auto-update, Wi-Fi network history, WARP accounts, node order. | On |
 | VPN system toggles | Autostart, Keep on exit, background mode, Allow VPN bypass, Auto redirect, Memory limit, the core log and its verbose levels. | On |
 | Debug API config | Debug API settings together with the access token. | Off |

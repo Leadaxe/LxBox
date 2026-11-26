@@ -34,7 +34,7 @@ milliseconds. `startTailscaleSSHSession` is not used.
 | Called from | `scripts/build-local-apk.sh` and CI (`ci.yml` → the android job → “Fetch sing-box-lx core”) |
 | The AAR in git | NO (~110 MB as of lx.25; `app/android/app/libs/` is in `.gitignore`); `build.gradle.kts` → `implementation(files("libs/libbox.aar"))` |
 
-**The current pin: `v1.14.4-lx.35`** (see `app/android/libbox.version`) — lx.1
+**The current pin: `v1.14.4-lx.37`** (see `app/android/libbox.version`) — lx.1
 plus XHTTP HTTP-version parity (**SPEC 104**, lx.2), Vision on top of VLESS
 Encryption (**SPEC 105**, lx.3), the runtime WG/AWG endpoint toggle
 (**SPEC 106**, lx.4: `CommandClient.setEndpointEnabled`, `endpointState =
@@ -44,7 +44,7 @@ default without `xmux` moved to `max_connections 3` (lx.6), three MASQUE hangs f
 control channel on port 443 from the first connection (**SPEC 111**, lx.9),
 the headroom Tailscale needs on a direct UDP path restored in the AWG
 wireguard-go (**SPEC 112**, lx.10), one more `stable` sync (lx.11), lx.12 and
-lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2, lx.30-rc.3, lx.30, lx.31, lx.32, lx.33 and lx.34–lx.35 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
+lx.13-rc.1, lx.13, lx.14, lx.15, lx.16–lx.18, lx.19–lx.21, lx.22–lx.23, lx.24-rc.1/rc.2, lx.24, lx.25, lx.26, lx.27, lx.28, lx.29, lx.30-rc.1, lx.30-rc.2, lx.30-rc.3, lx.30, lx.31, lx.32, lx.33, lx.34–lx.35, lx.36, lx.37-rc.1, lx.37-rc.2, lx.37-rc.3 and lx.37 (below). The Java surface of lx.11 is identical to lx.8 (`javap` over both
 `classes.jar`). The `lx.1` layers: **SPEC 097**, **SPEC 098**, **SPEC 101** and
 the upstream sync to sing-box **1.14.2** (**SPEC 102**).
 
@@ -1344,6 +1344,43 @@ v2.9.0 were prepared (MASQUE symbols were verified with `strings libbox.so`).
   and in CI.
 - ⚠ In production, use **only the official release AAR** (see gotcha 3).
 
+## The chain as a `detour` rewrite (`v1.14.4-lx.37-rc.2`, not pinned yet)
+
+Core SPEC 165. LxBox is ready in the branch of
+[task 761](spec/tasks/761-core-rc2-chain-detour.md); the pin stays
+`v1.14.4-lx.37-rc.1` until the rc2 AAR is out.
+
+- **No link copies.** At load time a chain sets `detour` of every node it reaches on
+  position ≥ 1 (the node itself or every leaf of a group there, picked or not,
+  except `direct`/`block`) to the hop below. The node has one instance and one path:
+  a direct route to it and a manual check go the chain's path too (LxBox#233).
+- **Load errors.** In the `chain` body: `idle_timeout`, `strip_evasion`, `strip`. The
+  root `lx.mtu_align` moved to `lx.detour.mtu_align`, `lx.mtu_align.except` to
+  `lx.detour.except_outbounds`. A node on position ≥ 1 with WireGuard `listen_port`,
+  Tailscale `listen_port`/`relay_server_port` or OpenConnect `dtls_local_port`
+  (socket binding fields are accepted and shown as inactive). One path per node or
+  group: a ring (reached at position 0 and higher in the same chain, or a position-0
+  node's own `detour` into a higher position) is upstream's `circular outbound
+  dependency` with hop tags; a node or group in two chains (any positions) or on two
+  positions ≥ 1 is "`<tag>` is needed on chain X position i and on chain Y position
+  j: one node or group has one path"; a repeated tag is "duplicate outbound …". LxBox
+  makes no copies: the editor refuses such a chain with a hint, the build drops it
+  before the core sees it.
+- **Default.** Without `lx.detour` the core filters `tls.fragment`, `tls.spoof`, kTLS
+  and the `apple` engine off any node whose connection has no kernel socket under
+  it, not only off chain links. `"detour": false` gives the upstream behaviour.
+- **Hops.** Outbounds of the internal type `chain-hop`, tags `<chain>#<i>`, appear
+  in `GetOutbounds`, the group tree and connections. LxBox hides them by type.
+- **libbox.** Removed: `GetChains`, `GetChainCloneConfig`. New:
+  `GetEffectiveConfig()` and `GetOutboundConfig(tag)` (both `RunningConfig` with
+  `content()`; the second is `{tag, original, effective, changes}`),
+  `GetChainStatus(tag)`. `SetChainPositionEnabled` returns only an error. LxBox
+  binds none of the removed calls.
+
+On the bump: the pin and `kCoreBuildTagsPin`, javap over `classes.jar`
+(`getOutboundConfig`, `getEffectiveConfig`, no `getChains`/`getChainCloneConfig`,
+the `type` string of a hop), the version history row below.
+
 ## AAR build tags
 
 They are baked in `cmd/internal/build_libbox/main.go` (`sharedTags`), NOT in the
@@ -1353,7 +1390,7 @@ client:
 with_gvisor, with_quic, with_wireguard, with_utls, with_naive_outbound,
 badlinkname, tfogo_checklinkname0,
 with_xhttp, with_awg, with_lx_command, with_lx_idle_suspend, with_lx_chain,
-with_openvpn, with_openconnect, with_trusttunnel,
+with_openvpn, with_openconnect, with_trusttunnel, with_lx_impair,
 with_tailscale, ts_omit_logtail, ts_omit_ssh, ts_omit_drive, ts_omit_taildrop,
 ts_omit_webclient, ts_omit_doctor, ts_omit_capture, ts_omit_kube, ts_omit_aws,
 ts_omit_synology, ts_omit_bird
@@ -1487,7 +1524,12 @@ subscription), the core provides insurance in case the client misses something.
 
 | rc | What was added |
 |---|---|
-| **v1.14.4-lx.35** (current pin) | lx.34 (`lx.sniff_guard`, below) plus the upstream `stable` sync to 2026-11-14 (uTLS v1.9.0-alpha.1, REALITY client fixes, sing-tun). LxBox task 729. Java surface lx.33 → lx.35 identical (270 classes, 3903 `javap -p` lines, empty diff); build tags identical (27, `strings` of `libbox.so`), equal to `kCoreBuildTags`. AAR sha256 `e5cfd79364316150acd5c9ddbb5d6d8c749f1ce4a590f9a3eaa408f949b8fd7b`. Not run on a device. |
+| **v1.14.4-lx.37** (current pin) | Stable release of the lx.37 line (rc.1–rc.3 below). Over rc.3: upstream `stable` synced to `a459df92d` — OpenConnect over `detour`, salamander XOR, DoT on TUN through the sing-tun fork; libbox gains `ParseConfig(content)` (parse only, no `box.New`) and `CommandServer.NewHTTPClient()` (HTTP through the core router) — LxBox does not use either yet. Config unchanged from rc.3, build tags identical; javap of the release AAR: the calls LxBox makes (`getPoolState`, `getOutboundConfig`, `getEffectiveConfig`, `setImpair`, `scheduleImpair`, `getImpairStatus`) are in place. |
+| **v1.14.4-lx.37-rc.3** | libbox gains the runtime control of an `impair` outbound (SPEC 164): `CommandClient.setImpair(tag, entry)`, `scheduleImpair(tag, entries, start, repeat)`, `getImpairStatus(tag)` → `ImpairStatus.getContent()` (the status JSON). Config unchanged from rc.2, build tags identical. LxBox task 762: Debug API `/impair/{tag}` (status, set, schedule), `PATCH /nodes/{tag}` for `detour`, `tags` in `POST /subs`. javap of the release AAR matches the calls. |
+| **v1.14.4-lx.37-rc.2** | ⚠ Chain as a `detour` rewrite (core SPEC 165): no clones, a node on position ≥ 1 gets `detour` to the hop of the position below and goes that way everywhere. Load errors: chain `idle_timeout` / `strip` / `strip_evasion`, root `lx.mtu_align` (now `lx.detour.mtu_align`, `except` → `lx.detour.except_outbounds`), a fixed local port on position ≥ 1, rings (`circular outbound dependency` with hop tags `<chain>#<i>`) and conflicts (one node or group on two paths; a shared entry is not a conflict). libbox: `GetChains`, `GetChainCloneConfig` removed; `GetChainStatus(tag)`, `GetEffectiveConfig()`, `GetOutboundConfig(tag)` added (`RunningConfig.content()`, JSON `{tag, original, effective, changes}`); `SetChainPositionEnabled` returns only an error. Hops of type `chain-hop` appear in outbound lists. Upstream `stable` synced to `060f54a9a` (SPEC 166). Build tags identical to rc.1. LxBox task 761: the generator, the chain editor (rings and conflicts are an error with a hint, the build drops such a chain), `chain-hop` hidden, node JSON from the core. javap of the release AAR matches the calls. |
+| **v1.14.4-lx.37-rc.1** | `round_robin` repairs itself on a failed connection (core SPEC 138): a retry through another slot, a dead node struck out and replaced from a reserve of `pool + max(ceil(pool/2), 1)` live nodes, a site closed to one node moved to another, a node that fails more than the rest quarantined, 15 s freeze after wake, network change or a clock jump. libbox: `CommandClient.GetPoolState(tag)` → `PoolState` (`ShiftedKeys`, `MarkedKeys`, `Frozen`, `FrozenSeconds`, `Slots()`), `PoolSlot` gains `Quarantined`, `Connections`, `ConfirmedFailures`; `GetPool` kept. The connection list shows the node a `round_robin` connection actually went through: the daemon repeats NEW with the same id. A manual group test wipes the history of non-answering nodes, as upstream. New outbound `impair` (SPEC 164) — `with_lx_impair` joins the AAR tags. Plus: `tls.fragment` hang (SPEC 163), `least_test`/`failover` connection refused = path dead (SPEC 054), SOCKS / httpupgrade / ShadowTLS v3 handshake 15 s (SPEC 161), MASQUE batching. LxBox task 759: View pool shows the self-heal state, the profiler keeps the actual node. `experimental/libbox` diff lx.36 → rc.1: only the pool additions. No config key changed. Not run on a phone. |
+| **v1.14.4-lx.36** | ⚠ The WireGuard sleep keys moved into `lx.wg.idle` (core SPEC 098 §2.1): `idle_suspend` → `idle.suspend`, `idle_suspend_reachable` → `idle.suspend_reachable`, `idle_teardown` → `idle.teardown`, `lazy_build` / `build_max` / `build_overflow` → `idle.*`; an old name is a load error, no period with both. New keys in any build: `lx.wg.buffers.read_datagram_count` (1–128, default 128, Linux/Android), `lx.wg.buffers.send_by_mtu` (default `true`, diagnostic), `lx.wg.connected_socket` (default `false`); only `lx.wg.idle` needs `with_lx_idle_suspend`. Plus: WG/AWG without detour faster, a queued packet ~2 KiB instead of 64 KiB (SPEC 158/160), DNS over a proxied stream (SPEC 157), HTTP CONNECT timeout (SPEC 161), upstream `stable` to 2026-11-23. LxBox task 758: the template writes the new layout and three new variables, mixins with old paths are rewritten on read. **On the pin bump:** the template and the pin move in one commit — the new layout does not load on lx.35, the old one does not load on lx.36. Build tags identical to lx.35 (`build_libbox/main.go`: comment only); `experimental/libbox` sources identical lx.35 → lx.36. Not run on a device. |
+| **v1.14.4-lx.35** | lx.34 (`lx.sniff_guard`, below) plus the upstream `stable` sync to 2026-11-14 (uTLS v1.9.0-alpha.1, REALITY client fixes, sing-tun). LxBox task 729. Java surface lx.33 → lx.35 identical (270 classes, 3903 `javap -p` lines, empty diff); build tags identical (27, `strings` of `libbox.so`), equal to `kCoreBuildTags`. AAR sha256 `e5cfd79364316150acd5c9ddbb5d6d8c749f1ce4a590f9a3eaa408f949b8fd7b`. Not run on a device. |
 | **v1.14.4-lx.34** (never pinned: LxBox goes straight to lx.35 = lx.34 plus fresh `upstream/stable` commits, owner's decision 2026-11-14) | `lx.sniff_guard` (FEATURE 019 of the fork) replaces two mechanisms: `lx.quic_sniff_decoy` is removed (any value fails to load) and the automatic `record_fragment` for a node with `detour` is gone without a load error. LxBox task 729 writes the block from the template (`sniff_guard_tls`, `sniff_guard_quic`, `sniff_guard_sni_mismatch`, `sniff_guard_persist`) and strips it below lx.34 (`kSniffGuardMinCore` in `sniff_guard.dart`); probe configs get it without `persist`. `nodes.sni_mismatch` is always written explicitly: the core treats a missing key as `true`. **On the pin bump:** move `kCoreBuildTagsPin`; if the pin is an `lx.34-rc.N`, move `kSniffGuardMinCore` to `rc.1` first, otherwise the block is stripped and TLS nodes behind sniffing relays stop connecting. |
 | **v1.14.4-lx.33** | `lx.quic_sniff_decoy` is an object `{mode, outbound_type, detour_type, send}` (defaults off / `[masque]` / `[vless]` / `retry`), the string/bool forms fail to load (SPEC 151); `lx.awg_masquerade` removed, the AWG burst goes on every path (SPEC 153). LxBox task 709 iteration 5, task 720 cancelled. Java surface and build tags unchanged by the diff. AAR sha256 `b1f569b7cf1744b810b2d0c7a05bbe63aa156092cf84811e21dc4e4bb90e0cc8`. |
 | **v1.14.4-lx.31** | TrustTunnel built into the AAR (`with_trusttunnel` in `sharedTags`, LxBox task 717); a `masque`/`trusttunnel`/`hysteria2`/`tuic` tunnel with `detour` on a selector follows the new selection (SPEC 152); root key `lx.awg_masquerade` `direct` (default) / `all` — the AWG masquerade burst only on the device's own socket by default (SPEC 153, issue #64); upstream `stable` v1.14.4 + 9 (SPEC 154). Java surface lx.30 → lx.31 identical (270 classes, 3903 `javap -p` lines). AAR sha256 `d862d20c0bbbf6e9e26c3cdfffd3c2d972501a5b05240b1dbd6998dc38daae85`. |

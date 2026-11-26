@@ -190,7 +190,14 @@ interface PlatformInterfaceWrapper : PlatformInterface {
     /// чтения wifi state. См. `WifiInfoReader.kt` docstring для детального
     /// контекста (3 call-sites consolidation, drift risk история).
     override fun readWIFIState(): WIFIState? {
-        val state = WifiInfoReader.readAsState(BoxApplication.application)
+        // §747 — тип ядра `WIFIState` собирается здесь, а не в `WifiInfoReader`:
+        // тем же читателем пользуется окно, а в его процессе ядра нет. null на
+        // любую ошибку — sing-box обрабатывает gracefully (F12.3).
+        val state = when (val r = WifiInfoReader.read(BoxApplication.application)) {
+            is WifiInfoReader.Result.Success -> WIFIState(r.ssid, r.bssid)
+            is WifiInfoReader.Result.UnknownSsid -> WIFIState("", "")
+            else -> null
+        }
         if (state == null) {
             android.util.Log.w("PIW",
                 "readWIFIState: null (permission missing / location off / no wifi / runtime error)")

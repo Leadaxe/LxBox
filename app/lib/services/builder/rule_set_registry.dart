@@ -73,9 +73,29 @@ class RuleSetRegistry {
 
   /// Insert routing rule (any shape). Порядок в `rules[]` = порядок матчинга
   /// в sing-box, так что caller контролирует приоритет через порядок вызовов.
-  void addRule(Map<String, dynamic> rule) {
-    _rules.add(Map<String, dynamic>.from(rule));
+  ///
+  /// Возвращает сохранённую копию — по ней правило снимается
+  /// ([removeRules], §757: правило-дерево с висячим рукописным тегом).
+  Map<String, dynamic> addRule(Map<String, dynamic> rule) {
+    final copy = Map<String, dynamic>.from(rule);
+    _rules.add(copy);
+    return copy;
   }
+
+  /// §757 — снять правила, ранее возвращённые [addRule] (по идентичности).
+  void removeRules(Iterable<Map<String, dynamic>> rules) {
+    final drop = rules.toList();
+    _rules.removeWhere((r) => drop.any((d) => identical(d, r)));
+  }
+
+  /// §757 — снять наборы с тегами [tags] (теги снова свободны).
+  void removeRuleSets(Set<String> tags) {
+    _ruleSets.removeWhere((r) => tags.contains(r['tag']));
+    _takenTags.removeAll(tags);
+  }
+
+  /// §757 — занятые теги наборов (шаблон и всё, что уже зарегистрировано).
+  Set<String> get takenTags => Set.unmodifiable(_takenTags);
 
   /// rule_set entries — для `route.rule_set`.
   List<Map<String, dynamic>> getRuleSets() => List.unmodifiable(_ruleSets);

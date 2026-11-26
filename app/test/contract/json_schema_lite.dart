@@ -1,8 +1,10 @@
 // §438 — проверка документа по JSON Schema в объёме, который использует
 // `contract/schema/backup.schema.json`: `$ref` на `#/$defs/…`, `type`,
 // `properties`, `required`, `additionalProperties`, `enum`, `const`, `items`,
-// `allOf`, `anyOf`, `if`/`then`, `minimum`/`maximum`, `minLength`, `pattern`
-// (контракт 1.1.158: `native_prefs.memory_limit`). `format`,
+// `allOf`, `anyOf`, `oneOf`, `not`, `if`/`then`, `minimum`/`maximum`,
+// `minLength`, `minItems`, `pattern`, булева схема свойства (`false` —
+// ключа быть не может) (контракт 1.1.158: `native_prefs.memory_limit`;
+// 1.1.179, §757: `rules[].body` — `oneOf` простого правила и `logical`). `format`,
 // `default`, `title`, `description` проверки не несут.
 //
 // Библиотеки валидатора в зависимостях проекта нет, а тянуть её ради одного
@@ -28,6 +30,9 @@ const Set<String> _known = {
   'items',
   'allOf',
   'anyOf',
+  'oneOf',
+  'not',
+  'minItems',
   'if',
   'then',
   'minimum',
@@ -120,7 +125,10 @@ void _validate(
     for (final entry in value.entries) {
       final key = '${entry.key}';
       final prop = properties[key];
-      if (prop is Map) {
+      if (prop == false) {
+        // §757 — булева схема: свойство запрещено (`refs` у `logical`).
+        errors.add('$at: property "$key" is not allowed');
+      } else if (prop is Map) {
         _validate(entry.value, prop.cast<String, dynamic>(), root, '$at.$key', errors);
       } else if (additional == false) {
         errors.add('$at: additional property "$key"');
@@ -128,6 +136,18 @@ void _validate(
         _validate(entry.value, additional.cast<String, dynamic>(), root, '$at.$key', errors);
       }
     }
+  }
+
+  final minItems = schema['minItems'];
+  if (value is List && minItems is int && value.length < minItems) {
+    errors.add('$at: fewer than $minItems items');
+  }
+
+  // §757 — `not`: документ НЕ должен подходить под схему.
+  final notSchema = schema['not'];
+  if (notSchema is Map &&
+      _matches(value, notSchema.cast<String, dynamic>(), root)) {
+    errors.add('$at: matches "not" schema');
   }
 
   final items = schema['items'];
@@ -147,6 +167,17 @@ void _validate(
       !anyOf.any((sub) =>
           _matches(value, (sub as Map).cast<String, dynamic>(), root))) {
     errors.add('$at: matches none of anyOf');
+  }
+
+  // §757 (контракт 1.1.179) — `rules[].body`: простое правило либо
+  // `logical`; ровно одна ветка.
+  final oneOf = schema['oneOf'];
+  if (oneOf is List) {
+    final n = oneOf
+        .where((sub) =>
+            _matches(value, (sub as Map).cast<String, dynamic>(), root))
+        .length;
+    if (n != 1) errors.add('$at: matches $n of oneOf (exactly one required)');
   }
 
   final ifSchema = schema['if'];

@@ -737,6 +737,65 @@ void main() {
 
   // §605 / 028 P2 — START начинает с нуля: сессия до STOP не даёт ложный
   // tcpClose в новом буфере.
+  group('TrafficProfiler — §759 повторное NEW с фактическим узлом', () {
+    CcConnection conn({
+      required List<String> chains,
+      List<String> detours = const [],
+      String outboundType = '',
+      int uplink = 0,
+    }) =>
+        CcConnection(
+          id: 'rr1',
+          network: 'tcp',
+          domain: 'example.org',
+          destination: '1.2.3.4:443',
+          rule: 'final',
+          uplink: uplink,
+          downlink: 0,
+          outbound: 'vpn-1-auto',
+          outboundType: outboundType,
+          chains: chains,
+          detours: detours,
+          createdAt: 0,
+          closedAt: 0,
+        );
+
+    test('узел стал известен после открытия → tcpClose несёт узел', () async {
+      TrafficProfiler.I.startGlobalRecording();
+      // Первое NEW: round_robin ещё не выбрал узел — в цепочке только группа.
+      TrafficProfiler.I.ingestForTest([
+        conn(chains: ['vpn-1-auto'], outboundType: 'urltest'),
+      ]);
+      // Повторное NEW с тем же id: фактический узел, тип и detour.
+      TrafficProfiler.I.ingestForTest([
+        conn(
+            chains: ['node-de', 'vpn-1-auto'],
+            detours: ['WARP'],
+            outboundType: 'vless',
+            uplink: 10),
+      ]);
+      // Узел сменился после повтора соединения.
+      TrafficProfiler.I.ingestForTest([
+        conn(
+            chains: ['node-fi', 'vpn-1-auto'],
+            outboundType: 'trojan',
+            uplink: 20),
+      ]);
+      TrafficProfiler.I.ingestForTest([]); // соединение исчезло → close
+
+      final buf = TrafficProfiler.I.globalRollingBuffer;
+      expect(buf.length, 2, reason: 'повторное NEW не плодит второй tcpOpen');
+      expect(buf.first.kind, TrafficEventKind.tcpOpen);
+      expect(buf.first.outboundChain, ['vpn-1-auto']);
+      final close = buf.last;
+      expect(close.kind, TrafficEventKind.tcpClose);
+      expect(close.outboundChain, ['node-fi', 'vpn-1-auto']);
+      expect(close.detourChain, isEmpty);
+      expect(close.outboundType, 'trojan');
+      expect(close.upBytes, 20);
+    });
+  });
+
   group('TrafficProfiler — STOP→START', () {
     CcConnection conn(String id, String domain) => CcConnection(
           id: id,

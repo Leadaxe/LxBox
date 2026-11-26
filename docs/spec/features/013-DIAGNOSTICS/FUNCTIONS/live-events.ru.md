@@ -87,7 +87,7 @@
 | 2 | [160](../../../tasks/160-perapp-trace-live-aggregated-redesign.md) | Done | Общий обозреватель Live / Aggregated с фильтром |
 | 3 | [168](../../../tasks/168-profiler-on-commandclient-connections.md) | Реализовано (device-verified) | Соединения — из потока ядра |
 | 4 | [177](../../../tasks/177-unattributed-banner-dns-fail-only.md) | Реализовано (A+B) | Плашка «без владельца» — только по отказам |
-| 5 | [180](../../../tasks/180-dns-query-stream.md) | ✅ DEVICE-VERIFIED | DNS-события — структурный поток ядра, а не журнал |
+| 5 | [180](../../../tasks/180-dns-query-stream.md) | ✅ DEVICE-VERIFIED | DNS-события — структурный поток ядра, а не лог |
 | 6 | [244](../../../tasks/244-profiler-filter-session-lifetime.md) | реализовано | Фильтр переживает навигацию |
 | 7 | [260](../../../tasks/260-profiler-dns-stream-reconnect.md) | — | Восстановление DNS-подписки после обрыва |
 | 8 | [262](../../../tasks/262-dns-health-detector.md) | Реализовано (не device-verified) | Плашка «DNS failing» с порогами и гейтом активности |

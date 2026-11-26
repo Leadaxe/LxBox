@@ -16,7 +16,7 @@ LxBackupFile _file({
   exportedByVersion: '2.25.12',
   exportedAt: '',
   directions: const [],
-  rules: [for (var i = 0; i < rules; i++) CustomRuleInline(name: 'r$i')],
+  rules: [for (var i = 0; i < rules; i++) CustomRuleTree.flat(name: 'r$i')],
   subscriptions: const [],
   vars: const {},
   routeFinal: null,

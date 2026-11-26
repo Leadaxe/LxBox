@@ -20,8 +20,6 @@
 
 import '../../models/node_link.dart';
 import '../../models/source_chain.dart';
-import '../contract/chain_strip.dart';
-import '../contract/registry_warning.dart';
 import 'core_chain_capability.dart';
 import 'node_link_resolve.dart';
 
@@ -103,8 +101,9 @@ class ChainResolution {
 /// и следующая цепочка может им воспользоваться. Без словаря (превью, тесты
 /// модели) корневая позиция разрешается по [knownTags], пара — нет.
 ///
-/// [hopBodies] — тела узлов конфига по финальному тегу: по ним реестр судит
-/// `on_hop_required` каталога strip (§57). Нет тела — звено не судится.
+/// [hopBodies] — тела узлов конфига по финальному тегу. §761: с ядра
+/// v1.14.4-lx.37-rc.2 не используются (шаг `on_hop_required` §57 снят,
+/// [ChainResolution.notes] всегда пуст); параметр оставлен для вызывающих.
 ///
 /// [coreVersion] — строка `Libbox.version()`. Гейт §393 C5 стоит ПЕРВЫМ:
 /// ядро без `with_lx_chain` отвергает конфиг ЦЕЛИКОМ на неизвестном типе
@@ -219,29 +218,9 @@ ChainResolution resolveChains(
       continue;
     }
 
-    // §57 — `on_hop_required`: звено требует снимаемый путь → ключ снимается
-    // с патча цепочки, цепочка собирается, код — предупреждением.
-    final unstrips = chainHopUnstrips(
-      stripEvasion: c.stripEvasion,
-      patch: c.strip,
-      hops: [for (final t in hopTags) (t, hopBodies[t])],
-    );
-    var emitted = c;
-    if (unstrips.isNotEmpty) {
-      emitted = c.copyWith(strip: applyChainUnstrips(c.strip, unstrips));
-      for (final u in unstrips) {
-        final params = {'target': u.target};
-        notes.add(ChainNote(
-          tag: c.tag,
-          code: u.code,
-          params: params,
-          line: 'Hop chain "${c.tag}": '
-              '${registryText(u.code, RegistryLang.en, params: params)} '
-              '[${u.code}]',
-        ));
-      }
-    }
-    nodes.add(chainOutboundObject(emitted, hopTags));
+    // §761 — шаг `on_hop_required` (§57) снят: ключа `strip` у цепочки в
+    // конфиге больше нет (ядро v1.14.4-lx.37-rc.2), снимать с патча нечего.
+    nodes.add(chainOutboundObject(c, hopTags));
     knownTags.add(c.tag);
     targets?.addRootNames([c.tag]);
     chainTags.add(c.tag);

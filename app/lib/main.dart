@@ -9,8 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/home_screen.dart';
 import 'services/app_log.dart';
-import 'services/app_theme_seed.dart';
+import 'widgets/app_theme_seed.dart';
 import 'services/l10n/locale_controller.dart';
+import 'services/assistant/assistant_gateway.dart';
 import 'services/automation/automation_dispatcher.dart';
 import 'services/automation/automation_sync.dart';
 import 'services/clash_log_pump.dart';
@@ -23,7 +24,7 @@ import 'services/oom_reports.dart';
 import 'services/stderr_reader.dart';
 import 'services/subscription/subscription_identity.dart';
 import 'services/debug/bootstrap.dart' as debug_bootstrap;
-import 'services/nav/home_return_observer.dart';
+import 'widgets/home_return_observer.dart';
 import 'services/settings_storage.dart';
 import 'services/taildrop_tags_sync.dart' show migrateLegacyTaildropPrefs;
 import 'services/template_loader.dart';
@@ -33,6 +34,7 @@ import 'services/workspaces/workspace_controller.dart';
 import 'services/workspaces/workspace_store.dart';
 import 'services/wifi_history_listener.dart';
 import 'widgets/mouse_drag_scroll_behavior.dart';
+import 'widgets/dpad_text_field_exit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -159,6 +161,9 @@ void main() async {
     // §143 §9 — one-shot: снятый тумблер interrupt-on-switch → галки
     // Направлений. ПОСЛЕ seed Направлений и ДО первого билда.
     await SettingsStorage.migrateInterruptOnSwitchIfNeeded();
+    // §757 — one-shot: рукописные ссылки rule_set на прежние теги наборов
+    // правил → теги контракта 1.1.182. ПОСЛЕ seed пресетов и ДО первого билда.
+    await SettingsStorage.migrateRuleSetTagRefsIfNeeded(directionsTemplate);
     // §229 — вызов one-shot ремапа preset_id (§228) убран: миграция удалена,
     // отработала у всех, кто обновлялся начиная с v2.10.0.
     // §043 — pump sing-box logs из Kotlin EventChannel "lxbox/coreLog" в
@@ -172,6 +177,9 @@ void main() async {
     // LxBoxIntentReceiver → этот handler → shared action-handlers). Пассивен
     // пока receiver disabled. Подгружаем emit-gates из storage (default OFF).
     registerAutomationBridge();
+    // §750 — шлюз ассистента к Debug API (native `assistantCall`). Только
+    // приём вызова: на старте ничего не считается.
+    registerAssistantGatewayBridge();
     // §605 — вместе с гейтами выставляем receiver'ы по сохранённому тумблеру:
     // бэкап/набор прошлых версий могли развести их с системой.
     unawaited(syncAutomationFromStorage());
@@ -208,6 +216,11 @@ void main() async {
   } catch (_) {
     // Storage недоступен — остаётся дефолт (true).
   }
+  // §748 — сцену пересоздаёт импорт бэкапа: экраны поверх корня держат
+  // контроллеры прежнего HomeScreen (устаревший список, правки молча не
+  // пишутся), поэтому закрываются до пересоздания.
+  WorkspaceController.I.onExternalRemount =
+      () => _rootNavigatorKey.currentState?.popUntil((r) => r.isFirst);
   runApp(const LxBoxApp());
 }
 
@@ -397,6 +410,10 @@ class ThemeNotifier extends ChangeNotifier with WidgetsBindingObserver {
 
 final themeNotifier = ThemeNotifier();
 
+/// §748 — корневой навигатор: [WorkspaceController.onExternalRemount]
+/// закрывает экраны поверх `HomeScreen`.
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class LxBoxApp extends StatelessWidget {
   const LxBoxApp({super.key});
 
@@ -413,6 +430,7 @@ class LxBoxApp extends StatelessWidget {
         // LocaleController._applyLocale (dict-reload на каждую смену); отдельного
         // per-build присваивания активного локализатора не требуется.
         return MaterialApp(
+          navigatorKey: _rootNavigatorKey,
           title: 'L×Box',
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: themeNotifier.seed),
@@ -428,6 +446,10 @@ class LxBoxApp extends StatelessWidget {
           themeMode: themeNotifier.mode,
           // §736 — списки тянутся и указателем-«мышью» (пульт TV, issue #220).
           scrollBehavior: const MouseDragScrollBehavior(),
+          // §746 — пульт TV уходит из любого текстового поля стрелками, когда
+          // каретка на краю; слой глубже DefaultTextEditingShortcuts.
+          builder: (context, child) =>
+              DpadTextFieldExit(child: child ?? const SizedBox.shrink()),
           // §279 — ВСЕГДА подаём явную локаль (effective уже резолвит
           // 'system' по языку устройства через PlatformDispatcher). Ранее
           // 'system' давал locale: null, и Flutter полагался на собственный

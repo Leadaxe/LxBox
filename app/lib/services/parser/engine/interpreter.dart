@@ -28,13 +28,14 @@ import 'dart:convert' show Base64Codec, jsonDecode;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../../models/node_warning.dart';
+import '../../contract/registry.dart';
 import '../drop_verdict.dart';
-import '../tt_deeplink.dart';
 import 'decoders.dart';
 import 'ini_space.dart';
 import 'lexer.dart';
 import 'section.dart';
 import 'source_space.dart';
+import 'tlv.dart';
 import 'trace.dart';
 
 /// §506 — нормализатор `bandwidth_mbps`: `<число><единица?>` → целое в
@@ -124,7 +125,7 @@ final class EngineResult {
 /// (`required`) не нашла значения. Тем же `null` отвечали рукописные мапперы.
 EngineResult? runSection(MapperSection section, String text,
     {MapperTrace? trace, XrayDropVerdict? dropped}) {
-  final space = _selectForm(section, text, dropped: dropped);
+  final space = _selectForm(section, text);
   if (space == null) {
     // §512 (контракт 1.1.49, PARSING_PRINCIPLES §4.1) — ФОРМА не опознана: схему секция
     // ведёт, но ни одна её форма текст не прочитала (оболочка не раскрылась,
@@ -437,16 +438,10 @@ SourceSpace? _selectIniForm(MapperSection section, String text) {
 /// Формы пробуются ПО ПОРЯДКУ, первая, чей `detect` сработал, выигрывает;
 /// `detect.default` — ветка «всё остальное» и пробуется последней, где бы ни
 /// стояла в списке ([formsInTrialOrder]).
-///
-/// [dropped] — §717: именованный декодер, который ОТКАЗАЛ с кодом, объявленным
-/// шагом формы (`tt_deeplink`), называет причину здесь; ставится она, только
-/// если не ответила ни одна форма.
-SourceSpace? _selectForm(MapperSection section, String text,
-    {XrayDropVerdict? dropped}) {
+SourceSpace? _selectForm(MapperSection section, String text) {
   final forms = section.forms.isEmpty
       ? const [MapperForm(id: 'url', space: 'url')]
       : formsInTrialOrder(section.forms);
-  RegistryWarning? decoderFailure;
   for (final form in forms) {
     // Текстовый `detect` формы с оболочкой судится по ДВУМ текстам (unwrap →
     // redetect, MAPPER_ENGINE §1): сырому пэйлоаду и раскрытому. Предикаты
@@ -522,27 +517,22 @@ SourceSpace? _selectForm(MapperSection section, String text,
         // декодирование сводится к тому же шагу над пэйлоадом.
         final unwrapped = _applyScopedDecodeToPayload(form, decoded);
         if (unwrapped == null) continue;
-        // §717 — именованный декодер БИНАРНОЙ оболочки (`tt_deeplink`): сам
-        // снимает base64url и разбирает TLV в объект. Отдельным шагом
-        // `base64url` перед ним это не выразить — общий шаг отдаёт ТЕКСТ, а
-        // байты TLV в UTF-8 не живут.
-        final ttStep = _namedDecoderStep(form, kTtDeeplinkDecoder);
-        Map<String, dynamic>? doc;
-        if (ttStep != null) {
-          final r = _decodeTtDeeplinkStep(ttStep, unwrapped);
-          if (r.failure != null) {
-            decoderFailure ??= r.failure;
-            continue;
-          }
-          doc = r.doc;
-        } else {
-          doc = _decodeFormJson(form, unwrapped);
-        }
+        // §717 (контракт 1.1.175, MAPPER_ENGINE §4a) — декодер БИНАРНОЙ
+        // оболочки `tlv`: пейлоад раскрывается в объект по таблице диалекта
+        // секции. Отдельным шагом `base64url` перед ним это не выразить —
+        // общий шаг отдаёт ТЕКСТ, а байты контейнера в UTF-8 не живут.
+        // Непрочитанный контейнер — обычный отказ формы (`form_unrecognized`).
+        final tlv = section.tlv;
+        final Map<String, dynamic>? doc =
+            tlv != null && form.decode.contains(kTlvDecoder)
+                ? decodeTlvText(tlv, unwrapped, unwrap: _RunDecode.bytes)
+                : _decodeFormJson(form, unwrapped);
         if (doc == null) continue;
         if (!detectMatchesJson(form.detect, doc)) continue;
         return SourceSpace(
           formId: form.id,
           scheme: _splitScheme(decoded)?.scheme ?? '',
+          fragment: _fragmentOf(decoded),
           json: doc,
           jsonBase: form.base,
           // ПЛОСКИЙ СЛОЙ контейнера (§0.10 НОРМЫ: «json — разбор объекта в
@@ -562,50 +552,14 @@ SourceSpace? _selectForm(MapperSection section, String text,
         continue;
     }
   }
-  if (dropped != null && dropped.reason == null && decoderFailure != null) {
-    dropped.reason = decoderFailure;
-  }
   return null;
 }
 
-/// Шаг `decode` формы с декодером по имени [name] (`{"decoder": name, …}`
-/// либо голая строка); `null` — шага нет.
-Map<String, dynamic>? _namedDecoderStep(MapperForm form, String name) {
-  for (final step in form.decode) {
-    if (step == name) return const {};
-    if (step is Map && step['decoder'] == name) {
-      return step.cast<String, dynamic>();
-    }
-  }
-  return null;
-}
-
-/// §717 — шаг `tt_deeplink`: пэйлоад после схемы (ведущий `?` снимается) →
-/// base64url → TLV → объект. Коды отказа объявляет ШАГ (`on_invalid.code`,
-/// `on_subscription_only.code`); не объявлен — `form_unrecognized`.
-({Map<String, dynamic>? doc, RegistryWarning? failure}) _decodeTtDeeplinkStep(
-    Map<String, dynamic> step, String text) {
-  final split = _splitScheme(text);
-  var payload = split?.payload ?? text;
-  final hash = payload.indexOf('#');
-  if (hash >= 0) payload = payload.substring(0, hash);
-  if (payload.startsWith('?')) payload = payload.substring(1);
-  RegistryWarning fail(String key) {
-    final code = (step[key] as Map?)?['code'] as String? ?? 'form_unrecognized';
-    final scheme = split?.scheme ?? '';
-    return RegistryWarning(
-        code: code, path: '', value: scheme, params: {'scheme': scheme});
-  }
-
-  final bytes = _RunDecode.bytes(payload.trim());
-  if (bytes == null) return (doc: null, failure: fail('on_invalid'));
-  final r = decodeTtPayload(bytes);
-  return switch (r.failure) {
-    null => (doc: r.doc, failure: null),
-    TtFailure.invalid => (doc: null, failure: fail('on_invalid')),
-    TtFailure.subscriptionOnly =>
-      (doc: null, failure: fail('on_subscription_only')),
-  };
+/// Метка после `#` у текста формы-контейнера: в пейлоад она не входит и
+/// остаётся источником `fragment`.
+String _fragmentOf(String text) {
+  final hash = text.indexOf('#');
+  return hash < 0 ? '' : text.substring(hash + 1);
 }
 
 /// Ссылочная форма с пространством `ini` (`<схема>://<base64 .conf>#метка`):
@@ -2346,7 +2300,7 @@ final class _Run {
       if (code != null) {
         final probe = _valueOfBare(p);
         if (probe != null && !(probe is String && probe.isEmpty)) {
-          warnings.add(NodeWarning.byCode(code,
+          warnings.add(_declaredNote(p.onWhenFalse, code,
               path: p.name, value: probe is String ? probe.trim() : '$probe'));
         }
       }
@@ -2478,6 +2432,16 @@ final class _Run {
           ? _mapValue(p.valueMap, value,
               caseSensitive: p.valueMapCase == 'sensitive')
           : (matched: false, value: value);
+      // §717 (контракт 1.1.175, MAPPER_ENGINE §7) — тот же ПРОМАХ ЗАКРЫТОЙ
+      // ТАБЛИЦЫ при `on_invalid: drop`, что у записи с путём: селектор без
+      // `maps_to` с таблицей, которой значение не знает, снимает узел кодом
+      // (запись, опознающая вход, который узлом не является вовсе).
+      if (!off.matched &&
+          p.valueMap.isNotEmpty &&
+          p.onInvalid['action'] == 'drop') {
+        _dropOnTableMiss(p, value is String ? value : '$value');
+        return;
+      }
       if (!(off.matched && off.value == null)) {
         _applyOnPresent(p, value is String ? value : '$value');
       }
@@ -2516,8 +2480,10 @@ final class _Run {
         if (mapped.value == null) {
           // Значение переведено в «ключа нет»: `sets` того же значения при
           // этом ОСТАЁТСЯ в силе (у `flow` так и устроено).
+          // `implies` при этом молчит (контракт 1.1.175, семантика Go
+          // `linkmap/exec.go`): запись ничего не написала, и дописывать к
+          // «ничему» включатель блока незачем.
           _applyValueSets(p, value);
-          _applyImplies(p);
           return;
         }
         value = mapped.value;
@@ -2550,16 +2516,7 @@ final class _Run {
         // её поле: селектор объявляет транспорт, которого у ядра нет вовсе, и
         // узел без своего транспорта не «хуже» — он не работает, и оставить
         // его в списке значило бы предложить человеку заведомо мёртвый сервер.
-        final w = _applyOnInvalid(p, value.toString());
-        if (p.selector) {
-          _dropNode = true;
-          // Отбраковка обязана быть НАЗВАННОЙ: имя кода и его `value` едут в
-          // вердикт, иначе узел исчезает молча — тот же дефект, что правится.
-          if (w is RegistryWarning && _dropped != null) {
-            _dropped.explicit = true;
-            _dropped.reason = w;
-          }
-        }
+        _dropOnTableMiss(p, value.toString());
         return;
       }
     }
@@ -2673,6 +2630,31 @@ final class _Run {
       if (low == k || low.startsWith('$k.')) return true;
     }
     return false;
+  }
+
+  /// Промах закрытой таблицы при `on_invalid: drop`: у СЕЛЕКТОРА снимается
+  /// узел целиком, у обычной записи — только её поле.
+  void _dropOnTableMiss(MapperParam p, String value) {
+    final w = _applyOnInvalid(p, value);
+    if (!p.selector) return;
+    _dropNode = true;
+    // Отбраковка обязана быть НАЗВАННОЙ: имя кода и его `value` едут в
+    // вердикт, иначе узел исчезает молча.
+    if (w is RegistryWarning && _dropped != null) {
+      _dropped.explicit = true;
+      // Контракт 1.1.176 (MAPPER_ENGINE §2.1, §7) — первый параметр,
+      // объявленный кодом, принимает отвергнутое значение: по ИМЕНИ
+      // параметра принимающая сторона узнаёт, что делать с отказом.
+      final own = ContractRegistry.I.declaredParams(w.code);
+      _dropped.reason = own.isEmpty || w.params.containsKey(own.first)
+          ? w
+          : RegistryWarning(
+              code: w.code,
+              path: w.path,
+              value: w.value,
+              params: {...w.params, own.first: w.value ?? value},
+            );
+    }
   }
 
   /// `sets` по значению параметра; `true` — набор нашёлся и применён.
@@ -2959,7 +2941,27 @@ final class _Run {
         shown = m.namedGroup(first) ?? shown;
       }
     }
-    warnings.add(NodeWarning.byCode(code, path: p.name, value: shown));
+    warnings.add(_declaredNote(p.onPresent, code, path: p.name, value: shown));
+  }
+
+  /// Предупреждение действия записи с ОБЪЯВЛЕННЫМИ параметрами
+  /// (`{"action": "note", "code": …, "params": {…}}`, контракт 1.1.175):
+  /// именованный параметр текста кода называет само объявление, и движку
+  /// таблица «код → имя параметра» для него не нужна.
+  NodeWarning _declaredNote(Map<String, dynamic> decl, String code,
+      {required String path, required String value}) {
+    final w = NodeWarning.byCode(code, path: path, value: value);
+    final declared = decl['params'];
+    if (w is! RegistryWarning || declared is! Map || declared.isEmpty) return w;
+    return RegistryWarning(
+      code: w.code,
+      path: w.path,
+      value: w.value,
+      params: {
+        ...w.params,
+        for (final e in declared.entries) '${e.key}': '${e.value}',
+      },
+    );
   }
 
   /// `split_into` — разбросать элементы списка по путям тела.

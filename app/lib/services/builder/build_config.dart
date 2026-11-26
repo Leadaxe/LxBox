@@ -21,6 +21,7 @@ import '../json_clone.dart';
 import '../node_hash.dart';
 import '../safe_regex.dart';
 import '../rule_set_downloader.dart';
+import '../storage_migration/rule_set_cache_ids.dart';
 import '../tailscale_state/state_keys.dart';
 import '../settings_storage.dart';
 import '../template_loader.dart';
@@ -31,6 +32,7 @@ import '../mixins/mixin_apply.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import '../chains/chain_takeover.dart' show applyChainTakeover;
 import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
@@ -718,9 +720,12 @@ Future<BuildResult?> _buildConfig({
   // Pre-resolve srs local paths (sing-box получает file:// — rule set
   // `{type: local, path: …}`). Удалённо ничего не качается.
   final srsPaths = <String, String>{};
+  // §757 — старые позиционные имена файлов кэша — в имена по ссылке.
+  await migrateRuleSetCacheIds(customRules);
   for (final cr in customRules) {
-    if (cr is! CustomRuleSrs) continue;
-    // ## 12 — по файлу на каждый набор правила; ключ — id кэша набора.
+    if (cr is! CustomRuleTree) continue;
+    // ## 12 / §757 — по файлу на каждый набор дерева; ключ — id кэша набора
+    // по ссылке (`<id>~<h8>`).
     for (final cacheId in cr.cacheIds) {
       final p = await RuleSetDownloader.cachedPath(cacheId);
       if (p != null) srsPaths[cacheId] = p;
@@ -1018,6 +1023,12 @@ Future<BuildResult?> _buildConfig({
   // члены-призраки групп, `default` вне состава (L1 — иначе ядро отвергает
   // конфиг целиком) и кольца зависимостей — ДО валидатора, чей §254-fatal
   // остаётся последним рубежом на неразруленное.
+  // §761 — ядро v1.14.4-lx.37-rc.2 само ставит `detour` узлам позиций ≥ 1
+  // цепочек: одному узлу или группе нужен один путь, фиксированный локальный
+  // порт у такого узла — ошибка загрузки. Цепочка с кольцом, конфликтом или
+  // портом выпадает (ссылки на неё дочищает санитайзер ниже), порт не
+  // снимается — как у лаунчера.
+  emitWarnings.addAll(applyChainTakeover(config));
   final graphCodes = <RegistryWarning>[];
   final detourThroughGroup = <(String, String)>[];
   final detourUnavailable = <(String, String)>[...detourReport.unavailable];

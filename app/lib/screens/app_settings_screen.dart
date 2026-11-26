@@ -25,6 +25,7 @@ import 'app_settings_screen/widgets/diagnostics_tab.dart';
 import 'app_settings_screen/widgets/general_tab.dart';
 import 'app_settings_screen/widgets/subscriptions_tab.dart';
 import 'backup_screen.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({
@@ -528,7 +529,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> with WidgetsBindi
                 ],
               ),
             ),
-            body: TabBarView(
+            body: FocusSafeTabBarView(
               children: [
                 _buildGeneralTab(context),
                 _buildAppearanceTab(context),

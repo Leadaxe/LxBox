@@ -56,7 +56,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// Без POST_NOTIFICATIONS (API 33+) утечки не бывает — система такое
         /// уведомление и не показывает.
         fun clearStaleNotification(context: Context) {
-            if (currentStatus != VpnStatus.Stopped) return
+            if (TunnelState.status != VpnStatus.Stopped) return
             if (!ServiceNotification.isStalePresent()) return
             Log.w(TAG, "[vpn §430] stale FGS notification from a dead service — bouncing service so AMS cancels it")
             val intent = Intent(context, BoxVpnService::class.java)
@@ -107,71 +107,31 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// CommandServer): разбирать нечего.
         const val EXTRA_CORE_ERROR = "core_error"
 
-        /// Mirror of the live service status, readable from anywhere.
-        /// VpnPlugin.getVpnStatus читает это чтобы Flutter мог пересинхрониться
-        /// после re-attach (process killed но service выжил из-за keep-on-exit).
-        @Volatile
-        var currentStatus: VpnStatus = VpnStatus.Stopped
-            private set
-
-        /// §069: snapshot значения `allow_bypass` при последнем `establish()`.
-        /// Отражает то что **сейчас applied** в `VpnService.Builder.allowBypass()`,
-        /// в отличие от persisted `BootReceiver.isAllowBypass()` который меняется
-        /// до `establish()` reload. Reset в `onDestroy()` чтобы UI warning исчезал
-        /// когда service умирает.
-        @Volatile
-        var currentSessionAllowBypass: Boolean = false
-            private set
-
-        /// §187 — время старта туннеля (`SystemClock.elapsedRealtime()`,
-        /// монотонные часы — не прыгают при смене системного времени/таймзоны).
-        /// PERSISTENT companion → переживает swipe (туннель keep-alive не
-        /// перезапускался) → даёт честный uptime после cold-start, когда Dart-
-        /// `connectedSince` обнулился бы на «сейчас». 0 = не запущен.
-        @Volatile
-        var tunnelStartedElapsedMs: Long = 0L
-            private set
-
-        /// §276 — зеркало «последний Stopped пришёл из onRevoke». Нужно для
-        /// pull-пути (`getVpnStatus` на resume): broadcast'ятся только переходы,
-        /// и без этого поля UI, вернувшийся из фона после перехвата, увидел бы
-        /// голый Stopped и показал нейтральный Disconnected (кейс, помеченный
-        /// в §003 как «намеренно не покрыто»).
-        @Volatile
-        var currentRevoked: Boolean = false
-            private set
-
         /// §725 — живой экземпляр сервиса (onCreate…onDestroy): замер Path MTU
         /// защищает им свой ICMP-сокет (`protect`), как ядро свои.
         @Volatile
         var live: BoxVpnService? = null
             private set
 
-        /// Internal — для BoxService.setStatus() обновлять companion-state.
+        /// Internal — для BoxService.setStatus(): запись в [TunnelState] (§742 —
+        /// владелец состояния туннеля), затем побочный эффект на стороне сервиса.
         internal fun setCurrentStatus(s: VpnStatus, revoked: Boolean = false) {
-            currentStatus = s
-            // §276 — Starting/Started снимают метку: туннель снова наш. На
-            // Stopped метка приходит из setStatus (true только от onRevoke).
-            currentRevoked = when (s) {
-                VpnStatus.Starting, VpnStatus.Started -> false
-                else -> revoked
-            }
-            // §187 — фиксируем старт ОДИН раз на переходе в Started (не
-            // перетирать при дедуп-повторе). Сброс на Stopped → uptime обнулится.
-            when (s) {
-                VpnStatus.Started ->
-                    if (tunnelStartedElapsedMs == 0L) {
-                        tunnelStartedElapsedMs = SystemClock.elapsedRealtime()
-                    }
-                VpnStatus.Stopped -> {
-                    tunnelStartedElapsedMs = 0L
-                    // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
-                    // работает VPN; «Поделиться» и «Send to device» скрываются.
-                    runCatching {
-                        TaildropClip.onVpnStopped(runCatching { BoxApplication.application }.getOrNull())
-                    }
+            TunnelState.setStatus(s, revoked)
+            // §747 — метка §276 переживает смену процесса `:bg`: пишется та, что
+            // получилась в состоянии (Starting / Started её снимают).
+            runCatching {
+                if (s != VpnStatus.Stopping) {
+                    NativeCache.setTunnelRevoked(BoxApplication.application, TunnelState.revoked)
                 }
-                else -> { /* Starting/Stopping — не трогаем */ }
+            }
+            // §747 — свёрнутое окно держится живым, пока туннель не Stopped.
+            runCatching { UiHold.sync(BoxApplication.application) }
+            if (s == VpnStatus.Stopped) {
+                // §707 итер. 7 — ленты окна «Send clipboard» живут, пока
+                // работает VPN; «Поделиться» и «Send to device» скрываются.
+                runCatching {
+                    TaildropClip.onVpnStopped(runCatching { BoxApplication.application }.getOrNull())
+                }
             }
         }
 
@@ -212,64 +172,52 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
                 "applied=${applied.size} [${applied.joinToString(",")}] " +
                 "not_installed=${missing.size} [${missing.joinToString(",")}]"
 
-        /// §043: Sink для core logs от sing-box → Flutter EventChannel.
+        /// §747 — команда старта отправлена, но до сервиса ещё не дошла
+        /// (`startForegroundService` → `onStartCommand` — не мгновенно, а при
+        /// свежем процессе `:bg` и заметно). В этом окне статус ещё `Stopped`
+        /// и приёмника ACTION_STOP нет: Stop, пришедший сюда, раньше уходил в
+        /// пустоту, и туннель поднимался вопреки ему.
         @Volatile
-        var coreLogSink: io.flutter.plugin.common.EventChannel.EventSink? = null
+        private var startPending = false
 
-        /// §122 Фаза 0 — sink'и нового CommandClient-канала (`BoxCommandClient`).
-        /// Инвариант §2.1: эмиттер живёт во Flutter-процессе (как `coreLogSink`).
+        /// Stop пришёл, пока старт был в пути: сервис отменит его сам.
         @Volatile
-        var ccStatusSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccOutboundsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccGroupsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        @Volatile
-        var ccConnectionsSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §180 — DNS-журнал из ядра (SPEC 018). Батч-доставка списком CcDnsQuery.
-        @Volatile
-        var ccDnsQueriesSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §579 — состояние узлов Tailscale (`SubscribeTailscaleStatus`): снапшот
-        /// списком `{tag, backend_state, state_text}` на каждое обновление ядра.
-        @Volatile
-        var ccTailscaleSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
-        @Volatile
-        var ccTailscalePingSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §687 — события теста соединения (`StartConnectionTest`): батчи
-        /// `{event: stage|result|error, …}`.
-        @Volatile
-        var ccConnectionTestSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`):
-        /// снапшот `{endpoints: [...], callback: {...}?}` на каждое обновление.
-        @Volatile
-        var ccOpenConnectSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §654 C — тап по уведомлению «Sign-in required»: тег узла, чей
-        /// челлендж показать. Dart забирает его на старте и при возврате.
-        @Volatile
-        var openConnectOpenRequest: String? = null
-        /// §707 — снапшот входящих Taildrop узла (`SubscribeTaildropInbox`).
-        @Volatile
-        var ccTaildropInboxSink: io.flutter.plugin.common.EventChannel.EventSink? = null
-        /// §707 — тап по уведомлению Taildrop: тег узла, чью вкладку Network
-        /// открыть. Dart забирает его на старте и при возврате.
-        @Volatile
-        var taildropOpenRequest: String? = null
+        private var startCancelled = false
+
+        /// `BoxService.onStartCommand`: старт дошёл. `true` — его успели отменить.
+        internal fun startArrived(): Boolean {
+            startPending = false
+            return startCancelled.also { startCancelled = false }
+        }
+
+        /// Stop при статусе `Stopped`: если старт в пути — отменить его.
+        private fun cancelPendingStart(): Boolean {
+            if (!startPending) return false
+            BgLifecycle.journal("stop while a start is on its way in pid ${android.os.Process.myPid()} — the start will be cancelled")
+            startCancelled = true
+            return true
+        }
 
         fun start(context: Context) {
-            Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.start() → startForegroundService, current status=${TunnelState.status.name}")
+            startPending = true
+            startCancelled = false
+            BgLifecycle.journal("start accepted in pid ${android.os.Process.myPid()} (status=${TunnelState.status.name})")
+            // §747 G — процесс не завершается, пока система создаёт сервис.
+            BgLifecycle.startRequested()
             val intent = Intent(context, BoxVpnService::class.java).apply { action = ACTION_START }
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
-            Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.stop() → sendBroadcast(ACTION_STOP), current status=${TunnelState.status.name}")
             // Фича 478, ревью после v2.25.1 (M2): это воронка нативных Stop
             // (плитка QS, ярлык, Intent API §047, Locale-плагин) — мимо Dart.
             // Идущий прогон страховки о них иначе не узнаёт и финальным
             // стартом поднимает туннель обратно; особенно в фазе тихого
             // цикла, где сервиса нет и ACTION_STOP принять некому.
-            VpnPlugin.notifyStopRequested()
+            AutomationRelay.notifyStopRequested()
+            if (TunnelState.status == VpnStatus.Stopped) cancelPendingStart()
             context.sendBroadcast(
                 Intent(ACTION_STOP).setPackage(context.packageName)
             )
@@ -288,13 +236,13 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// ACTION_FORCE_STOP стоит до гарда `status != Stopped`.
         fun forceStop(context: Context) {
             if (stopReceiverAlive) {
-                Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+                Log.w(TAG, "[vpn] companion.forceStop() → sendBroadcast(ACTION_FORCE_STOP), current status=${TunnelState.status.name}")
                 context.sendBroadcast(
                     Intent(ACTION_FORCE_STOP).setPackage(context.packageName)
                 )
                 return
             }
-            Log.w(TAG, "[vpn §663] companion.forceStop() → receiver gone, startService(ACTION_FORCE_STOP), current status=${currentStatus.name}")
+            Log.w(TAG, "[vpn §663] companion.forceStop() → receiver gone, startService(ACTION_FORCE_STOP), current status=${TunnelState.status.name}")
             runCatching {
                 context.startService(
                     Intent(context, BoxVpnService::class.java).apply { action = ACTION_FORCE_STOP }
@@ -305,14 +253,14 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         }
 
         fun reload(context: Context) {
-            Log.d(TAG, "[vpn] companion.reload() current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.reload() current status=${TunnelState.status.name}")
             context.sendBroadcast(
                 Intent(ACTION_RELOAD).setPackage(context.packageName)
             )
         }
 
         fun resetNetwork(context: Context) {
-            Log.d(TAG, "[vpn] companion.resetNetwork() current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.resetNetwork() current status=${TunnelState.status.name}")
             context.sendBroadcast(
                 Intent(ACTION_RESET_NETWORK).setPackage(context.packageName)
             )
@@ -323,9 +271,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// некому ловить (receiver жив только у работающего сервиса) → удаляем
         /// файл прямо здесь; чистый cache.db создастся при следующем старте.
         fun clearDnsCache(context: Context) {
-            Log.d(TAG, "[vpn] companion.clearDnsCache() current status=${currentStatus.name}")
-            if (currentStatus == VpnStatus.Started ||
-                currentStatus == VpnStatus.Starting
+            Log.d(TAG, "[vpn] companion.clearDnsCache() current status=${TunnelState.status.name}")
+            if (TunnelState.status == VpnStatus.Started ||
+                TunnelState.status == VpnStatus.Starting
             ) {
                 context.sendBroadcast(
                     Intent(ACTION_CLEAR_DNS_CACHE).setPackage(context.packageName)
@@ -360,8 +308,9 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         }
 
         fun stopAwait(context: Context): Deferred<Unit> {
-            Log.d(TAG, "[vpn] companion.stopAwait() current status=${currentStatus.name}")
-            if (currentStatus == VpnStatus.Stopped) {
+            Log.d(TAG, "[vpn] companion.stopAwait() current status=${TunnelState.status.name}")
+            if (TunnelState.status == VpnStatus.Stopped) {
+                cancelPendingStart()
                 return CompletableDeferred(Unit)
             }
             // §361 — статус не Stopped, но принимать ACTION_STOP некому: сервис
@@ -371,13 +320,16 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
             // вызывающий висел бы 5 секунд ради `false` и мёртвой кнопки «Стоп».
             // Приводим companion-состояние к правде и отвечаем сразу.
             if (!stopReceiverAlive) {
-                Log.w(TAG, "[vpn §361] stopAwait: no live receiver (status=${currentStatus.name}) — force Stopped")
+                Log.w(TAG, "[vpn §361] stopAwait: no live receiver (status=${TunnelState.status.name}) — force Stopped")
                 setCurrentStatus(VpnStatus.Stopped)
                 runCatching {
                     context.sendBroadcast(
-                        Intent(BROADCAST_STATUS)
-                            .setPackage(context.packageName)
-                            .putExtra(EXTRA_STATUS, VpnStatus.Stopped.name)
+                        BgEvents.putWire(
+                            Intent(BROADCAST_STATUS)
+                                .setPackage(context.packageName)
+                                .putExtra(EXTRA_STATUS, VpnStatus.Stopped.name),
+                            TunnelState.wire(),
+                        )
                     )
                 }
                 completeStopIfWaiting()
@@ -413,12 +365,12 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         /// JNI no-throw (§141/§151): зовётся из BroadcastReceiver; тело защищено,
         /// наружу не бросаем.
         fun reconnect(context: Context) {
-            Log.d(TAG, "[vpn] companion.reconnect() current status=${currentStatus.name}")
+            Log.d(TAG, "[vpn] companion.reconnect() current status=${TunnelState.status.name}")
             if (reconnecting) {
                 Log.w(TAG, "[vpn] reconnect already in progress — ignore")
                 return
             }
-            if (currentStatus == VpnStatus.Stopped) {
+            if (TunnelState.status == VpnStatus.Stopped) {
                 start(context)   // нечего останавливать — просто старт
                 return
             }
@@ -461,6 +413,8 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun onCreate() {
         super.onCreate()
         live = this
+        // §747 G — сервис создан: пометка «старт в пути» больше не нужна.
+        BgLifecycle.startSettled()
         service.onCreate()
     }
 
@@ -471,12 +425,20 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
     override fun onBind(intent: Intent): IBinder? = super.onBind(intent) ?: android.os.Binder()
 
     override fun onDestroy() {
-        live = null
-        service.onDestroy()
+        // §747 — если система уже создала новый экземпляр, общее состояние
+        // (ссылка на живой сервис, статус туннеля, снимок allow_bypass)
+        // принадлежит ему: уничтожение прежнего его не затирает.
+        val current = live === this
+        if (current) live = null
+        service.onDestroy(current)
         // §069: runtime applied значение больше не действует — clear snapshot
         // чтобы Stats screen warning исчез при stop VPN.
-        currentSessionAllowBypass = false
+        if (current) TunnelState.setSessionAllowBypass(false)
         super.onDestroy()
+        // §747 G — туннель остановлен, сервис уничтожен: если причин жить нет,
+        // процесс `:bg` с задержкой завершится (память ядра возвращает только
+        // завершение процесса). Новый старт до проверки её отменяет сам.
+        BgLifecycle.check(applicationContext, BgLifecycle.DELAY_IDLE_MS)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -520,7 +482,7 @@ class BoxVpnService : VpnService(), PlatformInterfaceWrapper {
         // §049 F15: allowBypass opt-in toggle.
         // §069: snapshot runtime applied value для UI warning + Debug API.
         val allowBypass = BootReceiver.isAllowBypass(this)
-        currentSessionAllowBypass = allowBypass
+        TunnelState.setSessionAllowBypass(allowBypass)
         if (allowBypass) {
             builder.allowBypass()
         }

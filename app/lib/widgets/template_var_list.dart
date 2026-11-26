@@ -215,10 +215,11 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   /// только оно и только на изменение своего значения (юзером или программно
   /// через on_change).
   Widget _buildVarWidget(WizardVar v) {
-    final field = ValueListenableBuilder<String>(
-      valueListenable: widget.model.notifier(v.name),
-      builder: (_, value, _) => _buildControl(v, value),
-    );
+    Widget fieldFor({required bool inactive}) => ValueListenableBuilder<String>(
+          valueListenable: widget.model.notifier(v.name),
+          builder: (_, value, _) => _buildControl(v, value, inactive: inactive),
+        );
+    final field = fieldFor(inactive: false);
     final gate = v.enable;
     if (gate == null) return field;
     // §709 — `#enable` объявления (TEMPLATE_LANG §4.6): строка неактивна,
@@ -230,8 +231,15 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       builder: (_, child) {
         final on = evalCond(gate, makeResolver(widget.model.snapshot, _byName));
         if (on) return child!;
+        // §743 — неактивная строка показывает, что настройка НЕ действует:
+        // переключатель в положении «выкл», список — «Not in effect».
+        // Сохранённое значение не трогается и вернётся, когда условие
+        // снова станет истинным.
         return AbsorbPointer(
-          child: Opacity(opacity: kVarDisabledOpacity, child: child),
+          child: Opacity(
+            opacity: kVarDisabledOpacity,
+            child: fieldFor(inactive: true),
+          ),
         );
       },
       child: field,
@@ -253,7 +261,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
     }
   }
 
-  Widget _buildControl(WizardVar v, String value) {
+  Widget _buildControl(WizardVar v, String value, {bool inactive = false}) {
     // §691 — `text_list` + `options` + `options_open`: поле списка с ▾
     // (подсказки добавляют строку), а не чипы — чипы читались как уже
     // введённые значения.
@@ -299,14 +307,14 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
           subtitle: v.tooltip.isNotEmpty
               ? Text(v.tooltip, style: const TextStyle(fontSize: 12))
               : null,
-          value: value == 'true',
+          value: !inactive && value == 'true',
           onChanged: (val) => _update(v.name, val.toString()),
         );
 
       case 'enum':
         // §555 — `options_open`: список плюс своё значение.
         if (v.optionsOpen) return _buildTextField(v, value);
-        return _buildOptionsDropdown(v, value);
+        return _buildOptionsDropdown(v, value, inactive: inactive);
 
       case 'secret':
         return VarTextField(
@@ -376,7 +384,7 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
         if (v.options.isNotEmpty &&
             !v.optionsOpen &&
             (v.type == 'text' || v.type == 'int')) {
-          return _buildOptionsDropdown(v, value);
+          return _buildOptionsDropdown(v, value, inactive: inactive);
         }
         return _buildTextField(v, value);
     }
@@ -385,7 +393,8 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
   /// Закрытый список `options`. Значение вне списка (старое сохранённое) —
   /// показываем `default_value`, а если и его нет в списке — первый пункт:
   /// dropdown без совпавшего пункта падает.
-  Widget _buildOptionsDropdown(WizardVar v, String value) {
+  Widget _buildOptionsDropdown(WizardVar v, String value,
+      {bool inactive = false}) {
     final values = v.optionValues;
     final shown = values.contains(value)
         ? value
@@ -397,7 +406,8 @@ class _TemplateVarListViewState extends State<TemplateVarListView> {
       field: DropdownButton<String>(
         key: ValueKey('options-${v.name}'),
         isExpanded: true,
-        value: shown,
+        value: inactive ? null : shown,
+        hint: inactive ? Text(getLocalText.s("Not in effect")) : null,
         items: v.options
             .map((o) => DropdownMenuItem(
                   value: o.value,

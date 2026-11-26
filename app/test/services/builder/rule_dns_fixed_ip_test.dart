@@ -21,7 +21,7 @@ void main() {
       expect(const RuleDns(fixedIps: ['1.2.3.4']).fixedMode, true);
       expect(const RuleDns().fixedMode, false);
       expect(const RuleDns(fixedIps: ['nas.home']).fixedMode, false);
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'r',
         domains: ['a.com'],
         outbound: 'direct-out',
@@ -37,7 +37,7 @@ void main() {
     });
 
     test('round-trip fixedIps; ключ fixed не пишется, старый игнорируется', () {
-      final on = CustomRuleInline(
+      final on = CustomRuleTree.flat(
         name: 'nas',
         domains: ['nas.home'],
         outbound: 'direct-out',
@@ -56,7 +56,7 @@ void main() {
     });
 
     test('старая запись без новых ключей читается как раньше', () {
-      final old = CustomRuleInline(
+      final old = CustomRuleTree.flat(
         name: 'old',
         domains: ['a.com'],
         outbound: 'direct-out',
@@ -80,7 +80,7 @@ void main() {
 
   group('эмиссия Fixed IP', () {
     test('inline, только IPv4: A с answer, AAAA пустой NOERROR', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'nas',
         domains: ['nas.home'],
         outbound: 'direct-out',
@@ -105,7 +105,7 @@ void main() {
     });
 
     test('inline, только IPv6: A пустой, AAAA с answer', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'v6',
         domains: ['h.lan'],
         outbound: 'direct-out',
@@ -118,7 +118,7 @@ void main() {
     });
 
     test('оба семейства; Force IPv4 и сервер при Fixed IP не эмитятся', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'both',
         domains: ['h.lan'],
         outbound: 'direct-out',
@@ -137,30 +137,31 @@ void main() {
     });
 
     test('srs: матч = .srs-тег + доп-фильтры', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
         name: 'lst',
         srsUrl: 'https://e/l.srs',
         packages: ['com.app'],
         outbound: 'vpn-1',
         dns: const RuleDns(fixedIps: ['1.2.3.4']),
       );
-      final m = _apply(r, srsPaths: {r.id: '/tmp/l.srs'}).dnsMirrors;
+      final m = _apply(r, srsPaths: {CustomRuleTree.cacheIdFor(r.id, r.srsUrl): '/tmp/l.srs'}).dnsMirrors;
       expect(m, hasLength(2));
-      expect(m[0].body['rule_set'], 'lst');
+      expect(m[0].body['rule_set'], 'lst:l');
       expect(m[0].body['package_name'], ['com.app']);
       expect(m[0].body['answer'], ['*. 300 IN A 1.2.3.4']);
     });
 
-    test('ports → гейт, Fixed IP не эмитится; без адресов — тоже', () {
-      final gated = CustomRuleInline(
+    test('§755: ports не гейтят — Fixed IP эмитится; без адресов — нет', () {
+      final withPort = CustomRuleTree.flat(
         name: 'g',
         domains: ['a.com'],
         ports: ['443'],
         outbound: 'direct-out',
         dns: const RuleDns(fixedIps: ['1.2.3.4']),
       );
-      expect(_apply(gated).dnsMirrors, isEmpty);
-      final empty = CustomRuleInline(
+      expect(_apply(withPort).dnsMirrors.every((m) => m.fixedAnswer), true);
+      expect(_apply(withPort).dnsMirrors, isNotEmpty);
+      final empty = CustomRuleTree.flat(
         name: 'e',
         domains: ['a.com'],
         outbound: 'direct-out',
@@ -170,7 +171,7 @@ void main() {
     });
 
     test('в списке нет разбираемого адреса — режим не действует', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         name: 'd',
         domains: ['a.com'],
         outbound: 'direct-out',

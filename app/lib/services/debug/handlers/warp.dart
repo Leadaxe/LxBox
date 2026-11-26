@@ -22,7 +22,6 @@ import '_shared.dart';
 ///   "endpoint": "IP:port",      // дефолт engage.cloudflareclient.com:2408
 ///   "obfuscate": true,          // §126 AmneziaWG обфускация
 ///   "forceNew": false,          // игнорировать кеш, регать заново
-///   "includeReserved": false,   // §142; null → дефолт по obfuscate
 ///   "quicParams": {             // §143 masquerade (при obfuscate)
 ///     "sni": "www.google.com",  // пусто → рандом из пула
 ///     "ip": "quic",             // quic|dns|stun|sip
@@ -46,7 +45,6 @@ Future<DebugResponse> warpHandler(DebugRequest req, DebugContext ctx) async {
   final licenseKey = fieldString(body, 'licenseKey');
   final obfuscate = fieldBool(body, 'obfuscate') ?? false;
   final forceNew = fieldBool(body, 'forceNew') ?? false;
-  final includeReserved = fieldBool(body, 'includeReserved');
   final endpoint = fieldString(body, 'endpoint');
   final quicParams = _parseQuicParams(body);
 
@@ -61,7 +59,6 @@ Future<DebugResponse> warpHandler(DebugRequest req, DebugContext ctx) async {
     forceNew: forceNew,
     obfuscate: obfuscate,
     quicParams: quicParams,
-    includeReserved: includeReserved,
   );
 
   if (account == null) {

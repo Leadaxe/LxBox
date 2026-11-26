@@ -11,7 +11,7 @@ import '../../core_reject/core_reject_runner.dart';
 import '../../core_reject/core_reject_state.dart';
 import '../../diagnostics/path_mtu.dart';
 import '../../error_humanize.dart';
-import '../../platform_channels.dart';
+import '../../../vpn/platform_channels.dart';
 import '../../../vpn/box_vpn_client.dart';
 import '../../rule_set_downloader.dart';
 import '../../settings_storage.dart';
@@ -557,12 +557,13 @@ Future<DebugResponse> _downloadSrs(DebugRequest req, DebugContext ctx) async {
     }
   }
   if (rule == null) throw NotFound('rule: $id');
-  if (rule.srsUrls.isEmpty) throw const Conflict('rule has no srsUrl');
-  // ## 12 — все наборы правила, каждый в свой файл кэша.
+  final refs = rule.allRefs;
+  if (refs.isEmpty) throw const Conflict('rule has no srsUrl');
+  // ## 12 / §757 — все наборы дерева, кэш по ссылке (`<id>~<h8>`).
   final paths = <String>[];
-  for (var i = 0; i < rule.srsUrls.length; i++) {
+  for (final ref in refs) {
     final path = await RuleSetDownloader.download(
-        CustomRuleSrs.cacheIdAt(id, i), rule.srsUrls[i]);
+        CustomRuleTree.cacheIdFor(id, ref), ref);
     if (path == null) throw const UpstreamError('srs download failed');
     paths.add(path);
   }
@@ -571,7 +572,16 @@ Future<DebugResponse> _downloadSrs(DebugRequest req, DebugContext ctx) async {
 
 Future<DebugResponse> _clearSrs(DebugRequest req, DebugContext ctx) async {
   final id = req.requiredQuery('ruleId');
-  await RuleSetDownloader.delete(id);
+  // §757 — файлы всех наборов правила (кэш по ссылке) и файл старой схемы.
+  final rules = await SettingsStorage.getCustomRules();
+  final cacheIds = {
+    id,
+    for (final r in rules)
+      if (r.id == id) ...r.cacheIds,
+  };
+  for (final c in cacheIds) {
+    await RuleSetDownloader.delete(c);
+  }
   return _ok('clear-srs', {'rule_id': id});
 }
 

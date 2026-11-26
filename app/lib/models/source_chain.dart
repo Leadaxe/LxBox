@@ -18,8 +18,6 @@
 
 import 'package:collection/collection.dart';
 
-import '../services/contract/chain_strip.dart'
-    show chainStripKeyKnown, chainStripKeys, orderedChainStrip;
 import '../services/json_clone.dart' show deepCloneJson;
 import 'codec/node_link_record.dart' show nodeLinkToRecord;
 import 'node_link.dart';
@@ -28,11 +26,9 @@ import 'node_link.dart';
 /// `with_lx_chain` этот тип не знает и отвергает конфиг ЦЕЛИКОМ (§393 C5).
 const String kChainOutboundType = 'chain';
 
-// ── каталог strip ───────────────────────────────────────────────────────────
-//
-// Каталог ключей `strip` (имена, порядок показа и эмиссии, умолчания) — данные
-// реестра (`chain.json`, контракт 1.1.58), см. `services/contract/chain_strip.dart`.
-// Своей копии здесь нет.
+// §761 — `idle_timeout`, `strip_evasion`, `strip` у цепочки сняты (ядро
+// v1.14.4-lx.37-rc.2 отвергает их, контракт 1.1.184): модель их не держит,
+// чтение старой записи или бэкапа их молча отбрасывает, запись не пишет.
 
 /// Источник-цепочка: маршрут через несколько позиций подряд.
 ///
@@ -45,9 +41,6 @@ class SourceChain {
     required this.tag,
     this.enabled = true,
     this.hops = const [],
-    this.idleTimeout = '',
-    this.stripEvasion,
-    this.strip = const {},
     this.rewrite = const {},
   });
 
@@ -85,26 +78,8 @@ class SourceChain {
   /// проверяет их [chainEmitError], и не прошедшая цепочка не эмитится вовсе.
   final List<NodeLink> hops;
 
-  /// Простой, после которого звено без живых соединений удаляется.
-  /// Пусто = умолчание ядра (5m), `"0s"` = жить до остановки.
-  final String idleTimeout;
-
-  /// Снимать ли у звеньев односторонние приёмы обхода DPI.
-  ///
-  /// Nullable ради ТРЁХЗНАЧНОСТИ, а не «для красоты»: `null` = «умолчание
-  /// ядра» (true, ключ в конфиг не пишется), `false` = «пользователь
-  /// выключил явно» (ключ пишется). Обычный bool не отличил бы одно от
-  /// другого, и явное выключение молча превращалось бы в умолчание при
-  /// смене дефолта ядра. Та же причина, что у `interrupt_exist_connections`
-  /// лаунчера.
-  final bool? stripEvasion;
-
-  /// Точечный патч поверх [stripEvasion]: `false` — не снимать, `true` —
-  /// снимать дополнительно. Ключи ТОЛЬКО из каталога реестра ([chainStripKeys]).
-  final Map<String, bool> strip;
-
   /// JSON merge-patch (RFC 7396) поверх опций узла, ключ — тип outbound'а.
-  /// Применяется к звеньям (позиции со второй) после strip.
+  /// Применяется к узлам позиций со второй.
   ///
   /// Формой не правится и правиться не должен: произвольный патч по всем
   /// типам протоколов урезанная форма молча потеряла бы. `null`-значение
@@ -112,17 +87,10 @@ class SourceChain {
   /// round-trip как есть, без «чистки пустого».
   final Map<String, dynamic> rewrite;
 
-  /// Умолчание ядра: отсутствие ключа = true.
-  bool get stripEvasionEnabled => stripEvasion ?? true;
-
   SourceChain copyWith({
     String? tag,
     bool? enabled,
     List<NodeLink>? hops,
-    String? idleTimeout,
-    bool? stripEvasion,
-    bool clearStripEvasion = false,
-    Map<String, bool>? strip,
     Map<String, dynamic>? rewrite,
   }) =>
       SourceChain(
@@ -131,24 +99,14 @@ class SourceChain {
         tag: tag ?? this.tag,
         enabled: enabled ?? this.enabled,
         hops: hops ?? this.hops,
-        idleTimeout: idleTimeout ?? this.idleTimeout,
-        stripEvasion:
-            clearStripEvasion ? null : (stripEvasion ?? this.stripEvasion),
-        strip: strip ?? this.strip,
         rewrite: rewrite ?? this.rewrite,
       );
 
   /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
   /// записи источника (`tag`, `enabled`).
-  ///
-  /// Round-trip обязан быть точным: `strip_evasion` пишется, ТОЛЬКО когда
-  /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
-  /// не создают — иначе умолчание и явный выбор стали бы неотличимы.
+  /// Пустой `rewrite` ключа не создаёт.
   Map<String, dynamic> toCanonJson() => {
         'hops': [for (final h in hops) nodeLinkToRecord(h)],
-        if (idleTimeout.isNotEmpty) 'idle_timeout': idleTimeout,
-        if (stripEvasion != null) 'strip_evasion': stripEvasion,
-        if (strip.isNotEmpty) 'strip': orderedChainStrip(strip),
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),
       };
 
@@ -161,14 +119,11 @@ class SourceChain {
           tag == other.tag &&
           enabled == other.enabled &&
           _eq.equals(hops, other.hops) &&
-          idleTimeout == other.idleTimeout &&
-          stripEvasion == other.stripEvasion &&
-          _eq.equals(strip, other.strip) &&
           _eq.equals(rewrite, other.rewrite));
 
   @override
   int get hashCode => Object.hash(tag, enabled, _eq.hash(hops),
-      idleTimeout, stripEvasion, _eq.hash(strip), _eq.hash(rewrite));
+      _eq.hash(rewrite));
 }
 
 /// §393 D2 — итог вычистки позиций: сколько ПОЗИЦИЙ снято и список цепочек
@@ -277,15 +232,16 @@ String chainEmitError(SourceChain c) {
     }
     if (!seen.add(hop)) return 'position ${i + 1} repeats "${hop.tag}"';
   }
-  for (final typeName in c.rewrite.keys) {
-    if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
-  }
-  for (final key in c.strip.keys) {
-    if (!chainStripKeyKnown(key)) {
-      return 'strip: unknown key "$key" '
-          '(allowed: ${chainStripKeys().join(', ')})';
+  for (final e in c.rewrite.entries) {
+    if (e.key.trim().isEmpty) return 'rewrite: empty outbound type name';
+    // §761 — ядро v1.14.4-lx.37-rc.2 отвергает патч, который не объект или
+    // трогает `detour`: путь узла на позиции задаёт цепочка, не патч.
+    if (e.value is! Map) return 'rewrite: "${e.key}" is not an object';
+    if ((e.value as Map).containsKey('detour')) {
+      return 'rewrite: "${e.key}" changes detour — the chain sets it';
     }
   }
+  // §761 — `strip` в конфиг не пишется, его ключи цепочку не валят.
   return '';
 }
 
@@ -303,12 +259,6 @@ Map<String, dynamic> chainOutboundObject(SourceChain c, List<String> hopTags) =>
       'tag': c.tag,
       'type': kChainOutboundType,
       'outbounds': [...hopTags],
-      if (c.idleTimeout.trim().isNotEmpty) 'idle_timeout': c.idleTimeout.trim(),
-      if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
-      if (c.strip.isNotEmpty)
-        // По каталогу, а не по порядку ключей Map: для ядра он не важен,
-        // а для читаемости конфига и сверки с лаунчером — важен.
-        'strip': orderedChainStrip(c.strip),
       if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
     };
 

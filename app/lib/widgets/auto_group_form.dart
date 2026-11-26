@@ -11,6 +11,7 @@ import '../services/node_identity.dart';
 import '../services/parser/uri_utils.dart';
 import '../services/safe_regex.dart';
 import 'urltest_idle_hint.dart';
+import 'dpad_radio_group.dart';
 
 /// §322/§686 — кандидат в пул узла автовыбора: ссылка на члена папки
 /// `{id папки, сырой тег}` (§439), имя и флаг «член включён в папке».
@@ -540,7 +541,7 @@ class AutoGroupFormState extends State<AutoGroupForm> {
       Text(getLocalText.s("Selected server"),
           style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
       const SizedBox(height: 4),
-      RadioGroup<String>(
+      DpadRadioGroup<String>(
         groupValue: current,
         onChanged: (v) => _update(() => _default = v ?? ''),
         child: Column(

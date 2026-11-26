@@ -295,7 +295,7 @@ void main() {
           enabled: true, tag: 'google_dot', varValues: {'outbound': 'vpn-2'});
       expect(identical(retargetDnsServerOutboundVars(other, decls, retarget), other),
           isTrue);
-      final inline = CustomRuleInline(name: 'r', outbound: 'vpn-3');
+      final inline = CustomRuleTree.flat(name: 'r', outbound: 'vpn-3');
       expect(identical(retargetPresetOutboundVars(inline, decls, retarget), inline),
           isTrue);
     });

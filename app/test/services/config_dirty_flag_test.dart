@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/services/config_dirty_check.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §113 — config-dirty флаг владеется `SettingsStorage`, поднимается

@@ -11,6 +11,7 @@ import 'package:lxbox/models/node_spec.dart';
 import 'package:lxbox/models/node_warning.dart';
 import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/models/singbox_entry.dart';
+import 'package:lxbox/models/source_dialect.dart';
 import 'package:lxbox/models/template_vars.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/builder/server_list_build.dart';
@@ -220,21 +221,47 @@ void main() {
         parseAll(decode('{"type": "vless", "tag": "v"}'), own: true), isEmpty);
   });
 
-  test('вход с комментариями принимается, источник без комментариев',
+  // §741 (контракт 1.1.172) — комментарии хранятся в источнике как набраны;
+  // авто-эмодзи (§090) правит тег текстом, пометки не трогает.
+  test('вход с комментариями принимается, источник с комментариями',
       () async {
     final c = SubscriptionController();
     await c.addFromInput(commented);
     expect(c.lastError, isNull);
-    expect(c.lastCommentsRemoved, isTrue);
     final list = c.entries.single.list as UserServer;
-    expect(list.rawBody, isNot(contains('United States')));
-    expect(list.rawBody, isNot(contains('block comment')));
+    expect(list.rawBody, contains('// United States Central'));
+    expect(list.rawBody, contains('/* block comment */'));
+    expect(list.dialect, SourceDialect.singbox);
     expect(sourceKindOf(list.rawBody), 'singbox_outbound');
     final src = jsonDecode(list.nodes.single.rawSource) as Map;
     expect(src['password'], 'https://not-a-comment');
+    expect(list.nodes.single.tag, endsWith('ovpn-out'));
+    // Без комментариев текст — тот же узел, что у тела.
+    final plain = jsonDecode(jsonSourceText(list.rawBody)) as Map;
+    expect(plain['password'], 'https://not-a-comment');
+    expect(plain['tag'], list.nodes.single.tag);
   });
 
-  // §686 п.11 — `#` до конца строки снимается, как `//`; в строке остаётся.
+  // §741 — голое тело с комментариями, добавленное в папку: член хранит
+  // текст как набран.
+  test('в папку: голое тело с комментариями — текст как набран', () async {
+    final c = SubscriptionController();
+    await c.addFolder('F');
+    final at = c.entries.indexWhere((e) => e.list is FolderServers);
+    const trojan = '{\n'
+        '  // пометка\n'
+        '  "type": "trojan", "tag": "tj", # тег\n'
+        '  "server": "example-1.com", "server_port": 443,\n'
+        '  /* пароль */ "password": "p//x#y"\n'
+        '}';
+    final err = await c.addMembersToFolder(at, trojan);
+    expect(err, isNull);
+    final folder = c.entries[at].list as FolderServers;
+    expect(folder.members.single.raw, trojan);
+    expect(folder.members.single.node?.tag, 'tj');
+  });
+
+  // §686 п.11 — `#` до конца строки — комментарий, как `//`; в строке цел.
   test('вход с #-комментариями принимается, # в строке цел', () async {
     final c = SubscriptionController();
     await c.addFromInput(commented
@@ -242,18 +269,11 @@ void main() {
         .replaceFirst('"test-user",', '"test-user", # user')
         .replaceFirst('https://not-a-comment', 'pass#word'));
     expect(c.lastError, isNull);
-    expect(c.lastCommentsRemoved, isTrue);
     final list = c.entries.single.list as UserServer;
-    expect(list.rawBody, isNot(contains('United States')));
-    expect(list.rawBody, isNot(contains('# user')));
+    expect(list.rawBody, contains('# United States Central'));
+    expect(list.rawBody, contains('# user'));
     final src = jsonDecode(list.nodes.single.rawSource) as Map;
     expect(src['password'], 'pass#word');
-  });
-
-  test('без комментариев флаг не ставится', () async {
-    final c = SubscriptionController();
-    await c.addFromInput(body);
-    expect(c.lastCommentsRemoved, isFalse);
   });
 
   test('uncommentedJson: строгий JSON и не-JSON не трогает', () {

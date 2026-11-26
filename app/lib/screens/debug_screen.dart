@@ -8,13 +8,13 @@ import '../models/debug_entry.dart';
 import '../services/app_log.dart';
 import '../services/dump_builder.dart';
 import '../services/error_format.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import 'app_settings_screen.dart';
 import 'crash_reports_screen.dart';
 import 'oom_reports_screen.dart';
 import 'debug/profiling_tab.dart';
 import '../services/l10n/locale_controller.dart';
-import '../widgets/dpad_field_exit.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key, this.initialTab = 0, this.errorsOnly = false});
@@ -75,7 +75,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
     return buf.toString();
   }
 
-  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _snack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   void _copyAll(List<DebugEntry> entries) {
     Clipboard.setData(ClipboardData(text: _entriesToText(entries)));
@@ -140,7 +140,7 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
                 Tab(text: getLocalText.s("Profiling")),
               ]),
             ),
-            body: TabBarView(children: [
+            body: FocusSafeTabBarView(children: [
               _buildLogTab(filtered),
               const CrashReportsTab(),
               const OomReportsTab(),
@@ -281,26 +281,24 @@ class _DebugScreenState extends State<DebugScreen> with SnackHelper {
           const SizedBox(height: 8),
           // Search field (night T6-3). Case-insensitive substring
           // match by message. Empty = no filter.
-          DpadFieldExit(
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search, size: 18),
-                hintText: getLocalText.s("Filter by text…"),
-                isDense: true,
-                border: const OutlineInputBorder(),
-                suffixIcon: _searchQuery.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _searchQuery = '');
-                        },
-                      ),
-              ),
-              onChanged: (v) => setState(() => _searchQuery = v),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, size: 18),
+              hintText: getLocalText.s("Filter by text…"),
+              isDense: true,
+              border: const OutlineInputBorder(),
+              suffixIcon: _searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    ),
             ),
+            onChanged: (v) => setState(() => _searchQuery = v),
           ),
           const SizedBox(height: 8),
           Expanded(

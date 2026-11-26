@@ -36,9 +36,6 @@
       "other": "%1$d 个快照 · %2$s。点击查看，分享以获取 pprof 性能文件。"
     }
   },
-  "%1$d · %2$d invalid": {
-    "value": "%1$d · %2$d 个无效"
-  },
   "%1$d/%2$d conns": {
     "value": "%1$d/%2$d 连接"
   },
@@ -69,11 +66,6 @@
   "%d app settings": {
     "value": {
       "other": "%d 项应用设置"
-    }
-  },
-  "%d apps selected — tap to edit": {
-    "value": {
-      "other": "已选 %d 个应用 — 点按编辑"
     }
   },
   "%d chained": {
@@ -314,9 +306,6 @@
   },
   "(optional)": {
     "value": "（可选）"
-  },
-  "1 app selected — tap to edit": {
-    "value": "已选 1 个应用 — 点按编辑"
   },
   "1 server disabled": {
     "value": "已关闭 1 个服务器"
@@ -590,12 +579,6 @@
   "AND": {
     "value": "AND"
   },
-  "AND with match. Transport (L4) and L7 sniff.": {
-    "value": "与 match 同时满足。传输层（L4）与 L7 嗅探。"
-  },
-  "AND. Which interface the packet came in on.": {
-    "value": "AND。数据包从哪个接口进入。"
-  },
   "About": {
     "value": "关于"
   },
@@ -608,8 +591,14 @@
   "Edit the Source tab": {
     "value": "请编辑 Source 标签页"
   },
-  "Let Android assistants turn the VPN on or off and read its status (Android 16+)": {
-    "value": "允许 Android 助手开启或关闭 VPN 并读取其状态（Android 16+）"
+  "Let Android assistants control the VPN, run network checks and read your routing setup (Android 16+)": {
+    "value": "允许 Android 助手控制 VPN、运行网络检查并读取路由设置（Android 16+）"
+  },
+  "Let assistants change settings": {
+    "value": "允许助手更改设置"
+  },
+  "Assistants can add and edit routing rules and Directions and turn sources on or off without asking": {
+    "value": "助手可以无需确认地添加和编辑路由规则与方向，并开启或关闭来源"
   },
   "Accept automation commands": {
     "value": "接受自动化指令"
@@ -662,12 +651,6 @@
   "Fixed IP": {
     "value": "固定 IP"
   },
-  "Go RE2, matched anywhere in the domain, e.g. %s": {
-    "value": "Go RE2，匹配域名中的任意位置，例如 %s"
-  },
-  "Go RE2, matched anywhere in the package name, e.g. %s": {
-    "value": "Go RE2，匹配包名中的任意位置，例如 %s"
-  },
   "How domains matched by this rule are resolved.": {
     "value": "如何解析与此规则匹配的域名。"
   },
@@ -697,9 +680,6 @@
   },
   "Owner": {
     "value": "主节点"
-  },
-  "Package name regex": {
-    "value": "包名正则"
   },
   "Relay": {
     "value": "中继节点"
@@ -915,9 +895,6 @@
   "Any app on this device will be able to control the VPN via broadcast commands while this is on. Only turn it on if you use Tasker / Macrodroid and understand the implications.": {
     "value": "开启后，本机任意应用都能通过广播指令控制 VPN。仅当你使用 Tasker / MacroDroid 并了解其影响时才开启。"
   },
-  "Any — tap Edit to filter by network / L7 protocol": {
-    "value": "任意 — 点「编辑」可按网络 / L7 协议筛选"
-  },
   "Anyone who gets this link can use the key. Copy it only to move the node to your own device.": {
     "value": "拿到这条链接的人都能使用该私钥。仅在把节点迁移到自己的设备时才复制它。"
   },
@@ -1099,9 +1076,6 @@
   },
   "Binary profiles (.pb): go tool pprof file.pb\nHeap inuse_space: go tool pprof -inuse_space heap-*.pb": {
     "value": "二进制性能文件（.pb）：go tool pprof file.pb\n堆 inuse_space：go tool pprof -inuse_space heap-*.pb"
-  },
-  "Bind to this device (reserved)": {
-    "value": "绑定到本机（保留）"
   },
   "Blocked — Android may throttle the VPN service. Tap to allow.": {
     "value": "已阻止——Android 可能限制 VPN 服务。点击允许。"
@@ -2126,9 +2100,6 @@
   "Don't use detour servers": {
     "value": "不使用 detour 服务器"
   },
-  "Done": {
-    "value": "完成"
-  },
   "Download": {
     "value": "下载"
   },
@@ -2542,6 +2513,9 @@
   "General": {
     "value": "通用"
   },
+  "Not in effect": {
+    "value": "未生效"
+  },
   "Generate random": {
     "value": "随机生成"
   },
@@ -2680,9 +2654,6 @@
   "How it works: directions, rules, DNS, detour, recipes": {
     "value": "工作原理：方向、规则、DNS、detour、示例"
   },
-  "INBOUND": {
-    "value": "INBOUND"
-  },
   "IP": {
     "value": "IP"
   },
@@ -2815,9 +2786,6 @@
         "value": "供参考"
       }
     }
-  },
-  "Inline": {
-    "value": "内联"
   },
   "Input is empty": {
     "value": "输入为空"
@@ -3071,17 +3039,8 @@
   "Managed by presets automatically": {
     "value": "由预设自动管理"
   },
-  "Match RFC1918 (10/8, 172.16/12, 192.168/16) + loopback + link-local": {
-    "value": "匹配 RFC1918（10/8、172.16/12、192.168/16）+ 回环 + 链路本地"
-  },
-  "Match when the packet SOURCE is a private address": {
-    "value": "当数据包来源为私有地址时匹配"
-  },
   "Matches": {
     "value": "匹配项"
-  },
-  "Matches when traffic is on a selected network AND matches a selected L7 protocol.": {
-    "value": "当流量位于所选网络且匹配所选 L7 协议时命中。"
   },
   "Measuring…": {
     "value": "正在测量…"
@@ -3151,9 +3110,6 @@
   },
   "Nearby Wi-Fi permission missing": {
     "value": "缺少“附近的 Wi-Fi 设备”权限"
-  },
-  "NETWORK & PROTOCOL": {
-    "value": "网络与协议"
   },
   "Name": {
     "value": "名称"
@@ -3241,21 +3197,6 @@
   },
   "No Tailscale nodes yet — add one on the Servers screen first": {
     "value": "还没有 Tailscale 节点——请先在「服务器」页添加一个"
-  },
-  "No SSID filter — rule is active on any Wi-Fi network.": {
-    "value": "没有 SSID 过滤——规则在任何 Wi-Fi 网络都生效。"
-  },
-  "Any": {
-    "value": "任意"
-  },
-  "Cellular": {
-    "value": "移动网络"
-  },
-  "Metered networks only": {
-    "value": "仅限计费网络"
-  },
-  "Mobile data and Wi-Fi marked as metered in Android settings": {
-    "value": "移动数据，以及在 Android 设置中标记为计费的 Wi-Fi"
   },
   "metered": {
     "value": "计费"
@@ -3424,9 +3365,6 @@
     "value": {
       "other": "路由 — %d 条规则"
     }
-  },
-  "Select apps…": {
-    "value": "选择应用…"
   },
   "Server + %d detours copied": {
     "value": {
@@ -3627,9 +3565,6 @@
   "On update": {
     "value": "更新时"
   },
-  "One URL per line — several rule sets in one rule.": {
-    "value": "每行一个 URL——一条规则可含多个规则集。"
-  },
   "One node routes traffic back into its own chain. Tap it to open its source, change or remove its detour, then start again.": {
     "value": "有一个节点的流量回环到自身链路。点击它打开来源，修改或删除其 detour，然后重新启动。"
   },
@@ -3638,9 +3573,6 @@
   },
   "One-way": {
     "value": "单向"
-  },
-  "One-way DPI tricks make no sense on a link that dials through the previous hop.": {
-    "value": "对经由上一跳拨号的链路，单向 DPI 绕过手段没有意义。"
   },
   "One-way traffic": {
     "value": "单向流量"
@@ -3732,9 +3664,6 @@
   "Password (optional)": {
     "value": "密码（可选）"
   },
-  "Paste": {
-    "value": "粘贴"
-  },
   "Paste JSON": {
     "value": "粘贴 JSON"
   },
@@ -3773,9 +3702,6 @@
   },
   "Pay": {
     "value": "支付"
-  },
-  "Per-key overrides": {
-    "value": "逐项覆盖"
   },
   "Phone → %1$s → %2$s → Internet": {
     "value": "手机 → %1$s → %2$s → 互联网"
@@ -3888,8 +3814,8 @@
   "Positions %s are empty — remove them: the core rejects a chain with a blank position.": {
     "value": "位置 %s 为空——请移除：内核不接受含空位置的链路。"
   },
-  "Positions %s have their own detour — it does not apply inside a chain: a link always dials through the previous position. The path is exactly as shown.": {
-    "value": "位置 %s 自带 detour——它在链路内部不生效：每一环始终经上一位置拨号。路径就如所示。"
+  "Positions %s have their own detour — it does not apply inside a chain: a position past the first always dials through the previous one. The path is exactly as shown.": {
+    "value": "位置 %s 有自己的 detour——在链内不生效：第一个之后的位置总是经由前一个位置连接。路径与显示完全一致。"
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "偏好设置、测速选项、自动更新、Wi-Fi 历史"
@@ -3927,12 +3853,6 @@
   "Presets are not transferable — this app has its own": {
     "value": "预设无法迁移——本应用自带"
   },
-  "Private IP": {
-    "value": "私有 IP"
-  },
-  "Private source IP": {
-    "value": "私有源 IP"
-  },
   "Probe again": {
     "value": "重新测量"
   },
@@ -3962,9 +3882,6 @@
   },
   "Protocol and server details": {
     "value": "协议与服务器信息"
-  },
-  "Protocol filter": {
-    "value": "协议筛选"
   },
   "Proxy link, WireGuard config or outbound JSON": {
     "value": "代理链接、WireGuard 配置或出站 JSON"
@@ -4103,9 +4020,6 @@
   },
   "Reload failed: %s": {
     "value": "重新加载失败：%s"
-  },
-  "Remote (.srs)": {
-    "value": "远程（.srs）"
   },
   "Remove": {
     "value": "移除"
@@ -4473,9 +4387,6 @@
   "Send x-hwid + device headers on every subscription fetch — for panels with HWID device limits (Remnawave). On by default.": {
     "value": "每次获取订阅时发送 x-hwid 与设备请求头——用于按 HWID 限制设备的面板（Remnawave）。默认开启。"
   },
-  "Sends the Cloudflare client_id. Off for obfuscation (the device binding tends to get blocked).": {
-    "value": "会发送 Cloudflare 的 client_id。使用混淆时关闭（设备绑定容易被封）。"
-  },
   "Server": {
     "value": "服务器"
   },
@@ -4737,9 +4648,6 @@
   },
   "Strict tunnel — all traffic goes through tun.": {
     "value": "严格隧道——所有流量都经 tun。"
-  },
-  "Strip evasion tricks from links": {
-    "value": "去除链接中的规避手段"
   },
   "Subscription": {
     "value": "订阅",
@@ -5120,9 +5028,6 @@
   "Unattributed (no owner)": {
     "value": "无归属（未识别应用）"
   },
-  "Unavailable with port/protocol filters — they are unknown at DNS-query time.": {
-    "value": "使用端口/协议筛选时不可用——DNS 查询时这些信息还未知。"
-  },
   "Unique id — referenced by DNS rules / resolvers": {
     "value": "唯一标识——DNS 规则/解析器通过它引用"
   },
@@ -5500,9 +5405,6 @@
   "empty = core default": {
     "value": "留空 = 内核默认值"
   },
-  "empty = core default (5m); 0s = keep until stop": {
-    "value": "留空 = 内核默认（5m）；0s = 保持到停止"
-  },
   "empty = no prefix": {
     "value": "留空 = 不加前缀"
   },
@@ -5550,9 +5452,6 @@
   },
   "keep the fastest server until it fails": {
     "value": "保持最快的服务器，直到它失效"
-  },
-  "kept": {
-    "value": "保留"
   },
   "latency-tested twin of this direction": {
     "value": "该方向的延迟测速副本"
@@ -5663,9 +5562,6 @@
   },
   "storage shape (lxbox_settings.json)": {
     "value": "存储格式（lxbox_settings.json）"
-  },
-  "stripped": {
-    "value": "已去除"
   },
   "taken from member names; empty = no badges. Display only — not sent to the core": {
     "value": "取自成员名称；留空 = 不显示标记。仅供显示——不会发送给内核"
@@ -6018,9 +5914,6 @@
   },
   "The app does not know this node type and does not check it. The node goes to the core as written.": {
     "value": "应用不认识此节点类型，也不对其做检查。节点按原样交给内核。"
-  },
-  "Comments were removed.": {
-    "value": "注释已移除。"
   },
   "via %s": {
     "value": "经 %s"
@@ -6713,20 +6606,29 @@
   "Devices shared by other users are not counted as yours.": {
     "value": "其他用户共享的设备不算作你的设备。"
   },
-  "Core: lx.wg.idle_suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
-    "value": "内核：lx.wg.idle_suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
+  "Core: lx.wg.idle.suspend. An idle WireGuard endpoint that is not on the active route is torn down and rebuilt on its next dial.": {
+    "value": "内核：lx.wg.idle.suspend。不在活动路由上的空闲 WireGuard 端点会被拆除，并在下次拨号时重建。"
   },
-  "Core: lx.wg.idle_suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
-    "value": "内核：lx.wg.idle_suspend_reachable。对活动路由上的端点进行同样的休眠，空闲时间更长。"
+  "Core: lx.wg.idle.suspend_reachable. The same sleep for endpoints on the active route, after a longer quiet period.": {
+    "value": "内核：lx.wg.idle.suspend_reachable。对活动路由上的端点进行同样的休眠，空闲时间更长。"
   },
-  "Core: lx.wg.lazy_build. An endpoint is built on its first dial instead of at core start.": {
-    "value": "内核：lx.wg.lazy_build。端点在首次拨号时构建，而不是在内核启动时。"
+  "Core: lx.wg.idle.lazy_build. An endpoint is built on its first dial instead of at core start.": {
+    "value": "内核：lx.wg.idle.lazy_build。端点在首次拨号时构建，而不是在内核启动时。"
   },
-  "Core: lx.wg.build_max. Over the limit the endpoint idle for the longest is torn down.": {
-    "value": "内核：lx.wg.build_max。超出上限时，空闲最久的端点会被拆除。"
+  "Core: lx.wg.idle.build_max. Over the limit the endpoint idle for the longest is torn down.": {
+    "value": "内核：lx.wg.idle.build_max。超出上限时，空闲最久的端点会被拆除。"
   },
-  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
-    "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
+  "Core: lx.wg.buffers.read_datagram_count. Datagrams one read of a tunnel without a detour takes; below 128 the socket also gives up kernel receive coalescing (UDP GRO). Ignored outside Linux and Android.": {
+    "value": "内核：lx.wg.buffers.read_datagram_count。没有 detour 的隧道一次读取的数据报数量；低于 128 时套接字还会放弃内核接收合并（UDP GRO）。仅在 Linux 和 Android 上生效。"
+  },
+  "Core: lx.wg.buffers.send_by_mtu. Off puts the send buffers back at 64 KiB per packet.": {
+    "value": "内核：lx.wg.buffers.send_by_mtu。关闭后发送缓冲区恢复为每个数据包 64 KiB。"
+  },
+  "Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry.": {
+    "value": "内核：lx.wg.connected_socket。隧道套接字连接到服务器；发送失败或路由变化会断开连接，更换了地址的服务器要到下一次握手重试后才能被听到。"
+  },
+  "Core: lx.detour.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "内核：lx.detour.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"
@@ -6850,5 +6752,260 @@
   },
   "Detour is applied in the test for %d of %d; the others are checked directly.": {
     "value": "测试中 %d / %d 个节点使用 detour；其余直接检测。"
+  },
+  "Not applied: the detour is unavailable, traffic goes directly to this server.": {
+    "value": "未生效：detour 不可用，流量直接连接到此服务器。"
+  },
+  "Not applied: the detour is unavailable, nodes connect directly.": {
+    "value": "未生效：detour 不可用，节点直接连接。"
+  },
+  "Block HTTPS/SVCB records": {
+    "value": "拦截 HTTPS/SVCB 记录"
+  },
+  "Hides ECH from apps like Chrome so the site name stays visible and this rule can match it. Apps with their own DNS-over-HTTPS bypass it.": {
+    "value": "对 Chrome 等应用隐藏 ECH，使网站名称保持可见，本规则即可匹配。自带 DNS-over-HTTPS 的应用会绕过此拦截。"
+  },
+  "Needs a domain condition": {
+    "value": "需要域名条件"
+  },
+  "DNS options apply to these domains on any port and protocol": {
+    "value": "DNS 选项对这些域名的任意端口和协议生效"
+  },
+  "DNS options have no effect: the rule has no condition DNS can see": {
+    "value": "DNS 选项无效：该规则没有 DNS 可识别的条件"
+  },
+  "DNS options are set in the form. This rule can only be edited as JSON.": {
+    "value": "DNS 选项在表单中设置。此规则只能以 JSON 编辑。"
+  },
+  "DNS options do not apply to this rule: it has no condition DNS queries can match, such as domains, apps or a rule set.": {
+    "value": "DNS 选项不适用于此规则：它没有 DNS 查询可匹配的条件，例如域名、应用或规则集。"
+  },
+  "%s Discard returns to the form without the JSON changes.": {
+    "value": "%s「放弃」将返回表单，不保留 JSON 的修改。"
+  },
+  "A rule set may hold its own ports and processes. To combine it with other conditions by OR, use a rule group.": {
+    "value": "规则集可能自带端口和进程条件。若要与其他条件按「或」组合，请使用规则组。"
+  },
+  "Add current": {
+    "value": "当前网络"
+  },
+  "Apps": {
+    "value": "应用"
+  },
+  "BSSID": {
+    "value": "BSSID"
+  },
+  "Choose apps": {
+    "value": "选择应用"
+  },
+  "Condition": {
+    "value": "条件"
+  },
+  "Destination / Rule sets": {
+    "value": "目标 / 规则集"
+  },
+  "Domain keywords": {
+    "value": "域名关键词"
+  },
+  "Domain suffixes": {
+    "value": "域名后缀"
+  },
+  "Domains": {
+    "value": "域名"
+  },
+  "Empty": {
+    "value": "空"
+  },
+  "IP addresses / CIDR": {
+    "value": "IP 地址 / CIDR"
+  },
+  "Inbound": {
+    "value": "入站"
+  },
+  "Inbound tags": {
+    "value": "入站标签"
+  },
+  "Invalid regex: %s": {
+    "value": "无效的正则表达式：%s"
+  },
+  "Keep editing": {
+    "value": "继续编辑"
+  },
+  "Leave JSON?": {
+    "value": "离开 JSON？"
+  },
+  "Manual download only. Tap ☁ to fetch the rule-set files.": {
+    "value": "仅手动下载。点击 ☁ 获取规则集文件。"
+  },
+  "Metered network": {
+    "value": "按流量计费的网络"
+  },
+  "Network type": {
+    "value": "网络类型"
+  },
+  "Network types": {
+    "value": "网络类型"
+  },
+  "Networks": {
+    "value": "网络"
+  },
+  "No conditions yet.": {
+    "value": "暂无条件。"
+  },
+  "Not a URL: %s": {
+    "value": "不是 URL：%s"
+  },
+  "Not available on this device": {
+    "value": "在此设备上无效"
+  },
+  "Package regex": {
+    "value": "包名正则"
+  },
+  "Packages": {
+    "value": "包名"
+  },
+  "Path regex": {
+    "value": "路径正则"
+  },
+  "Pick saved": {
+    "value": "从已保存中选择"
+  },
+  "Port ranges": {
+    "value": "端口范围"
+  },
+  "Ports": {
+    "value": "端口"
+  },
+  "Private addresses": {
+    "value": "私有地址"
+  },
+  "Private source addresses": {
+    "value": "私有源地址"
+  },
+  "Process": {
+    "value": "进程"
+  },
+  "Protocols": {
+    "value": "协议"
+  },
+  "Remove %s?": {
+    "value": "删除「%s」？"
+  },
+  "Rule %d": {
+    "value": "规则 %d"
+  },
+  "Rule group": {
+    "value": "规则组"
+  },
+  "Rule sets": {
+    "value": "规则集"
+  },
+  "Rule sets in this rule: %d": {
+    "value": "本规则中的规则集：%d"
+  },
+  "Rule sets — URL (one per line)": {
+    "value": "规则集 — URL（每行一个）"
+  },
+  "Source IP addresses / CIDR": {
+    "value": "源 IP 地址 / CIDR"
+  },
+  "Source port": {
+    "value": "源端口"
+  },
+  "Source port ranges": {
+    "value": "源端口范围"
+  },
+  "Source ports": {
+    "value": "源端口"
+  },
+  "The form cannot show this rule.": {
+    "value": "表单无法显示此规则。"
+  },
+  "The rule has no conditions": {
+    "value": "该规则没有条件"
+  },
+  "What is filled in here will be lost.": {
+    "value": "此处填写的内容将丢失。"
+  },
+  "all of": {
+    "value": "全部满足"
+  },
+  "any of": {
+    "value": "任一满足"
+  },
+  "quarantine": {
+    "value": "隔离"
+  },
+  "%d conn · %d fail": {
+    "value": "%d 连接 · %d 失败"
+  },
+  "shifted keys: %d": {
+    "value": "已偏移的键：%d"
+  },
+  "address problems: %d": {
+    "value": "地址问题：%d"
+  },
+  "frozen for %d s": {
+    "value": "冻结 %d 秒"
+  },
+  "frozen": {
+    "value": "冻结"
+  },
+  "Effective": {
+    "value": "生效"
+  },
+  "Original": {
+    "value": "原始"
+  },
+  "No data from the core: the tunnel is not running or the node is not in the running config.": {
+    "value": "内核无数据：隧道未运行，或运行中的配置里没有该节点。"
+  },
+  "Changed by the core": {
+    "value": "内核所做的更改"
+  },
+  "chain %s, position %d": {
+    "value": "链 %s，位置 %d"
+  },
+  "rewrite of chain %s, position %d": {
+    "value": "链 %s 的 rewrite，位置 %d"
+  },
+  "MTU alignment (%s) under %s": {
+    "value": "MTU 对齐（%s），下层 %s"
+  },
+  "\"%s\" at position %d is also inside \"%s\" at the entry — make a copy of \"%s\" without \"%s\" for the entry.": {
+    "value": "“%1$s”（位置 %2$d）也在入口的“%3$s”中——请为入口复制一份不含“%5$s”的“%4$s”。"
+  },
+  "\"%s\" is the entry and also inside \"%s\" at position %d — make a copy of \"%s\" without \"%s\" for this position.": {
+    "value": "“%s”是入口，同时也在位置 %3$d 的“%2$s”中——请为该位置复制一份不含“%5$s”的“%4$s”。"
+  },
+  "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.": {
+    "value": "“%s”同时位于位置 %d 和 %d——请为位置 %6$d 复制一份不含“%5$s”的“%4$s”。"
+  },
+  "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
+    "value": "标签“%s”已被节点或组占用，而链的跃点需要它——请重命名该节点。"
+  },
+  "Hop chain \"%s\" is not built": {
+    "value": "跳转链路“%s”未构建"
+  },
+  "More chains are not built: %d.": {
+    "value": "另有未构建的跳转链路：%d。"
+  },
+  "Open chain": {
+    "value": "打开跳转链路"
+  },
+  "\"%s\" is used in chain \"%s\" (position %d) and in chain \"%s\" (position %d) — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
+    "value": "“%s”已在链“%s”（位置 %d）和链“%s”（位置 %d）中使用——请为其中之一复制“%s”（及其节点；WireGuard 副本需要其他密钥）。"
+  },
+  "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.": {
+    "value": "在链“%s”中，入口处“%s”的 detour 指向“%s”，而该链在更高位置接管了它——请删除该 detour，或把“%s”移出该链。"
+  },
+  "\"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or put a copy of the node without the port at this position.": {
+    "value": "链“%3$s”位置 %2$d 的“%1$s”设置了固定本地端口（%4$s）——请删除该节点的端口，或在此位置放一份不带端口的节点副本。"
+  },
+  "\"%s\" inside \"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or use a copy of the node without the port in \"%s\".": {
+    "value": "链“%4$s”位置 %3$d 的“%2$s”中的“%1$s”设置了固定本地端口（%5$s）——请删除该节点的端口，或在“%6$s”中使用不带端口的节点副本。"
+  },
+  "These changes can't be saved until the error is fixed. Leave without saving?": {
+    "value": "在修正错误之前无法保存这些更改。不保存就离开吗？"
   }
 }

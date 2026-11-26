@@ -22,6 +22,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 
+import 'rule_conditions.dart';
+
 /// Чтение файла реестра. Инъекция ради тестов: прод читает `rootBundle`,
 /// тест — файловую систему, и сервис остаётся свободен от биндинга.
 typedef AssetLoader = Future<String> Function(String path);
@@ -44,7 +46,17 @@ const _kSharedRefs = <String, String>{
 
 /// Общие файлы реестра БЕЗ цели `ref`: тело узла в них не спускается, их
 /// читают другие слои по имени файла ([ContractRegistry.rawShared]).
-const _kStandaloneShared = <String>['source_kinds.json', 'allowlists.json'];
+///
+/// §757 — `rule_conditions.json` (контракт 1.1.179): таблица условий правила
+/// маршрута ([ContractRegistry.ruleConditions]).
+const _kStandaloneShared = <String>[
+  'source_kinds.json',
+  'allowlists.json',
+  _kRuleConditionsFile,
+];
+
+/// §757 — файл таблицы условий правила маршрута.
+const _kRuleConditionsFile = 'rule_conditions.json';
 
 /// Контракт 1.1.122 (`TASKS_LXBOX.md` §119 п. 1) — запись wildcard в `fields`
 /// объекта. Это НЕ поле: ключи этого объекта, которых нет в `fields`,
@@ -615,6 +627,7 @@ final class ContractRegistry {
     _sharedCache.clear();
     _sourceTexts.clear();
     _sourceProtocols.clear();
+    _ruleConditions = null;
     _generation++;
   }
 
@@ -756,6 +769,8 @@ final class ContractRegistry {
         ((warnings['text_params_implicit'] as List?) ?? const []).cast<String>();
     for (final e in byCode.entries) {
       final w = (e.value as Map).cast<String, dynamic>();
+      _declaredParams[e.key] =
+          ((w['params'] as List?) ?? const []).cast<String>();
       _warnings[e.key] = WarningText(
         code: e.key,
         severity: w['severity'] as String? ?? 'warning',
@@ -866,6 +881,13 @@ final class ContractRegistry {
   /// Текст кода из `warnings.json`; `null` — кода в реестре нет.
   WarningText? textFor(String code) => _warnings[code];
 
+  /// Параметры, которые код объявил САМ (`params` записи), без неявных
+  /// `path`/`value` (`text_params_implicit`), в порядке объявления.
+  List<String> declaredParams(String code) =>
+      _declaredParams[code] ?? const [];
+
+  final Map<String, List<String>> _declaredParams = {};
+
   /// §480 — СЫРОЙ JSON протокола по `singbox_type`.
   ///
   /// Нужен движку маппера: он читает секции (`mappers.<kind>`), которых нет в
@@ -921,6 +943,19 @@ final class ContractRegistry {
     if (values is! List) return null;
     return values.whereType<String>().toSet();
   }
+
+  /// §757 — таблица условий правила маршрута (`registry/rule_conditions.json`);
+  /// `null` — реестр не загружен или файла нет (контракт старше 1.1.179).
+  /// Разбирается один раз на загрузку.
+  RuleConditionTable? get ruleConditions {
+    final cached = _ruleConditions;
+    if (cached != null) return cached;
+    final raw = _shared[_kRuleConditionsFile];
+    if (raw == null) return null;
+    return _ruleConditions = RuleConditionTable.fromJson(raw);
+  }
+
+  RuleConditionTable? _ruleConditions;
 
   /// Разворот секции `body` — все ссылки разрешаются здесь, один раз при
   /// загрузке, и читатель схемы видит уже развёрнутые поля (§553). Три ветки,

@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/config_node.dart';
 import 'package:lxbox/models/direction.dart';
 import 'package:lxbox/models/source_chain.dart';
-import 'package:lxbox/screens/chain_edit/chain_hop_candidate.dart';
-import 'package:lxbox/screens/chain_edit/chain_hop_targets.dart';
+import 'package:lxbox/services/chains/chain_hop_candidate.dart';
+import 'package:lxbox/services/chains/chain_hop_targets.dart';
 
 // §393 C7 — что можно поставить позицией цепочки. Позиция это ссылка на тег
 // СОБРАННОГО конфига: предлагать имена, которых в конфиге не будет, значило бы

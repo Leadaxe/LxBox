@@ -72,18 +72,20 @@ class ViewTab extends StatelessWidget {
         // структуру даже для не-скачанных srs-правил (юзер видит «что
         // будет» после download'а). Реальный путь живёт в build_config'е
         // runtime'а.
-        final srsPaths = <String, String>{};
-        if (c.kind == CustomRuleKind.srs) {
-          srsPaths[c.initial.id] = c.srsState == SrsDownloadState.cached
-              ? '<cached file path>'
-              : '<download first>';
-        }
+        final snap = c.snapshot();
+        // §757 — ключ — id кэша набора по ссылке, у каждого набора дерева.
+        final srsPaths = <String, String>{
+          for (final id in snap.cacheIds)
+            id: c.srsState == SrsDownloadState.cached
+                ? '<cached file path>'
+                : '<download first>',
+        };
         // skipDisabled: false — preview показывает «что родит правило при
         // включении», не отфильтровывая по `enabled`. Юзер открыл editor
         // именно для inspect'а формы; Switch — отдельная UX-плоскость.
         // §683 — DNS-правила правила (сервер / Force IPv4 / Fixed IP).
         final mirrors = <DnsMirrorEntry>[];
-        warnings = applyCustomRules(reg, [c.snapshot()],
+        warnings = applyCustomRules(reg, [snap],
             srsPaths: srsPaths, skipDisabled: false, dnsMirrors: mirrors);
         json = const JsonEncoder.withIndent('  ').convert({
           'rule_set': reg.getRuleSets(),

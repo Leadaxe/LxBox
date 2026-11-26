@@ -7,6 +7,8 @@ import '../../../controllers/subscription_controller.dart';
 import '../../../models/home_state.dart';
 import '../../../services/core_reject/core_reject_state.dart';
 import '../../../services/crash_banner_state.dart';
+import '../../../services/chains/chain_trouble_state.dart';
+import '../../owner_navigation.dart';
 import '../core_reject_ui.dart';
 import '../../../services/crash_share.dart';
 import '../../../services/haptic_service.dart';
@@ -158,7 +160,7 @@ class HomeControls extends StatelessWidget {
             // CoreRejectState, как краш-плашка из CrashBannerState: это
             // итог прогона страховки, а не поле HomeState.
             animation: Listenable.merge(
-                [CrashBannerState.I, CoreRejectState.I]),
+                [CrashBannerState.I, CoreRejectState.I, ChainTroubleState.I]),
             builder: (context, _) => BannerStack(
               banners: activeBanners(
                 state,
@@ -168,6 +170,7 @@ class HomeControls extends StatelessWidget {
                 coreRejected: CoreRejectState.I.bannerVisible
                     ? CoreRejectState.I.bannerNodes
                     : const [],
+                chainTroubles: ChainTroubleState.I.visible,
                 actions: BannerActions(
                   onRebuild: () => unawaited(onRebuildAndClearDirty()),
                   // Не гасим restart на тап — если юзер отменит Stop-диалог,
@@ -182,6 +185,17 @@ class HomeControls extends StatelessWidget {
                       context, CoreRejectState.I.bannerNodes,
                       subController: subController)),
                   onDismissCoreRejected: CoreRejectState.I.dismissBanner,
+                  // §761 — редактор цепочки; сохранение пересобирает конфиг,
+                  // и плашка перепроверяется по новой сборке.
+                  onOpenChain: (tag) => unawaited(openTagOwner(
+                    context,
+                    tag,
+                    subController: subController,
+                    homeController: controller,
+                    onOwnerNotFound: () {},
+                  )),
+                  onDismissChainTroubles: () =>
+                      unawaited(ChainTroubleState.I.dismiss()),
                 ),
               ),
             ),

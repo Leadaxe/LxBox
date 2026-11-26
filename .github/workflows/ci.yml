@@ -225,6 +225,14 @@ jobs:
         working-directory: app
         run: dart run tool/docs/parity_check.dart --strict
 
+      # §742 C — архитектурные границы (слои Dart, имена каналов, кто в Kotlin
+      # знает VpnPlugin/EventSink/SharedPreferences/BoxService). Исключения —
+      # в самом чекере, с причиной.
+      - name: Architecture boundaries
+        if: ${{ github.event.inputs.test_path == '' }}
+        working-directory: app
+        run: dart run tool/arch/boundary_check.dart --strict
+
       # §436 — описание выпуска для Google Play берётся из тех же
       # fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt, что
       # читает F-Droid. Play режет описание на 500 символах и отвергает

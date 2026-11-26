@@ -23,7 +23,7 @@ void main() {
     return walk(fragment, makeResolver(vars, byName));
   }
 
-  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5, sniff_guard; clamp и masque off не пишутся', () {
+  test('дефолты шаблона: сон 30s/5m, lazy, build_max 5 в lx.wg.idle, read_datagram_count 8, sniff_guard; send_by_mtu/connected_socket, clamp и masque off не пишутся', () {
     expect(lx({}), {
       'sniff_guard': {
         'nodes': {'sni_mismatch': true},
@@ -34,10 +34,13 @@ void main() {
         },
       },
       'wg': {
-        'idle_suspend': '30s',
-        'idle_suspend_reachable': '5m',
-        'lazy_build': true,
-        'build_max': 5,
+        'idle': {
+          'suspend': '30s',
+          'suspend_reachable': '5m',
+          'lazy_build': true,
+          'build_max': 5,
+        },
+        'buffers': {'read_datagram_count': 8},
       },
     });
   });
@@ -145,8 +148,13 @@ void main() {
     }
   });
 
-  test('сон off — блока wg нет, reachable и lazy не пишутся', () {
-    final r = lx({'wg_idle_suspend': 'off', 'sniff_guard_tls': 'off', 'sniff_guard_quic': 'off'});
+  test('сон off и буферы как у ядра (128) — блока wg нет, reachable и lazy не пишутся', () {
+    final r = lx({
+      'wg_idle_suspend': 'off',
+      'wg_read_datagram_count': '128',
+      'sniff_guard_tls': 'off',
+      'sniff_guard_quic': 'off',
+    });
     expect(r, isEmpty);
   });
 
@@ -155,19 +163,84 @@ void main() {
       'wg_idle_suspend_reachable': 'off',
       'wg_lazy_build': 'false',
     }) as Map;
-    expect(r['wg'], {'idle_suspend': '30s'});
+    expect(r['wg'], {
+      'idle': {'suspend': '30s'},
+      'buffers': {'read_datagram_count': 8},
+    });
   });
 
   test('build_max — целое, 0 пишется как 0', () {
     final r = lx({'wg_build_max': '0'}) as Map;
-    expect((r['wg'] as Map)['build_max'], 0);
+    expect(((r['wg'] as Map)['idle'] as Map)['build_max'], 0);
   });
 
-  test('mtu_align fill/off строкой, masque_idle_timeout во вложенный masque', () {
+  test('758 — ядро lx.36: прежние плоские ключи сна не пишутся (ошибка загрузки)', () {
+    for (final vars in <Map<String, String>>[
+      {},
+      {'wg_read_datagram_count': '8', 'wg_send_by_mtu': 'false', 'wg_connected_socket': 'true'},
+    ]) {
+      final wg = (lx(vars) as Map)['wg'] as Map;
+      for (final old in [
+        'idle_suspend',
+        'idle_suspend_reachable',
+        'idle_teardown',
+        'lazy_build',
+        'build_max',
+        'build_overflow',
+      ]) {
+        expect(wg.containsKey(old), isFalse, reason: '$old в $vars');
+      }
+    }
+  });
+
+  test('758 — buffers и connected_socket: пишутся только при отличии от дефолта ядра', () {
+    final r = lx({
+      'wg_read_datagram_count': '8',
+      'wg_send_by_mtu': 'false',
+      'wg_connected_socket': 'true',
+    }) as Map;
+    expect((r['wg'] as Map)['buffers'], {'read_datagram_count': 8, 'send_by_mtu': false});
+    expect((r['wg'] as Map)['connected_socket'], true);
+    expect(((lx({'wg_read_datagram_count': '1'}) as Map)['wg'] as Map)['buffers'],
+        {'read_datagram_count': 1});
+    expect(
+        ((lx({'wg_read_datagram_count': '128', 'wg_send_by_mtu': 'false'}) as Map)['wg']
+            as Map)['buffers'],
+        {'send_by_mtu': false});
+    // Умолчание LxBox — 8 (решение владельца 24.11): ключ пишется всегда,
+    // кроме выбранного 128 — умолчания самого ядра.
+    final def = (lx({}) as Map)['wg'] as Map;
+    expect(def['buffers'], {'read_datagram_count': 8});
+    expect(def.containsKey('connected_socket'), isFalse);
+    final core = (lx({'wg_read_datagram_count': '128'}) as Map)['wg'] as Map;
+    expect(core.containsKey('buffers'), isFalse);
+  });
+
+  test('758 — сон off: buffers и connected_socket живут без idle', () {
+    final off = {
+      'wg_idle_suspend': 'off',
+      'wg_read_datagram_count': '128',
+      'sniff_guard_tls': 'off',
+      'sniff_guard_quic': 'off',
+    };
+    expect(lx({...off, 'wg_connected_socket': 'true'}), {
+      'wg': {'connected_socket': true},
+    });
+    expect(lx({...off, 'wg_read_datagram_count': '2'}), {
+      'wg': {
+        'buffers': {'read_datagram_count': 2},
+      },
+    });
+  });
+
+  test('mtu_align fill/off в lx.detour (§761), masque_idle_timeout во вложенный masque', () {
     final r = lx({'mtu_align': 'fill', 'masque_idle_timeout': '5m'}) as Map;
-    expect(r['mtu_align'], 'fill');
+    expect(r['detour'], {'mtu_align': 'fill'});
+    expect(r.containsKey('mtu_align'), isFalse);
     expect(r['masque'], {'idle_timeout': '5m'});
-    expect((lx({'mtu_align': 'off'}) as Map)['mtu_align'], 'off');
+    final off = lx({'mtu_align': 'off'}) as Map;
+    expect(off['detour'], {'mtu_align': 'off'});
+    expect(off.containsKey('mtu_align'), isFalse);
   });
 
   test('#enable объявлений: reachable/lazy от сна, build_max ещё и от lazy', () {

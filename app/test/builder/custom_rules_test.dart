@@ -8,6 +8,12 @@ import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/storage_migration/legacy_form_v0.dart';
 
+/// §757 — srsPaths ключуются id кэша набора по ссылке.
+Map<String, String> _paths(String id, Map<String, String> byUrl) => {
+      for (final e in byUrl.entries)
+        CustomRuleTree.cacheIdFor(id, e.key): e.value,
+    };
+
 /// Правило через запись хранения и обратно — путь `SettingsStorage`.
 CustomRule _storageRoundTrip(CustomRule r) =>
     ruleFromRecord(ruleToRecord(r), unknownAsVerbatim: true).value!;
@@ -17,7 +23,7 @@ void main() {
     test('domain only → inline rule_set + outbound route', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           id: 'id-1',
           name: 'Pin Yandex',
           domains: ['ya.ru', 'yandex.ru'],
@@ -41,7 +47,7 @@ void main() {
     test('domain_suffix-only rule emits domain_suffix field', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'RU',
           domainSuffixes: ['ru', 'xn--p1ai'],
           outbound: 'vpn-1',
@@ -54,7 +60,7 @@ void main() {
     test('ip_cidr rule emits ip_cidr field', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Home LAN',
           ipCidrs: ['10.0.0.0/8', '192.168.0.0/16'],
           outbound: 'direct-out',
@@ -67,7 +73,7 @@ void main() {
     test('domain + suffix + ip в одном правиле → все в одном headless rule', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Mixed',
           domains: ['foo.com'],
           domainSuffixes: ['bar.com'],
@@ -83,10 +89,10 @@ void main() {
       });
     });
 
-    test('ports → int list, port_range → string list, в одном headless rule', () {
+    test('§755: ports → int list, port_range → string list, на маршрутном правиле', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'HTTPS+range',
           domainSuffixes: ['example.com'],
           ports: ['443', '8443'],
@@ -95,14 +101,19 @@ void main() {
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match['port'], [443, 8443]);
-      expect(match['port_range'], ['8000:9000', ':3000']);
+      expect(match.containsKey('port'), isFalse, reason: 'набор без портов');
+      expect(match.containsKey('port_range'), isFalse);
+      final route = reg.getRules().single;
+      expect(route['rule_set'], 'HTTPS+range');
+      expect(route['port'], [443, 8443]);
+      expect(route['port_range'], ['8000:9000', ':3000']);
     });
 
-    test('packages → package_name в inline headless rule', () {
+    // §757 — приложения уходят из inline-набора на маршрутное правило.
+    test('packages → package_name на маршрутном правиле, домены — в наборе', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Firefox RU',
           domainSuffixes: ['.ru'],
           packages: ['org.mozilla.firefox'],
@@ -110,31 +121,31 @@ void main() {
         ),
       ]);
       final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match['package_name'], ['org.mozilla.firefox']);
-      expect(match['domain_suffix'], ['.ru']);
+      expect(match, {'domain_suffix': ['.ru']});
       final rule = reg.getRules().first;
-      expect(rule.containsKey('package_name'), isFalse);
+      expect(rule['rule_set'], 'Firefox RU');
+      expect(rule['package_name'], ['org.mozilla.firefox']);
     });
 
-    test('packages-only rule → inline с одним package_name', () {
+    test('packages-only rule → маршрутное правило с package_name (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Block bad app',
           packages: ['com.evil.app'],
           outbound: kOutboundReject,
         ),
       ]);
-      final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match, {'package_name': ['com.evil.app']});
-      final rule = reg.getRules().first;
-      expect(rule['action'], 'reject');
+      // §757 — без ключей `set: true` набора нет; приложение — на правиле.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules().single,
+          {'package_name': ['com.evil.app'], 'action': 'reject'});
     });
 
     test('protocols идут на routing-rule level (headless не поддерживает)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'TLS quic',
           domainSuffixes: ['example.com'],
           protocols: ['tls', 'quic'],
@@ -152,7 +163,7 @@ void main() {
     test('§240 network идёт на routing-rule level, AND с protocol', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'UDP quic',
           domainSuffixes: ['example.com'],
           network: ['udp'],
@@ -172,7 +183,7 @@ void main() {
     test('§240 network-only (match пуст) → routing rule без rule_set', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'All ICMP',
           network: ['icmp'],
           outbound: 'direct-out',
@@ -188,7 +199,7 @@ void main() {
     test('§240 пустой network не эмитит ключ', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Plain',
           domainSuffixes: ['example.com'],
           outbound: 'vpn-1',
@@ -201,7 +212,7 @@ void main() {
     test('reject + protocol → action:reject со сохранением protocol', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Block BT',
           domainSuffixes: ['.torrent'],
           protocols: ['bittorrent'],
@@ -217,7 +228,7 @@ void main() {
     test('disabled → skipped', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Never',
           enabled: false,
           domains: ['example.com'],
@@ -231,7 +242,7 @@ void main() {
     test('no match fields → skipped', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(name: 'Empty inline', outbound: 'vpn-1'),
+        CustomRuleTree.flat(name: 'Empty inline', outbound: 'vpn-1'),
       ]);
       expect(reg.getRuleSets(), isEmpty);
       expect(reg.getRules(), isEmpty);
@@ -240,14 +251,14 @@ void main() {
     test('invalid port strings → отбрасываются на intPorts getter', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Bad ports',
           ports: ['443', 'abc', '99999', '80'],
           outbound: 'vpn-1',
         ),
       ]);
-      final match = reg.getRuleSets().first['rules'].first as Map;
-      expect(match['port'], [443, 80]);
+      expect(reg.getRuleSets(), isEmpty, reason: '§755: только порты — без набора');
+      expect(reg.getRules().single['port'], [443, 80]);
     });
 
     test('collision с существующим tag'
@@ -258,7 +269,7 @@ void main() {
         ],
       );
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Block',
           domainSuffixes: ['x.com'],
           outbound: kOutboundReject,
@@ -273,30 +284,32 @@ void main() {
   group('applyCustomRules — srs (local-file mode)', () {
     test('srs с cached path → local rule_set + routing rule', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRuleSrs(
+      final rule = CustomRuleTree.flat(
         id: 'rule-1',
         name: 'GeoIP CN',
         srsUrl: 'https://example.com/geoip-cn.srs',
         outbound: 'direct-out',
       );
+      // §757 — ключ srsPaths — id кэша набора по ссылке.
       final warn = applyCustomRules(reg, [rule], srsPaths: {
-        'rule-1': '/cache/rule_sets/rule-1.srs',
+        CustomRuleTree.cacheIdFor('rule-1', rule.srsUrl):
+            '/cache/rule_sets/rule-1.srs',
       });
       expect(warn, isEmpty);
       final set = reg.getRuleSets().single;
       expect(set['type'], 'local');
-      expect(set['tag'], 'GeoIP CN');
+      expect(set['tag'], 'GeoIP CN:geoip-cn');
       expect(set['format'], 'binary');
       expect(set['path'], '/cache/rule_sets/rule-1.srs');
       expect(set.containsKey('url'), isFalse);
       expect(set.containsKey('update_interval'), isFalse);
       expect(reg.getRules().single,
-          {'rule_set': 'GeoIP CN', 'outbound': 'direct-out'});
+          {'rule_set': 'GeoIP CN:geoip-cn', 'outbound': 'direct-out'});
     });
 
     test('srs без cached path → skip + warning', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRuleSrs(
+      final rule = CustomRuleTree.flat(
         id: 'r2',
         name: 'Not yet downloaded',
         srsUrl: 'https://example.com/foo.srs',
@@ -311,7 +324,7 @@ void main() {
 
     test('srs + ports + packages + protocol → AND на routing rule level', () {
       final reg = RuleSetRegistry();
-      final rule = CustomRuleSrs(
+      final rule = CustomRuleTree.flat(
         id: 'r3',
         name: 'SRS filtered',
         srsUrl: 'https://example.com/rules.srs',
@@ -321,10 +334,11 @@ void main() {
         protocols: ['tls'],
         outbound: 'vpn-1',
       );
-      applyCustomRules(reg, [rule],
-          srsPaths: {'r3': '/cache/rule_sets/r3.srs'});
+      applyCustomRules(reg, [rule], srsPaths: {
+        CustomRuleTree.cacheIdFor('r3', rule.srsUrl): '/cache/rule_sets/r3.srs',
+      });
       final r = reg.getRules().single;
-      expect(r['rule_set'], 'SRS filtered');
+      expect(r['rule_set'], 'SRS filtered:rules');
       expect(r['port'], [443]);
       expect(r['port_range'], ['8000:9000']);
       expect(r['package_name'], ['org.mozilla.firefox']);
@@ -337,7 +351,7 @@ void main() {
   // читает с `unknownAsVerbatim`).
   group('CustomRule: запись rules[] round-trip', () {
     test('inline со всеми полями', () {
-      final src = CustomRuleInline(
+      final src = CustomRuleTree.flat(
         id: 'id-x',
         name: 'Mixed',
         domains: ['a.com'],
@@ -349,8 +363,8 @@ void main() {
         outbound: kOutboundReject,
       );
       final back = _storageRoundTrip(src);
-      expect(back, isA<CustomRuleInline>());
-      final inline = back as CustomRuleInline;
+      expect(back, isA<CustomRuleTree>());
+      final inline = back as CustomRuleTree;
       expect(inline.id, 'id-x');
       expect(inline.name, 'Mixed');
       expect(inline.domains, ['a.com']);
@@ -363,14 +377,14 @@ void main() {
     });
 
     test('srs kind preserved', () {
-      final src = CustomRuleSrs(
+      final src = CustomRuleTree.flat(
         name: 'Remote',
         srsUrl: 'https://example.com/rules.srs',
         outbound: 'vpn-1',
       );
       final back = _storageRoundTrip(src);
-      expect(back, isA<CustomRuleSrs>());
-      final srs = back as CustomRuleSrs;
+      expect(back, isA<CustomRuleTree>());
+      final srs = back as CustomRuleTree;
       expect(srs.srsUrl, 'https://example.com/rules.srs');
     });
 
@@ -383,8 +397,8 @@ void main() {
         'domains': ['foo.com'],
         'target': 'vpn-1',
       });
-      expect(back, isA<CustomRuleInline>());
-      expect((back as CustomRuleInline).outbound, 'vpn-1');
+      expect(back, isA<CustomRuleTree>());
+      expect((back as CustomRuleTree).outbound, 'vpn-1');
     });
   });
 
@@ -393,73 +407,68 @@ void main() {
   // ⚠ С sing-box 1.14 wifi_* эмитятся в **headless rule_set** (раньше под 1.12
   // были на routing-rule level). Эти тесты обновлены под 1.14-форму.
   group('§051 wifi conditions (1.14: headless)', () {
-    test('inline wifi-only → headless rule_set с wifi_ssid', () {
+    test('inline wifi-only → wifi_ssid на маршрутном правиле (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Home wifi → direct',
           wifiSsids: ['lexRouter'],
           outbound: 'direct-out',
         ),
       ]);
-      // §030/new_fields: wifi теперь внутри headless rule_set (1.14).
-      expect(reg.getRuleSets(), hasLength(1));
-      expect(reg.getRuleSets().first['rules'], [
-        {'wifi_ssid': ['lexRouter']},
-      ]);
+      // §757 — Wi-Fi не ключ набора: набора нет, условие на маршрутном
+      // правиле.
+      expect(reg.getRuleSets(), isEmpty);
       expect(reg.getRules(), [
         {
-          'rule_set': 'Home wifi → direct',
+          'wifi_ssid': ['lexRouter'],
           'outbound': 'direct-out',
         },
       ]);
     });
 
-    test('inline wifi_ssid + wifi_bssid в headless rule_set вместе', () {
+    test('inline wifi_ssid + wifi_bssid вместе на правиле (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Home',
           wifiSsids: ['lexRouter'],
           wifiBssids: ['38:2c:4a:cf:6d:5c'],
           outbound: 'direct-out',
         ),
       ]);
-      expect(reg.getRuleSets().first['rules'], [
+      // §757 — оба Wi-Fi-условия вместе на маршрутном правиле.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules(), [
         {
           'wifi_ssid': ['lexRouter'],
           'wifi_bssid': ['38:2c:4a:cf:6d:5c'],
-        },
-      ]);
-      expect(reg.getRules(), [
-        {
-          'rule_set': 'Home',
           'outbound': 'direct-out',
         },
       ]);
     });
 
-    test('inline domain + wifi: оба в headless rule_set, AND-семантика', () {
+    test('inline domain + wifi: домен в наборе, wifi на правиле, AND', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Banking on home wifi',
           domains: ['bank.com'],
           wifiSsids: ['lexRouter'],
           outbound: 'direct-out',
         ),
       ]);
-      // §030/new_fields: domain И wifi заходят в headless rule_set (AND).
+      // §757 — домен в наборе, Wi-Fi на правиле: (набор) AND (wifi).
       expect(reg.getRuleSets(), hasLength(1));
       expect(reg.getRuleSets().first['rules'], [
         {
           'domain': ['bank.com'],
-          'wifi_ssid': ['lexRouter'],
         },
       ]);
       expect(reg.getRules(), [
         {
           'rule_set': 'Banking on home wifi',
+          'wifi_ssid': ['lexRouter'],
           'outbound': 'direct-out',
         },
       ]);
@@ -468,14 +477,14 @@ void main() {
     test('srs + wifi: rule_set + wifi_ssid в одном правиле', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleSrs(
+        CustomRuleTree.flat(
           name: 'GeoSite RU on home',
           srsUrl: 'https://example.com/geo.srs',
           wifiSsids: ['lexRouter'],
           outbound: 'direct-out',
         ),
       ], srsPaths: {
-        // CustomRuleSrs needs cached path, иначе skipped с warning.
+        // CustomRuleTree needs cached path, иначе skipped с warning.
         // Pass id-key = generated id; используем factory-call id для этого
         // не получится (UUID каждый запуск разный). Создадим с id явно:
       });
@@ -483,18 +492,19 @@ void main() {
 
     test('srs + wifi с явным id и path', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         id: 'srs-1',
         name: 'GeoSite RU on home',
         srsUrl: 'https://example.com/geo.srs',
         wifiSsids: ['lexRouter'],
         outbound: 'direct-out',
       );
-      applyCustomRules(reg, [srs], srsPaths: {'srs-1': '/cache/geo.srs'});
+      applyCustomRules(reg, [srs],
+          srsPaths: _paths('srs-1', {srs.srsUrl: '/cache/geo.srs'}));
       expect(reg.getRuleSets(), hasLength(1));
       expect(reg.getRules(), [
         {
-          'rule_set': 'GeoSite RU on home',
+          'rule_set': 'GeoSite RU on home:geo',
           'wifi_ssid': ['lexRouter'],
           'outbound': 'direct-out',
         },
@@ -503,7 +513,7 @@ void main() {
 
     // ## 12 контракта (D-100) — несколько наборов в одном правиле.
     group('## 12 srs с несколькими наборами', () {
-      final multi = CustomRuleSrs(
+      final multi = CustomRuleTree.flat(
         id: 'm',
         name: 'Multi',
         srsUrls: const [
@@ -516,19 +526,20 @@ void main() {
 
       test('rule_set на каждый набор, одно правило со списком тегов', () {
         final reg = RuleSetRegistry();
-        final warn = applyCustomRules(reg, [multi], srsPaths: {
-          'm': '/cache/m.srs',
-          'm~1': '/cache/m~1.srs',
-          'm~2': '/cache/m~2.srs',
-        });
+        final warn = applyCustomRules(reg, [multi], srsPaths: _paths('m', {
+          'https://x/a.srs': '/cache/m.srs',
+          'https://x/b.srs': '/cache/m~1.srs',
+          'https://x/c.srs': '/cache/m~2.srs',
+        }));
         expect(warn, isEmpty);
-        expect(reg.getRuleSets().map((s) => s['tag']),
-            ['Multi', 'Multi-2', 'Multi-3']);
+        // §757 (§6.13, контракт 1.1.182) — каждая ссылка `имя:<stem>`.
+        final tags = ['Multi:a', 'Multi:b', 'Multi:c'];
+        expect(reg.getRuleSets().map((s) => s['tag']), tags);
         expect(reg.getRuleSets().map((s) => s['path']),
             ['/cache/m.srs', '/cache/m~1.srs', '/cache/m~2.srs']);
         expect(reg.getRules(), [
           {
-            'rule_set': ['Multi', 'Multi-2', 'Multi-3'],
+            'rule_set': tags,
             'outbound': 'proxy',
           },
         ]);
@@ -539,19 +550,19 @@ void main() {
         applyCustomRules(
             reg,
             [
-              CustomRuleSrs(
+              CustomRuleTree.flat(
                   id: 's', name: 'S', srsUrl: 'https://x/a.srs', outbound: 'proxy')
             ],
-            srsPaths: {'s': '/cache/s.srs'});
-        expect(reg.getRules().single['rule_set'], 'S');
+            srsPaths: _paths('s', {'https://x/a.srs': '/cache/s.srs'}));
+        expect(reg.getRules().single['rule_set'], 'S:a');
       });
 
       test('нет файла хотя бы одного набора → правило пропущено с warning', () {
         final reg = RuleSetRegistry();
-        final warn = applyCustomRules(reg, [multi], srsPaths: {
-          'm': '/cache/m.srs',
-          'm~2': '/cache/m~2.srs',
-        });
+        final warn = applyCustomRules(reg, [multi], srsPaths: _paths('m', {
+          'https://x/a.srs': '/cache/m.srs',
+          'https://x/c.srs': '/cache/m~2.srs',
+        }));
         expect(warn.single, contains('Multi'));
         expect(reg.getRuleSets(), isEmpty, reason: 'частичной регистрации нет');
         expect(reg.getRules(), isEmpty);
@@ -561,23 +572,24 @@ void main() {
         final reg = RuleSetRegistry();
         final r = multi.copyWith(
             resolve: const RuleResolve(only: false, strategy: 'ipv4_only'));
-        applyCustomRules(reg, [r], srsPaths: {
-          'm': '/cache/m.srs',
-          'm~1': '/cache/m~1.srs',
-          'm~2': '/cache/m~2.srs',
-        });
+        applyCustomRules(reg, [r], srsPaths: _paths('m', {
+          'https://x/a.srs': '/cache/m.srs',
+          'https://x/b.srs': '/cache/m~1.srs',
+          'https://x/c.srs': '/cache/m~2.srs',
+        }));
         final rules = reg.getRules();
         expect(rules, hasLength(2));
         expect(rules.first['action'], 'resolve');
-        expect(rules.first['rule_set'], ['Multi', 'Multi-2', 'Multi-3']);
-        expect(rules.last['rule_set'], ['Multi', 'Multi-2', 'Multi-3']);
+        final tags = ['Multi:a', 'Multi:b', 'Multi:c'];
+        expect(rules.first['rule_set'], tags);
+        expect(rules.last['rule_set'], tags);
       });
     });
 
     test('disabled rule не эмитит wifi-условия', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Off',
           enabled: false,
           wifiSsids: ['lexRouter'],
@@ -590,7 +602,7 @@ void main() {
     test('empty wifi-списки не появляются в JSON', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'No wifi',
           domains: ['ya.ru'],
           outbound: 'direct-out',
@@ -604,47 +616,49 @@ void main() {
 
   // §030/new_fields — source_ip_cidr / source_ip_is_private / inbound.
   group('§030 new_fields source + inbound', () {
-    test('inline source_ip_cidr → headless rule_set', () {
+    test('inline source_ip_cidr → маршрутное правило (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'LAN clients',
           sourceIpCidrs: ['192.168.1.0/24'],
           outbound: 'direct-out',
         ),
       ]);
-      // source_ip_cidr принимается headless rule_set (sing-box 1.14).
-      expect(reg.getRuleSets(), hasLength(1));
-      expect(reg.getRuleSets().first['rules'], [
-        {'source_ip_cidr': ['192.168.1.0/24']},
-      ]);
+      // §757 — источник не ключ набора: условие на маршрутном правиле.
+      expect(reg.getRuleSets(), isEmpty);
       expect(reg.getRules(), [
-        {'rule_set': 'LAN clients', 'outbound': 'direct-out'},
+        {'source_ip_cidr': ['192.168.1.0/24'], 'outbound': 'direct-out'},
       ]);
     });
 
-    test('inline domain + source_ip_cidr — оба в headless (AND)', () {
+    test('inline domain + source_ip_cidr — набор и правило (AND, §757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'r',
           domains: ['bank.com'],
           sourceIpCidrs: ['10.0.0.0/8'],
           outbound: 'vpn-1',
         ),
       ]);
+      // §757 — домен в наборе, источник на правиле (AND).
       expect(reg.getRuleSets().first['rules'], [
         {
           'domain': ['bank.com'],
-          'source_ip_cidr': ['10.0.0.0/8'],
         },
       ]);
+      expect(reg.getRules().single, {
+        'rule_set': 'r',
+        'source_ip_cidr': ['10.0.0.0/8'],
+        'outbound': 'vpn-1',
+      });
     });
 
     test('inline source_ip_is_private → routing-rule level (не headless)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'priv-src',
           sourceIpIsPrivate: true,
           outbound: 'direct-out',
@@ -660,7 +674,7 @@ void main() {
     test('inline inbound-only → routing-rule level без rule_set', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'proxy clients',
           inbounds: ['mixed-in'],
           outbound: 'direct-out',
@@ -676,7 +690,7 @@ void main() {
     test('inline domain + inbound: rule_set + inbound на route-level', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'r',
           domains: ['ya.ru'],
           inbounds: ['tun-in', 'mixed-in'],
@@ -697,7 +711,7 @@ void main() {
 
     test('srs: source_ip_cidr/inbound → routing-rule level (нет headless)', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         id: 'srs-1',
         name: 'GeoSite',
         srsUrl: 'https://example.com/geo.srs',
@@ -706,10 +720,11 @@ void main() {
         inbounds: ['mixed-in'],
         outbound: 'direct-out',
       );
-      applyCustomRules(reg, [srs], srsPaths: {'srs-1': '/cache/geo.srs'});
+      applyCustomRules(reg, [srs],
+          srsPaths: _paths('srs-1', {srs.srsUrl: '/cache/geo.srs'}));
       expect(reg.getRules(), [
         {
-          'rule_set': 'GeoSite',
+          'rule_set': 'GeoSite:geo',
           'source_ip_cidr': ['192.168.0.0/16'],
           'source_ip_is_private': true,
           'inbound': ['mixed-in'],
@@ -721,7 +736,7 @@ void main() {
     test('empty source/inbound — поля не появляются в JSON', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(name: 'r', domains: ['ya.ru'], outbound: 'direct-out'),
+        CustomRuleTree.flat(name: 'r', domains: ['ya.ru'], outbound: 'direct-out'),
       ]);
       final rs = reg.getRuleSets().first['rules'] as List;
       expect((rs.first as Map).containsKey('source_ip_cidr'), isFalse);
@@ -731,7 +746,7 @@ void main() {
     });
 
     test('запись rules[] round-trip + форма 2.23.2 без новых ключей', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         id: 'id-1',
         name: 'r',
         sourceIpCidrs: ['10.0.0.0/8'],
@@ -742,7 +757,7 @@ void main() {
       expect(body['source_ip_cidr'], ['10.0.0.0/8']);
       expect(body['source_ip_is_private'], true);
       expect(body['inbound'], ['mixed-in']);
-      final restored = _storageRoundTrip(r) as CustomRuleInline;
+      final restored = _storageRoundTrip(r) as CustomRuleTree;
       expect(restored.sourceIpCidrs, ['10.0.0.0/8']);
       expect(restored.sourceIpIsPrivate, isTrue);
       expect(restored.inbounds, ['mixed-in']);
@@ -752,7 +767,7 @@ void main() {
         'kind': 'inline',
         'name': 'Legacy',
         'domains': ['ya.ru'],
-      }) as CustomRuleInline;
+      }) as CustomRuleTree;
       expect(legacy.sourceIpCidrs, isEmpty);
       expect(legacy.sourceIpIsPrivate, isFalse);
       expect(legacy.inbounds, isEmpty);
@@ -768,7 +783,7 @@ void main() {
   // §051 — round-trip записи rules[] для wifi-полей.
   group('§051 wifi: запись rules[] round-trip', () {
     test('inline: запись пишет wifi_ssid/wifi_bssid, чтение восстанавливает', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         id: 'id-1',
         name: 'Home',
         wifiSsids: ['lexRouter'],
@@ -778,13 +793,13 @@ void main() {
       expect(body['wifi_ssid'], ['lexRouter']);
       expect(body['wifi_bssid'], ['38:2c:4a:cf:6d:5c']);
 
-      final restored = _storageRoundTrip(r) as CustomRuleInline;
+      final restored = _storageRoundTrip(r) as CustomRuleTree;
       expect(restored.wifiSsids, ['lexRouter']);
       expect(restored.wifiBssids, ['38:2c:4a:cf:6d:5c']);
     });
 
     test('inline: empty wifi-поля не пишутся в запись', () {
-      final r = CustomRuleInline(name: 'No wifi', domains: ['ya.ru']);
+      final r = CustomRuleTree.flat(name: 'No wifi', domains: ['ya.ru']);
       final body = ruleToRecord(r)['body'] as Map<String, dynamic>;
       expect(body.containsKey('wifi_ssid'), isFalse);
       expect(body.containsKey('wifi_bssid'), isFalse);
@@ -797,7 +812,7 @@ void main() {
         'body': {
           'wifi_bssid': ['38:2C:4A:CF:6D:5C', 'AA:BB:CC:DD:EE:FF'],
         },
-      }, unknownAsVerbatim: true).value! as CustomRuleInline;
+      }, unknownAsVerbatim: true).value! as CustomRuleTree;
       expect(r.wifiBssids, ['38:2c:4a:cf:6d:5c', 'aa:bb:cc:dd:ee:ff']);
     });
 
@@ -807,20 +822,20 @@ void main() {
         'name': 'Legacy',
         'domains': ['ya.ru'],
         'outbound': 'direct-out',
-      }) as CustomRuleInline;
+      }) as CustomRuleTree;
       expect(r.wifiSsids, isEmpty);
       expect(r.wifiBssids, isEmpty);
     });
 
     test('srs: round-trip сохраняет wifi-поля', () {
-      final r = CustomRuleSrs(
+      final r = CustomRuleTree.flat(
         id: 'srs-1',
         name: 'GeoSite',
         srsUrl: 'https://example.com/geo.srs',
         wifiSsids: ['Office'],
         wifiBssids: ['11:22:33:44:55:66'],
       );
-      final restored = _storageRoundTrip(r) as CustomRuleSrs;
+      final restored = _storageRoundTrip(r) as CustomRuleTree;
       expect(restored.wifiSsids, ['Office']);
       expect(restored.wifiBssids, ['11:22:33:44:55:66']);
     });
@@ -980,7 +995,7 @@ void main() {
         'один tag', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'RU v4',
           domainSuffixes: ['ru'],
           outbound: 'direct-out',
@@ -997,7 +1012,7 @@ void main() {
         () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'RU v4',
           domainSuffixes: ['ru'],
           outbound: 'direct-out', // в модели остаётся — билдер игнорирует
@@ -1013,7 +1028,7 @@ void main() {
         '(гейт resolveEligible)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'LAN',
           ipCidrs: ['10.0.0.0/8'],
           outbound: 'direct-out',
@@ -1030,7 +1045,7 @@ void main() {
       applyCustomRules(
         reg,
         [
-          CustomRuleSrs(
+          CustomRuleTree.flat(
             id: 'srs-1',
             name: 'RU srs',
             srsUrl: 'https://ex.com/ru.srs',
@@ -1039,23 +1054,23 @@ void main() {
                 strategy: 'ipv4_only', serverTag: 'yandex_udp'),
           ),
         ],
-        srsPaths: {'srs-1': '/cache/ru.srs'},
+        srsPaths: _paths('srs-1', {'https://ex.com/ru.srs': '/cache/ru.srs'}),
       );
       expect(reg.getRules(), [
         {
-          'rule_set': 'RU srs',
+          'rule_set': 'RU srs:ru',
           'action': 'resolve',
           'strategy': 'ipv4_only',
           'server': 'yandex_udp',
         },
-        {'rule_set': 'RU srs', 'outbound': 'vpn-1'},
+        {'rule_set': 'RU srs:ru', 'outbound': 'vpn-1'},
       ]);
     });
 
     test('reject + resolve → resolve перед {action: reject}', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Block RU',
           domainSuffixes: ['ru'],
           outbound: kOutboundReject,
@@ -1072,7 +1087,7 @@ void main() {
         'AND-поля дублируются на resolve-правило', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Adv',
           domainSuffixes: ['ru'],
           protocols: ['tls'],
@@ -1106,7 +1121,7 @@ void main() {
     test('resolve без опций → голое {action: resolve} (inherit всего)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Bare',
           domainSuffixes: ['ru'],
           outbound: 'direct-out',
@@ -1118,7 +1133,7 @@ void main() {
 
     test('JSON round-trip: RuleResolve сохраняется; старые записи без '
         'resolve → null', () {
-      final r = CustomRuleInline(
+      final r = CustomRuleTree.flat(
         id: 'rt-1',
         name: 'RT',
         domainSuffixes: ['ru'],
@@ -1133,7 +1148,7 @@ void main() {
           clientSubnet: '10.0.0.0/8',
         ),
       );
-      final restored = _storageRoundTrip(r) as CustomRuleInline;
+      final restored = _storageRoundTrip(r) as CustomRuleTree;
       final rr = restored.resolve!;
       expect(rr.only, isTrue);
       expect(rr.strategy, 'ipv4_only');
@@ -1158,22 +1173,27 @@ void main() {
     test('resolveEligible: inline с доменами true, чистый ip false, '
         'srs всегда true', () {
       expect(
-        CustomRuleInline(name: 'A', domainSuffixes: ['ru']).resolveEligible,
+        CustomRuleTree.flat(name: 'A', domainSuffixes: ['ru']).resolveEligible,
         isTrue,
       );
       expect(
-        CustomRuleInline(name: 'B', ipCidrs: ['10.0.0.0/8']).resolveEligible,
+        CustomRuleTree.flat(name: 'B', ipCidrs: ['10.0.0.0/8']).resolveEligible,
         isFalse,
       );
-      expect(CustomRuleSrs(name: 'C').resolveEligible, isTrue);
+      // §757 — srs = правило со ссылкой в дереве (ссылка — условие).
+      expect(
+        CustomRuleTree.flat(name: 'C', srsUrl: 'https://x/c.srs')
+            .resolveEligible,
+        isTrue,
+      );
     });
   });
 
   group('§694 network_type / network_is_expensive', () {
-    test('inline: в headless rule_set рядом с доменом', () {
+    test('inline: на правиле рядом с набором домена (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Video on cellular',
           domains: ['video.example'],
           networkTypes: ['cellular'],
@@ -1181,46 +1201,51 @@ void main() {
           outbound: kOutboundReject,
         ),
       ]);
+      // §757 — тип/лимитность сети на правиле, домен в наборе.
       expect(reg.getRuleSets().first['rules'], [
         {
           'domain': ['video.example'],
-          'network_type': ['cellular'],
-          'network_is_expensive': true,
         },
       ]);
       expect(reg.getRules(), [
-        {'rule_set': 'Video on cellular', 'action': 'reject'},
+        {
+          'rule_set': 'Video on cellular',
+          'network_type': ['cellular'],
+          'network_is_expensive': true,
+          'action': 'reject',
+        },
       ]);
     });
 
     test('inline: только тип сети — правило не пустое', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'All on cellular',
           networkTypes: ['cellular'],
           outbound: 'vpn-1',
         ),
       ]);
-      expect(reg.getRuleSets().first['rules'], [
-        {'network_type': ['cellular']},
-      ]);
-      expect(reg.getRules().single['outbound'], 'vpn-1');
+      // §757 — набора нет, условие на маршрутном правиле.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(reg.getRules().single,
+          {'network_type': ['cellular'], 'outbound': 'vpn-1'});
     });
 
     test('srs: на routing-rule рядом с rule_set', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'geo',
         srsUrl: 'https://e/geo.srs',
         networkTypes: ['wifi'],
         networkIsExpensive: true,
         outbound: 'direct-out',
       );
-      applyCustomRules(reg, [srs], srsPaths: {srs.id: '/tmp/geo.srs'});
+      applyCustomRules(reg, [srs],
+          srsPaths: _paths(srs.id, {srs.srsUrl: '/tmp/geo.srs'}));
       expect(reg.getRules(), [
         {
-          'rule_set': 'geo',
+          'rule_set': 'geo:geo',
           'network_type': ['wifi'],
           'network_is_expensive': true,
           'outbound': 'direct-out',
@@ -1233,29 +1258,32 @@ void main() {
   group('§712 package_name_regex / domain_regex', () {
     const dnsOn = RuleDns(enabled: true, serverTag: 'google_udp');
 
-    test('inline: оба ключа в headless rule_set', () {
+    test('inline: domain_regex в наборе, package_name_regex на правиле (§757)', () {
       final reg = RuleSetRegistry();
       applyCustomRules(reg, [
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'Oplus',
           packageRegexes: [r'^com\.oplus\.'],
           domainRegexes: [r'(^|\.)example\.com$'],
           outbound: 'vpn-1',
         ),
       ]);
+      // §757 — регулярка домена в наборе, регулярка пакета на правиле.
       expect(reg.getRuleSets().first['rules'], [
         {
           'domain_regex': [r'(^|\.)example\.com$'],
-          'package_name_regex': [r'^com\.oplus\.'],
         },
       ]);
-      expect(reg.getRules().single,
-          {'rule_set': 'Oplus', 'outbound': 'vpn-1'});
+      expect(reg.getRules().single, {
+        'rule_set': 'Oplus',
+        'package_name_regex': [r'^com\.oplus\.'],
+        'outbound': 'vpn-1',
+      });
     });
 
-    test('inline: только регулярка пакета — DNS-способно, зеркало на тот же rule_set',
+    test('inline: только регулярка пакета — DNS-способно, зеркало по ключу (§757)',
         () {
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'Oplus',
         packageRegexes: [r'^com\.oplus\.'],
         outbound: 'vpn-1',
@@ -1266,22 +1294,22 @@ void main() {
       expect(rule.summary(), isNotEmpty);
       final reg = RuleSetRegistry();
       final result = applyAllCustomRules(reg, [rule], const []);
-      expect(reg.getRuleSets().single['rules'], [
-        {'package_name_regex': [r'^com\.oplus\.']},
-      ]);
-      expect(result.dnsMirrors.single.body['rule_set'], 'Oplus');
+      // §757 — набора нет; зеркало несёт ключ приложения.
+      expect(reg.getRuleSets(), isEmpty);
+      expect(result.dnsMirrors.single.body,
+          {'package_name_regex': [r'^com\.oplus\.']});
     });
 
     test('inline: domain regex делает правило resolve-способным', () {
       expect(
-        CustomRuleInline(name: 'r', domainRegexes: ['^a']).resolveEligible,
+        CustomRuleTree.flat(name: 'r', domainRegexes: ['^a']).resolveEligible,
         true,
       );
     });
 
     test('srs: package_name_regex на routing-rule и в DNS-зеркале', () {
       final reg = RuleSetRegistry();
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         name: 'geo',
         srsUrl: 'https://e/geo.srs',
         packageRegexes: [r'^com\.oplus\.'],
@@ -1289,9 +1317,9 @@ void main() {
         dns: dnsOn,
       );
       final result = applyAllCustomRules(reg, [srs], const [],
-          srsPaths: {srs.id: '/tmp/geo.srs'});
+          srsPaths: _paths(srs.id, {srs.srsUrl: '/tmp/geo.srs'}));
       expect(reg.getRules().single, {
-        'rule_set': 'geo',
+        'rule_set': 'geo:geo',
         'package_name_regex': [r'^com\.oplus\.'],
         'outbound': 'vpn-1',
       });
@@ -1300,7 +1328,7 @@ void main() {
     });
 
     test('кодек: round-trip обоих ключей, ключи sing-box в теле записи', () {
-      final src = CustomRuleInline(
+      final src = CustomRuleTree.flat(
         id: 'id-re',
         name: 'Re',
         packageRegexes: [r'^com\.oplus\.', r'^com\.coloros\.'],
@@ -1314,7 +1342,7 @@ void main() {
       expect(body['domain_regex'], [r'\.example\.com$']);
       final back = _storageRoundTrip(src);
       expect(back, src);
-      final srs = CustomRuleSrs(
+      final srs = CustomRuleTree.flat(
         id: 'id-srs',
         name: 'S',
         srsUrl: 'https://e/x.srs',

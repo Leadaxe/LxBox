@@ -15,6 +15,7 @@ import 'live_events_tab.dart';
 import 'stats_screen/overview_models.dart';
 import 'stats_screen/overview_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §044/§048: enum для start-tab выбора в StatsScreen. Передаётся при
 /// `Navigator.push(StatsScreen(initialTab: StatsTab.live))`. Порядок значений
@@ -273,7 +274,7 @@ class _StatsScreenState extends State<StatsScreen> {
               ],
             ),
           ),
-          body: TabBarView(
+          body: FocusSafeTabBarView(
             children: [
               OverviewTab(
                 loading: _loading,

@@ -1,10 +1,15 @@
 {
   "lx": {
     "wg": {
-      "idle_suspend": "30s",
-      "lazy_build": true,
-      "build_max": 5,
-      "idle_suspend_reachable": "5m"
+      "buffers": {
+        "read_datagram_count": 8
+      },
+      "idle": {
+        "suspend": "30s",
+        "lazy_build": true,
+        "build_max": 5,
+        "suspend_reachable": "5m"
+      }
     }
   },
   "log": {
@@ -166,6 +171,55 @@
       },
       {
         "rule_set": "ds-model",
+        "server": "google_udp"
+      },
+      {
+        "rule_set": "All groups",
+        "package_name": [
+          "com.example.browser"
+        ],
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
+        "source_ip_is_private": true,
+        "inbound": [
+          "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
+        ],
+        "ip_version": 6,
+        "action": "predefined",
+        "rcode": "NOERROR"
+      },
+      {
+        "rule_set": "All groups",
+        "package_name": [
+          "com.example.browser"
+        ],
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
+        "source_ip_is_private": true,
+        "inbound": [
+          "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
+        ],
+        "server": "my-doh"
+      },
+      {
+        "rule_set": [
+          "Geo sets:a",
+          "Geo sets:b"
+        ],
         "server": "google_udp"
       },
       {
@@ -526,12 +580,6 @@
         "EU nl-1",
         "PR DE-1"
       ],
-      "idle_timeout": "5m",
-      "strip_evasion": false,
-      "strip": {
-        "tls.fragment": true,
-        "tls.utls": false
-      },
       "rewrite": {
         "vless": {
           "flow": null
@@ -687,6 +735,16 @@
       },
       {
         "rule_set": "All groups",
+        "port": [
+          443,
+          8443
+        ],
+        "port_range": [
+          "10000:10100"
+        ],
+        "package_name": [
+          "com.example.browser"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -695,9 +753,18 @@
           "tcp"
         ],
         "ip_is_private": true,
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
         "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "action": "resolve",
         "strategy": "prefer_ipv4",
@@ -710,6 +777,16 @@
       },
       {
         "rule_set": "All groups",
+        "port": [
+          443,
+          8443
+        ],
+        "port_range": [
+          "10000:10100"
+        ],
+        "package_name": [
+          "com.example.browser"
+        ],
         "protocol": [
           "tls",
           "quic"
@@ -718,9 +795,18 @@
           "tcp"
         ],
         "ip_is_private": true,
+        "source_ip_cidr": [
+          "10.0.0.0/8"
+        ],
         "source_ip_is_private": true,
         "inbound": [
           "tun-in"
+        ],
+        "wifi_ssid": [
+          "Home WiFi"
+        ],
+        "wifi_bssid": [
+          "aa:bb:cc:dd:ee:ff"
         ],
         "outbound": "vpn-2"
       },
@@ -731,8 +817,8 @@
       },
       {
         "rule_set": [
-          "Geo sets",
-          "Geo sets-2"
+          "Geo sets:a",
+          "Geo sets:b"
         ],
         "port": [
           443
@@ -788,7 +874,9 @@
         "action": "reject"
       },
       {
-        "rule_set": "Ports with text",
+        "port": [
+          53
+        ],
         "network": [
           "udp"
         ],
@@ -825,25 +913,6 @@
             ],
             "ip_cidr": [
               "198.51.100.0/24"
-            ],
-            "port": [
-              443,
-              8443
-            ],
-            "port_range": [
-              "10000:10100"
-            ],
-            "package_name": [
-              "com.example.browser"
-            ],
-            "source_ip_cidr": [
-              "10.0.0.0/8"
-            ],
-            "wifi_ssid": [
-              "Home WiFi"
-            ],
-            "wifi_bssid": [
-              "aa:bb:cc:dd:ee:ff"
             ]
           }
         ]
@@ -861,15 +930,15 @@
       },
       {
         "type": "local",
-        "tag": "Geo sets",
+        "tag": "Geo sets:a",
         "format": "binary",
-        "path": "<sandbox>/docs/rule_sets/r-srs-multi.srs"
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi~0a7c4584.srs"
       },
       {
         "type": "local",
-        "tag": "Geo sets-2",
+        "tag": "Geo sets:b",
         "format": "binary",
-        "path": "<sandbox>/docs/rule_sets/r-srs-multi~1.srs"
+        "path": "<sandbox>/docs/rule_sets/r-srs-multi~6765fa2f.srs"
       },
       {
         "tag": "ru-direct:ru-domains",
@@ -927,17 +996,6 @@
         "type": "local",
         "format": "binary",
         "path": "<sandbox>/docs/rule_sets/preset__block-ads__ads-all.srs"
-      },
-      {
-        "type": "inline",
-        "tag": "Ports with text",
-        "rules": [
-          {
-            "port": [
-              53
-            ]
-          }
-        ]
       },
       {
         "type": "local",

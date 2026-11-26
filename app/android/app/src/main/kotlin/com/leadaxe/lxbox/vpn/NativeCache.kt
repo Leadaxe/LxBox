@@ -71,6 +71,50 @@ object NativeCache {
 
     // ─────────────── §428 «туннель желателен» и sticky-рестарты ───────────────
 
+    // §747 — версия ядра, запомненная на установленную сборку приложения
+    // ([stamp] — время последнего обновления пакета): строку показывают и без
+    // туннеля, а ядро в `:bg` грузится лениво.
+    fun coreVersion(ctx: Context, stamp: Long): String? {
+        val p = prefs(ctx)
+        if (p.getLong("core_version_stamp", -1L) != stamp) return null
+        return p.getString("core_version", null)?.takeIf { it.isNotEmpty() }
+    }
+
+    fun setCoreVersion(ctx: Context, stamp: Long, version: String) {
+        prefs(ctx).edit()
+            .putLong("core_version_stamp", stamp)
+            .putString("core_version", version)
+            .apply()
+    }
+
+    // §747 — метка §276 «последний Stopped пришёл из onRevoke» («Taken by
+    // another VPN»). Состояние туннеля живёт в памяти `:bg`, а процесс после
+    // остановки завершается или перезапускается; без записи новый процесс
+    // отдавал бы revoked=false, и окно на resume показывало бы обычный
+    // Disconnected. Снимается стартом туннеля.
+    fun isTunnelRevoked(ctx: Context): Boolean = prefs(ctx).getBoolean("tunnel_revoked", false)
+
+    fun setTunnelRevoked(ctx: Context, revoked: Boolean) {
+        val p = prefs(ctx)
+        if (p.getBoolean("tunnel_revoked", false) == revoked) return
+        p.edit().putBoolean("tunnel_revoked", revoked).apply()
+    }
+
+    /// §747 — см. `BootReceiver.flushPrefs`.
+    fun flush(ctx: Context) {
+        prefs(ctx).edit().commit()
+    }
+
+    // §747 — ручки quic-go (§341): применяются к ядру процесса `:bg` при его
+    // загрузке, а не только вызовом окна (ядро грузится лениво и заново в
+    // каждом новом процессе `:bg`).
+    fun quicKnobDisabled(ctx: Context, knob: String): Boolean =
+        prefs(ctx).getBoolean("quic_${knob}_disabled", false)
+
+    fun setQuicKnobDisabled(ctx: Context, knob: String, disabled: Boolean) {
+        prefs(ctx).edit().putBoolean("quic_${knob}_disabled", disabled).apply()
+    }
+
     fun isVpnDesired(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_VPN_DESIRED, false)
 
     fun setVpnDesired(ctx: Context, desired: Boolean) {

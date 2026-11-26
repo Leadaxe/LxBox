@@ -4,7 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../services/error_format.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../services/profile_dump_writer.dart';
-import '../../services/ui_helpers.dart';
+import '../../widgets/ui_helpers.dart';
 import '../../vpn/box_vpn_client.dart';
 import '../../vpn/pprof_profile.dart';
 import '../../widgets/safe_bottom.dart';

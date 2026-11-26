@@ -105,7 +105,7 @@ class ServiceNotification(private val service: Service) {
 
         /// §654 C — экстра интента MainActivity: тег узла openconnect, чей
         /// челлендж показать после тапа по уведомлению.
-        const val EXTRA_OPENCONNECT_TAG = "openconnect_tag"
+        const val EXTRA_OPENCONNECT_TAG = BgEvents.EXTRA_LAUNCH_OPENCONNECT_TAG
 
         /// §654 C — id уведомления «Sign-in required» на узел: своё на каждый
         /// тег, вне id 1/2.
@@ -181,6 +181,13 @@ class ServiceNotification(private val service: Service) {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
+            // §223 — на Android 14+ (HyperOS 3 и др.) уведомление FGS смахивается
+            // несмотря на setOngoing, а периодического notify у нас нет: без
+            // deleteIntent оно не вернулось бы до переподключения. Смахнули →
+            // тот же ACTION_UPDATE_NOTIFICATION, ресивер перерисует только в
+            // Started. Снятие самим приложением (stopForeground) deleteIntent
+            // не шлёт.
+            .setDeleteIntent(broadcastPI(BoxVpnService.ACTION_UPDATE_NOTIFICATION, 4))
 
         if (pendingIntent != null) builder.setContentIntent(pendingIntent)
 

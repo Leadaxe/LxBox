@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/debug_entry.dart';
 import 'app_log.dart';
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 
 /// §043: Pump для sing-box logs из Kotlin'а в наш [AppLog].
 ///

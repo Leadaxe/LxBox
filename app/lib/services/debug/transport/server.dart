@@ -7,6 +7,7 @@ import '../../settings_storage.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../handlers/action.dart';
+import '../handlers/assistant.dart';
 import '../handlers/backup.dart';
 import '../handlers/chains.dart';
 import '../handlers/directions.dart';
@@ -21,6 +22,7 @@ import '../handlers/mixins.dart';
 import '../handlers/help.dart';
 import '../handlers/nodes.dart';
 import '../handlers/ping.dart';
+import '../handlers/impair.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
 import '../handlers/support.dart';
@@ -222,6 +224,7 @@ Router buildDebugRouter() {
     ..mount('/device', deviceHandler)
     ..mount('/config', configHandler)
     ..mount('/pool', poolHandler) // §208 — снапшот пула round_robin
+    ..mount('/impair', impairHandler) // §762 — линия outbound impair
     ..mount('/logs', logsHandler)
     ..mount('/action', actionHandler)
     ..mount('/files', filesHandler)
@@ -243,6 +246,8 @@ Router buildDebugRouter() {
     ..mount('/wifi_history', wifiHistoryHandler)
     ..mount('/profiler', profilerHandler)
     ..mount('/support', supportHandler) // §357 — тест support-ленты
-    ..mount('/taildrop', taildropHandler); // §707 итер. 5 — Taildrop узлов
+    ..mount('/taildrop', taildropHandler) // §707 итер. 5 — Taildrop узлов
+    // §750 — функции ИИ-ассистента: проверка адреса, выходы, подключения.
+    ..mount('/assistant', assistantHandler);
 }
 

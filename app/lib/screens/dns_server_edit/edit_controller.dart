@@ -11,7 +11,7 @@ import '../../services/dns/tailscale_endpoint_options.dart' show TailscaleEndpoi
 import '../../services/record_vars.dart';
 import '../../widgets/outbound_picker.dart';
 import '../../widgets/var_values_model.dart';
-import '../dns_settings_screen/dns_server_resolver.dart'
+import '../../services/dns/dns_server_resolver.dart'
     show defaultDnsServerTag;
 import '../../models/custom_rule.dart' show RuleDns;
 import '../../services/builder/post_steps.dart'
@@ -20,7 +20,7 @@ import '../../services/dns/dns_server_holds.dart' show dnsListableTags;
 import '../../services/l10n/locale_controller.dart';
 import '../../services/builder/preset_expand.dart' show normalizeDnsDetour;
 import '../dns_settings_screen/dns_server_copy.dart';
-import '../dns_settings_screen/resolved_server.dart';
+import '../../services/dns/resolved_server.dart';
 
 /// §117 задача 4b — режимы формы создания/редактирования inline-сервера.
 /// Значение = sing-box `type`. Прочие типы (`local`, `tcp`, `fakeip`,

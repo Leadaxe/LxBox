@@ -12,6 +12,8 @@
 /// переименование у лаунчера правилось одной правкой.
 library;
 
+import 'tlv.dart';
+
 /// §0.7 DRAFT — имена, которые лаунчер может переименовать.
 ///
 /// Вынесены сюда все разом, а не разбросаны по коду: это и есть «изолировать
@@ -65,7 +67,7 @@ final class MapperForm {
   final Map<String, dynamic>? detect;
 
   /// Конвейер декодеров оболочки: `url`, `percent`, `base64`, `base64url`,
-  /// `base64?`, `json`, `ini`, `tt_deeplink` (§717), `{reparse: url|authority}`.
+  /// `base64?`, `json`, `ini`, `tlv` (§717), `{reparse: url|authority}`.
   final List<dynamic> decode;
 
   /// Итоговое пространство источников: `url` | `json` | `ini`.
@@ -689,6 +691,7 @@ final class MapperSection {
     this.nestedQuiet = const {},
     this.kindWhen = const {},
     this.iniDialect,
+    this.tlv,
     this.emit,
   });
 
@@ -753,6 +756,9 @@ final class MapperSection {
           ? null
           : IniDialect.fromJson(
               (j[DraftNames.iniDialect] as Map).cast<String, dynamic>()),
+      tlv: j['tlv'] is Map
+          ? TlvDialect.fromJson((j['tlv'] as Map).cast<String, dynamic>())
+          : null,
       emit: (j['emit'] as Map?)?.cast<String, dynamic>(),
     );
   }
@@ -811,6 +817,11 @@ final class MapperSection {
   /// служит не текст `.conf`.
   final IniDialect? iniDialect;
 
+  /// §717 (контракт 1.1.175) — диалект бинарного контейнера `tlv`
+  /// (MAPPER_ENGINE §4a): таблица тегов формы с декодером `tlv` и обратного
+  /// хода `emit.container: "tlv"`.
+  final TlvDialect? tlv;
+
   final Map<String, dynamic>? emit;
 
   /// Секция с вмонтированными блоками `include` (общие tls/transports).
@@ -834,6 +845,7 @@ final class MapperSection {
         nestedQuiet: nestedQuiet,
         kindWhen: kindWhen,
         iniDialect: iniDialect,
+        tlv: tlv,
         emit: emit,
       );
 }

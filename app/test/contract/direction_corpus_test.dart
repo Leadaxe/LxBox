@@ -64,6 +64,29 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 /// как у Направления (§570).
 const Map<String, String> _skipFold = {};
 
+/// §761 — кейсы, где корпус и сборка LxBox судят разные слои. Раннер
+/// лаунчера (`core/config/contract_direction_test.go`) проверяет генерацию
+/// (`GenerateOutboundsFromParserConfig`), до проверки перезаписи цепочек;
+/// его сборка (`applyChainDetourRules`) снимает те же цепочки кодами
+/// `chain_detour_ring` / `chain_detour_conflict`. Раннер LxBox гоняет всю
+/// сборку, где эта проверка есть (`applyChainTakeover`). По ядру
+/// v1.14.4-lx.37-rc.2 (SPEC 165 ALGORITHM К1, `placesConflict` в
+/// `protocol/chain/rewrite.go`) конфиг кейса не грузится: цепочку надо снять.
+const Map<String, String> _skipChainRc2 = {
+  // `[proxy-out, NL]`, NL внутри proxy-out: NL на позиции 0 и 1 одной
+  // цепочки — кольцо (К1, апстримное `circular outbound dependency`).
+  'chain_cycle_excluded_from_direction':
+      '§761: ring (the exit node is also inside the entry Direction), the '
+          'core rejects the config and the build drops the chain; the corpus '
+          'checks the generation layer before the chain check',
+  // `[F, A]` и `[A, F]`: F на входе одной и на позиции 2 другой — конфликт
+  // (К1, Т11 ALGORITHM).
+  'chain_interrupt_connections':
+      '§761: the second chain over the same nodes conflicts (core: one node '
+          'or group has one path) and the build drops it; the corpus checks '
+          'the generation layer before the chain check',
+};
+
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.
 ///
 /// Реестр (`registry/warnings.json`) — нормативный словарь кодов, и там, где
@@ -164,7 +187,7 @@ void main() {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы
       // (C1–C5). `fold_*` идут с фазой B фичи 565, кроме [_skipFold].
-      final skip = _skipFold[name];
+      final skip = _skipFold[name] ?? _skipChainRc2[name];
 
       test(name, () async {
         final input = jsonDecode(File('$base.direction.json').readAsStringSync())
@@ -332,13 +355,6 @@ SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
       hops: [
         for (final h in (c['hops'] as List?) ?? const []) ?nodeLinkFromRecord(h),
       ],
-      idleTimeout: c['idle_timeout'] as String? ?? '',
-      stripEvasion:
-          c['strip_evasion'] is bool ? c['strip_evasion'] as bool : null,
-      strip: {
-        for (final e in ((c['strip'] as Map?) ?? const {}).entries)
-          if (e.value is bool) e.key.toString(): e.value as bool,
-      },
       rewrite: ((c['rewrite'] as Map?) ?? const {}).cast<String, dynamic>(),
     );
 

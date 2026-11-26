@@ -104,10 +104,13 @@ void main() {
       final before = _identityBefore();
       var checked = 0;
       for (final plus in const [false, true]) {
-        for (final res in const [true, false]) {
+        // §142 — генератор больше не пишет reserved: сверяем с эталоном
+        // `res=false` (ветки с reserved в фикстуре теперь недостижимы).
+        const res = false;
+        {
           for (final ka in const <int?>[null, 25]) {
             final uri = _warpAccount(plus: plus)
-                .toWireguardUri(includeReserved: res, persistentKeepalive: ka);
+                .toWireguardUri(persistentKeepalive: ka);
             final byUri = parseUri(uri)!;
             final wantUri = before['warp_uri:$plus/$res/$ka']!;
             expect(legacyNodeIdentityHash(byUri), wantUri['identity'],
@@ -115,7 +118,7 @@ void main() {
             expect(byUri.tag, wantUri['tag']);
 
             final conf = _warpAccount(plus: plus, awg: _warpAwg)
-                .toWireguardConf(includeReserved: res, persistentKeepalive: ka);
+                .toWireguardConf(persistentKeepalive: ka);
             final byConf = parseWireguardIni(conf,
                 nameHint: WarpAccount.nodeTag(warpPlus: plus, hasAwg: true))!;
             final wantConf = before['warp_conf:$plus/$res/$ka']!;
@@ -128,7 +131,7 @@ void main() {
           }
         }
       }
-      expect(checked, 16);
+      expect(checked, 8);
     });
   });
 

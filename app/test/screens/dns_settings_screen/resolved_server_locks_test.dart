@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_settings_screen/dns_server_delete.dart';
-import 'package:lxbox/screens/dns_settings_screen/dns_server_resolver.dart';
-import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/dns_server_resolver.dart';
+import 'package:lxbox/services/dns/resolved_server.dart';
 import 'package:lxbox/services/dns/dns_server_holds.dart'
     show dnsServerFirstHolds;
 

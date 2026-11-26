@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/services.dart';
 
 import 'app_log.dart';
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 import 'settings_storage.dart';
 
 /// §425 — регион использования приложения: страна, в которой юзер сидит за

@@ -72,7 +72,9 @@ Auto ✨ (только двойник автовыбора Направлени�
 - Нажатие по строке только подсвечивает её. Кнопка ▷ справа выбирает узел;
   у активного это ✓ и нажать нельзя.
 - В `NETWORKS` нет Ping, Use this node и кнопки ▷.
-- Copy JSON / detour перенесены в View details.
+- Copy JSON / detour перенесены в View details. Вкладка JSON там показывает
+  узел таким, каким его запустило ядро (effective / original и правки ядра);
+  при выключенном туннеле — нет данных (задача 761).
 
 ## Границы
 
@@ -104,3 +106,4 @@ Auto ✨ (только двойник автовыбора Направлени�
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | — | Turn off / Turn on WG-узла, состояние `off` |
 | 13 | [572](../../../tasks/572-notifications-group-by-code.md) | Released v2.25.7 | Уведомления узла сгруппированы по коду |
 | 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Двойник Auto в Load balance показывает метку пула; без значков — имена слотов |
+| 15 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (ветка, ждёт rc2 ядра) | Вкладка JSON в View details показывает узел от ядра |

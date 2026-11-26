@@ -104,6 +104,73 @@ void main() {
     });
   });
 
+  // §741 (контракт 1.1.172) — комментарии `//`, `/* */`, `#` сохраняются на
+  // Source; снимаются только при обрезке документа.
+  group('§741 комментарии', () {
+    const body = '// пометка автора\n'
+        '{\n'
+        '  "type": "trojan", /* "блок" */\n'
+        '  "server": "example-1.com", # хост\n'
+        '  "server_port": 443,\n'
+        '  "password": "pass//not#comment"\n'
+        '}';
+
+    test('тег не задан — текст как набран, вид singbox', () {
+      final p = readyOf(prepareNodeDocumentForSave(body, ''));
+      expect(p.text, body);
+      expect(p.dialect, SourceDialect.singbox);
+      expect(p.isDocument, isFalse);
+      expect(p.droppedExtras, isFalse);
+    });
+
+    test('тег из поля вставляется правкой текста, комментарии на месте', () {
+      final p = readyOf(prepareNodeDocumentForSave(body, 'n1'));
+      expect(p.text, contains('// пометка автора'));
+      expect(p.text, contains('/* "блок" */'));
+      expect(p.text, contains('# хост'));
+      expect(p.text, contains('"tag": "n1",'));
+      // Повторное сохранение с тем же тегом — текст не меняется.
+      expect(readyOf(prepareNodeDocumentForSave(p.text, 'n1')).text, p.text);
+      // Переименование — меняется только значение тега.
+      final r = readyOf(prepareNodeDocumentForSave(p.text, 'n2'));
+      expect(r.text, p.text.replaceFirst('"tag": "n1"', '"tag": "n2"'));
+    });
+
+    test('поле Tag не трогали, тега в тексте нет — тег вставлен, пометки целы',
+        () {
+      final p = readyOf(prepareNodeDocumentForSave(body, 'auto-tag',
+          tagTouched: false));
+      expect(p.text, contains('// пометка автора'));
+      expect(p.text, contains('"tag": "auto-tag"'));
+    });
+
+    test('документ без лишнего — как набран; с dns — пересобран без них', () {
+      const doc = '{\n  // док\n  "outbounds": [{"type": "socks", '
+          '"tag": "s", "server": "h", "server_port": 1080}] # узел\n}';
+      final kept = readyOf(prepareNodeDocumentForSave(doc, ''));
+      expect(kept.text, doc);
+      expect(kept.isDocument, isTrue);
+      expect(kept.droppedExtras, isFalse);
+
+      final withDns = doc.replaceFirst(
+          '# узел\n}', ', "dns": {"servers": []} /* остаток */\n}');
+      final cut = readyOf(prepareNodeDocumentForSave(withDns, ''));
+      expect(cut.droppedExtras, isTrue);
+      expect(cut.text, isNot(contains('//')));
+      expect(cut.text, isNot(contains('#')));
+      expect((jsonDecode(cut.text) as Map).keys, ['outbounds']);
+    });
+
+    test('Xray outbound с комментариями — вид xray, текст как набран', () {
+      const xr = '{\n  # xray\n  "tag": "xr", "protocol": "vless", // p\n'
+          '  "settings": {"vnext": [{"address": "example-1.com", "port": 443, '
+          '"users": [{"id": "11111111-2222-3333-4444-555555555555"}]}]}\n}';
+      final p = readyOf(prepareNodeDocumentForSave(xr, ''));
+      expect(p.dialect, SourceDialect.xray);
+      expect(p.text, xr);
+    });
+  });
+
   group('§722 Xray (#209)', () {
     test('outbound: смена тега → Ready, текст Xray, вид xray', () {
       final p = readyOf(prepareNodeDocumentForSave(xrayOut, 'renamed'));

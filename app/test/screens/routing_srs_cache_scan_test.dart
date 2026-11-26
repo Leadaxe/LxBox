@@ -16,7 +16,7 @@ void main() {
     ],
   );
 
-  CustomRuleSrs srsRule({bool enabled = true}) => CustomRuleSrs(
+  CustomRuleTree srsRule({bool enabled = true}) => CustomRuleTree.flat(
         id: 'srs-1',
         name: 'S',
         srsUrl: 'https://example.invalid/s.srs',

@@ -57,7 +57,7 @@ void main() {
       'route_final': 'vpn-3',
       'storage_version': 1,
       'rules': [
-        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
+        ruleToRecord(CustomRuleTree.flat(name: 'r1', domains: const ['x.com'], outbound: 'vpn-3')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));
@@ -130,7 +130,7 @@ void main() {
       'route_final': 'vpn-1',
       'storage_version': 1,
       'rules': [
-        ruleToRecord(CustomRuleInline(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')),
+        ruleToRecord(CustomRuleTree.flat(name: 'r1', domains: const ['x.com'], outbound: 'vpn-1')),
       ],
     };
     await File(mainPath()).writeAsString(jsonEncode(data));

@@ -1,5 +1,7 @@
 import '../models/custom_rule.dart';
 import '../models/parser_config.dart';
+import '../models/rule_tree.dart';
+import 'builder/post_steps.dart' show customRuleAxisTags;
 import 'rule_display_names.dart';
 
 /// §165 — резолвер человекочитаемого имени правила для Stats/Conns.
@@ -14,6 +16,12 @@ import 'rule_display_names.dart';
 ///   2. ядровая строка обрезана → её префикс (до `...`) ⊂ нашей полной → indexOf
 ///   3. кэшируем `c.rule → title` (И промахи) — `ruleName` зовётся в цикле
 ///      ×10/сек (FAST), без кэша = фриз. Сброс кэша при смене правил (stop VPN).
+///
+/// §757 — правило пользователя выпускает наборы (ссылки и inline-набор
+/// узла с доменами / адресами), и ядро печатает его `rule_set=<теги>`;
+/// поэтому первым идёт матч по тегам наборов правила (схема §6.13 тем же
+/// расчётом, что у сборки), затем — по строкам условий (правило без
+/// наборов; у правила с группами — по строке на простой узел).
 class RuleNameResolver {
   RuleNameResolver._();
   static final RuleNameResolver I = RuleNameResolver._();
@@ -22,9 +30,18 @@ class RuleNameResolver {
   /// кэшируются, чтобы не пересчитывать каждый тик.
   final Map<String, String> _cache = {};
 
-  /// Эталонные нормализованные строки правил: normString → title. Перестраивается
-  /// при `setRules` (смена конфига) и `relocalize` (смена локали).
-  final List<({String norm, String title})> _rules = [];
+  /// Эталонные нормализованные строки правил: строки → title. Перестраивается
+  /// при `setRules` (смена конфига) и `relocalize` (смена локали). У плоского
+  /// правила строка одна; §757 — у правила с группами по строке на простой
+  /// узел, матч — все строки входят в строку ядра.
+  final List<({List<String> norms, String title})> _rules = [];
+
+  /// §757 — тег набора правила пользователя (база, ссылки, inline-наборы
+  /// узлов; схема §6.13, тот же расчёт, что у сборки) → display-титул.
+  /// Правило с наборами ядро печатает `rule_set=<теги>`, а у правила с
+  /// группами — дерево листьев через `&&` / `||`, поэтому тег — главный
+  /// признак. Длинные теги первыми: тег `X:ads` не путается с `X`.
+  final List<({String tag, String title})> _userTags = [];
 
   /// §279 — исходный список правил последнего [setRules]: relocalize
   /// пере-дерайвит из него display-титулы под новый шаблон.
@@ -53,6 +70,7 @@ class RuleNameResolver {
     _cache.clear();
     _rules.clear();
     _ruleSetTagTitles.clear();
+    _userTags.clear();
     _sourceRules = const [];
   }
 
@@ -71,7 +89,17 @@ class RuleNameResolver {
   void _rebuild(WizardTemplate? template) {
     _rules.clear();
     _ruleSetTagTitles.clear();
+    _userTags.clear();
     final titles = ruleDisplayNames(_sourceRules, template);
+    // §757 — теги наборов правил пользователя: заняты теги `route.rule_set`
+    // шаблона и наборов пресетов (как в сборке). Без шаблона занятых тегов
+    // нет: база может разойтись со сборкой лишь у правила, чьё имя совпало
+    // с тегом шаблона или пресета.
+    final axisTags = customRuleAxisTags(
+      _sourceRules,
+      takenTags: _templateRuleSetTags(template),
+      presets: template?.selectableRules ?? const [],
+    );
     for (var i = 0; i < _sourceRules.length; i++) {
       final r = _sourceRules[i];
       if (r.kind == CustomRuleKind.preset) {
@@ -88,11 +116,36 @@ class RuleNameResolver {
         }
         continue;
       }
-      final s = _ruleConditionString(r);
-      if (s.isEmpty) continue;
-      _rules.add((norm: _norm(s), title: titles[i]));
+      final tags = axisTags[r.id];
+      if (tags != null) {
+        for (final t in {...tags.refTags.values, ...tags.inlineTags.values}) {
+          _userTags.add((tag: t, title: titles[i]));
+        }
+      }
+      // Строки условий — для правил без наборов и для конфига, собранного
+      // до §757 (тот же процесс ядра переживает обновление приложения).
+      final strings = r is CustomRuleTree && r.hasGroups
+          ? [
+              for (final (_, leaf) in ruleTreeLeaves(r.root))
+                _leafConditionString(leaf),
+            ].where((s) => s.isNotEmpty).toList()
+          : [_ruleConditionString(r)].where((s) => s.isNotEmpty).toList();
+      if (strings.isEmpty) continue;
+      _rules.add((norms: [for (final s in strings) _norm(s)], title: titles[i]));
     }
+    _userTags.sort((a, b) => b.tag.length.compareTo(a.tag.length));
     _cache.clear();
+  }
+
+  /// §757 — теги `route.rule_set` шаблона (заняты до правил пользователя).
+  static List<String> _templateRuleSetTags(WizardTemplate? template) {
+    final route = template?.config['route'];
+    final sets = route is Map ? route['rule_set'] : null;
+    if (sets is! List) return const [];
+    return [
+      for (final rs in sets)
+        if (rs is Map && rs['tag'] is String) rs['tag'] as String,
+    ];
   }
 
   static SelectableRule? _presetOf(WizardTemplate? template, String presetId) {
@@ -125,14 +178,63 @@ class RuleNameResolver {
     // Ядро обрезает списки до `[a b c...]` — отрезаем хвост `...`, ищем префикс.
     final probe = _stripTruncation(normCore);
 
+    // §757 — тег набора правила пользователя в `rule_set=` строки ядра.
+    final byTag = _userTagTitle(core);
+    if (byTag != null) return byTag;
+
     for (final rule in _rules) {
-      // Матч: обрезанная ядровая строка (или её префикс до `...`) ⊂ полной нашей.
-      if (rule.norm.contains(probe) || normCore.contains(rule.norm)) {
+      if (rule.norms.length == 1) {
+        // Матч: обрезанная ядровая строка (или её префикс до `...`) ⊂ полной нашей.
+        final norm = rule.norms.single;
+        if (norm.contains(probe) || normCore.contains(norm)) return rule.title;
+      } else if (rule.norms.every(normCore.contains)) {
+        // §757 — правило с группами: строка каждого листа — в строке ядра.
         return rule.title;
       }
     }
     // Не нашли правило — fallback: имя rule_set'а если есть, иначе `final`.
     return _fallback(core);
+  }
+
+  /// §757 — титул правила пользователя, чей тег набора стоит в одном из
+  /// `rule_set=` строки ядра (у `logical` их несколько). Теги содержат
+  /// пробелы (`Ads (2)`), поэтому список не режется на слова: тег ищется
+  /// целиком с границами — начало значения, `[`, `(` или пробел слева;
+  /// конец, `]`, `)` или пробел справа (ядро: `rule_set=[a b]`, у `invert`
+  /// — `!(…)`, у `logical` — листья через ` && ` / ` || `).
+  String? _userTagTitle(String core) {
+    if (_userTags.isEmpty) return null;
+    const key = 'rule_set=';
+    final values = <String>[];
+    for (var i = core.indexOf(key); i >= 0; i = core.indexOf(key, i + 1)) {
+      final v = _kvValue(core.substring(i), key);
+      if (v != null && v.isNotEmpty) values.add(v);
+    }
+    if (values.isEmpty) return null;
+    for (final e in _userTags) {
+      for (final v in values) {
+        if (_containsTag(v, e.tag)) return e.title;
+      }
+    }
+    return null;
+  }
+
+  static final RegExp _dedupSuffix = RegExp(r'^ \(\d+\)');
+
+  static bool _containsTag(String value, String tag) {
+    for (var i = value.indexOf(tag); i >= 0; i = value.indexOf(tag, i + 1)) {
+      final before = i == 0 ? 0x20 : value.codeUnitAt(i - 1);
+      final end = i + tag.length;
+      final after = end == value.length ? 0x20 : value.codeUnitAt(end);
+      // ` (2)` за тегом — это развод другого тега (`Ads` внутри `Ads (2)`),
+      // `:` — производный тег; оба отсекаются границей справа.
+      if ((before == 0x20 || before == 0x5B || before == 0x28) &&
+          (after == 0x20 || after == 0x5D || after == 0x29) &&
+          !_dedupSuffix.hasMatch(value.substring(end))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Fallback когда правило не сматчилось: `rule_set=<tag>` целиком (§279 —
@@ -232,25 +334,44 @@ class RuleNameResolver {
   /// protocol → network_type → network_is_expensive → wifi_ssid → wifi_bssid.
   /// Формат: `key=val` / `key=[a b c]`.
   static String _ruleConditionString(CustomRule r) {
+    final leaf = r.flatLeaf;
+    return leaf == null ? '' : _leafConditionString(leaf);
+  }
+
+  /// §757 — строка условий простого узла дерева (тот же порядок ключей).
+  static String _leafConditionString(RuleLeaf leaf) =>
+      _conditionString((key) => switch (leaf.conditions[key]) {
+            final List l => [for (final e in l) e.toString()],
+            true => const ['true'],
+            _ => const <String>[],
+          });
+
+  static String _conditionString(List<String> Function(String key) values) {
     final parts = <String>[];
     void add(String key, List<String> vals) {
       if (vals.isEmpty) return;
       parts.add(vals.length == 1 ? '$key=${vals.first}' : '$key=[${vals.join(' ')}]');
     }
 
-    add('domain', r.domains);
-    add('domain_suffix', r.domainSuffixes);
-    add('domain_keyword', r.domainKeywords);
-    add('domain_regex', r.domainRegexes); // §712
-    add('ip_cidr', r.ipCidrs);
-    add('package_name', r.packages);
-    add('package_name_regex', r.packageRegexes); // §712
-    add('protocol', r.protocols);
-    // §694 — в ядре network_type / network_is_expensive идут перед wifi.
-    add('network_type', r.networkTypes);
-    if (r.networkIsExpensive) parts.add('network_is_expensive=true');
-    add('wifi_ssid', r.wifiSsids);
-    add('wifi_bssid', r.wifiBssids);
+    for (final key in const [
+      'domain',
+      'domain_suffix',
+      'domain_keyword',
+      'domain_regex', // §712
+      'ip_cidr',
+      'package_name',
+      'package_name_regex', // §712
+      'protocol',
+      // §694 — в ядре network_type / network_is_expensive идут перед wifi.
+      'network_type',
+    ]) {
+      add(key, values(key));
+    }
+    if (values('network_is_expensive').isNotEmpty) {
+      parts.add('network_is_expensive=true');
+    }
+    add('wifi_ssid', values('wifi_ssid'));
+    add('wifi_bssid', values('wifi_bssid'));
     return parts.join(' ');
   }
 }

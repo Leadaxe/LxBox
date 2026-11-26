@@ -1,0 +1,69 @@
+// -----------------------------------------------------------------------------
+// §141 P2.4e — централизованные имена MethodChannel / EventChannel.
+//
+// Раньше строки каналов (`com.leadaxe.lxbox/methods` и т.д.) дублировались в
+// 6+ Dart-файлах + Kotlin-стороне. Опечатка в одном месте → молчаливо мёртвый
+// канал (вызовы уходят в никуда). Единый источник здесь; Kotlin-зеркало —
+// `MainActivity.kt` / `VpnPlugin.kt` (их строки должны совпадать дословно).
+//
+// Прецедент стиля: `box_vpn_client/method_names.dart` (`_Methods`).
+// -----------------------------------------------------------------------------
+
+class PlatformChannels {
+  const PlatformChannels._();
+
+  /// §324 — он же package name приложения: `OverrideOptions.includePackage`
+  /// native кладёт именно его (`service.packageName` в `buildOverrideOptions`),
+  /// и зеркало override сравнивает по этой строке. Публичный, чтобы литерал не
+  /// расползался третьей копией.
+  static const packageName = 'com.leadaxe.lxbox';
+
+  static const _ns = packageName;
+
+  /// Основной двусторонний канал: config/VPN lifecycle/notification/system-proxy
+  /// и пр. (`VpnPlugin.kt handleMethodCall`).
+  static const methods = '$_ns/methods';
+
+  /// EventChannel статусов туннеля (broadcast от native → `onStatusChanged`).
+  static const statusEvents = '$_ns/status_events';
+
+  /// Утилитарный канал (url_launcher, showToast и пр.).
+  static const utils = '$_ns/utils';
+
+  /// §725 — проба Path MTU мимо туннеля (`PathMtuProbe.kt`).
+  static const pathMtu = '$_ns/path_mtu';
+
+  /// Wi-Fi history: MethodChannel + native `onWifiSeen` events (§051).
+  static const wifiHistory = '$_ns/wifi_history';
+
+  /// EventChannel для forward'а sing-box core-логов в AppLog (§043).
+  /// Отдельный (короткий) неймспейс — зеркало `BoxService.coreLog`.
+  static const coreLog = 'lxbox/coreLog';
+
+  /// §122 Фаза 0 — EventChannel'ы нативного CommandClient-канала.
+  /// Зеркало `VpnPlugin.CC_*_CHANNEL` + `BoxVpnService.cc*Sink`.
+  /// status: скорость/память/трафик (always-on). outbounds: плоский node-list +
+  /// delay. groups: дерево групп. connections: снапшот соединений (дельты→аккумулятор).
+  static const ccStatus = 'lxbox/cc/status';
+  static const ccOutbounds = 'lxbox/cc/outbounds';
+  static const ccGroups = 'lxbox/cc/groups';
+  static const ccConnections = 'lxbox/cc/connections';
+  static const ccDns = 'lxbox/cc/dns'; // §180 — DNS-журнал из ядра (SPEC 018)
+  /// §579 — состояние узлов Tailscale (`SubscribeTailscaleStatus`).
+  static const ccTailscale = 'lxbox/cc/tailscale';
+  /// §581 — ответы проверки устройства Tailscale (`StartTailscalePing`).
+  static const ccTailscalePing = 'lxbox/cc/tailscale_ping';
+  /// §687 — события теста соединения (`StartConnectionTest`), батчами.
+  static const ccConnectionTest = 'lxbox/cc/connection_test';
+  /// §654 C — состояние endpoint'ов openconnect (`SubscribeOpenConnectStatus`).
+  static const ccOpenConnect = 'lxbox/cc/openconnect';
+  /// §707 — входящие Taildrop узла (`SubscribeTaildropInbox`).
+  static const ccTaildropInbox = 'lxbox/cc/taildrop_inbox';
+
+  /// Редактор Sora (`widgets/lx_code_editor.dart`): viewType PlatformView.
+  static const soraEditorViewType = 'lxbox/sora_editor';
+
+  /// Редактор Sora: префикс MethodChannel экземпляра, к нему дописывается
+  /// `viewId` (`${soraEditorChannelPrefix}$viewId`).
+  static const soraEditorChannelPrefix = 'com.leadaxe.lxbox/sora_editor_';
+}

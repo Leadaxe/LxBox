@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show LogicalKeyboardKey;
 
 import '../../services/backup_merge.dart' show MergeCount;
 import '../../services/backup_service.dart';
 import '../../services/format_utils.dart' show formatDateTime;
 import '../../services/l10n/locale_controller.dart';
+import '../../widgets/dpad_radio_group.dart';
 
 class ImportDialogResult {
   const ImportDialogResult({required this.include, required this.merge});
@@ -155,15 +155,12 @@ Future<ImportDialogResult?> showImportPreview(
                   getLocalText.s("Mode:"),
                   style: const TextStyle(fontWeight: FontWeight.w500),
                 ),
-                RadioGroup<bool>(
+                DpadRadioGroup<bool>(
                   groupValue: merge,
                   onChanged: (v) => set(() => merge = v ?? true),
-                  // RadioGroup вешает на стрелки «выбрать соседнее радио», и
-                  // пульт TV крутился между Merge и Replace, не доходя до
-                  // Import. Стрелки здесь двигают фокус, выбор — OK/Enter.
-                  child: Shortcuts(
-                    shortcuts: _arrowsMoveFocus,
-                    child: Column(
+                  // §744 — стрелки двигают фокус, выбор — OK/Enter (своё
+                  // Shortcuts из §622 переехало в DpadRadioGroup).
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         RadioListTile<bool>(
@@ -189,7 +186,6 @@ Future<ImportDialogResult?> showImportPreview(
                         ),
                       ],
                     ),
-                  ),
                 ),
               ],
             ),
@@ -248,17 +244,6 @@ Future<ImportDialogResult?> showImportPreview(
     ),
   );
 }
-
-const _arrowsMoveFocus = <ShortcutActivator, Intent>{
-  SingleActivator(LogicalKeyboardKey.arrowUp):
-      DirectionalFocusIntent(TraversalDirection.up),
-  SingleActivator(LogicalKeyboardKey.arrowDown):
-      DirectionalFocusIntent(TraversalDirection.down),
-  SingleActivator(LogicalKeyboardKey.arrowLeft):
-      DirectionalFocusIntent(TraversalDirection.left),
-  SingleActivator(LogicalKeyboardKey.arrowRight):
-      DirectionalFocusIntent(TraversalDirection.right),
-};
 
 Widget _previewCheckbox(
   BuildContext ctx, {

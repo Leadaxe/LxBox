@@ -4,6 +4,7 @@ import '../../controllers/home_controller.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../speed_test_screen.dart';
 import 'url_check_tab.dart';
+import '../../widgets/focus_safe_tab_bar_view.dart';
 
 /// §687 — вкладки раздела Diagnostics в порядке показа.
 enum DiagnosticsTab { urlCheck, speedTest }
@@ -41,7 +42,7 @@ class DiagnosticsScreen extends StatelessWidget {
             ],
           ),
         ),
-        body: TabBarView(
+        body: FocusSafeTabBarView(
           children: [
             UrlCheckTab(homeController: homeController),
             SpeedTestScreen(homeController: homeController, embedded: true),

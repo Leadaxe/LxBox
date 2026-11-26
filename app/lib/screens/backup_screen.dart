@@ -13,11 +13,12 @@ import '../services/lx_backup.dart';
 import '../services/lx_backup_import.dart';
 import '../services/record_vars.dart';
 import '../services/warp/warp_backup.dart';
+import '../services/workspaces/workspace_controller.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
 import '../services/error_format.dart';
 import '../services/l10n/locale_controller.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/export_action_sheet.dart';
 import 'backup_screen/export_card.dart';
 import 'backup_screen/import_card.dart';
@@ -272,7 +273,7 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
     }
   }
 
-  // §219 — _snack вынесен в SnackHelper.showSnack (services/ui_helpers.dart).
+  // §219 — _snack вынесен в SnackHelper.showSnack (widgets/ui_helpers.dart).
 
   // ——— §622: передача настроек телефон → TV ———
 
@@ -515,6 +516,9 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
   /// Показывает, что приедет, ДО применения: импорт заменяет правила целиком,
   /// и спрашивать после было бы поздно.
   Future<void> _onLxImport() async {
+    // §748 — после записи сцена пересоздаётся и этот экран закрывается:
+    // итог показывает корневой messenger, взятый заранее.
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
     try {
       final outcome = await pickFileSafely(
@@ -550,16 +554,27 @@ class _BackupScreenState extends State<BackupScreen> with SnackHelper {
       final confirmed = await _confirmLxImport(plan.file);
       if (confirmed != true) return;
 
-      final result = await importer.apply(plan);
-      if (!mounted) return;
+      final LxImportResult result;
+      try {
+        result = await importer.apply(plan);
+      } finally {
+        // §748 — импорт пишет хранилище мимо контроллеров главного экрана:
+        // без пересоздания сцены импортированное не видно до перезапуска, а
+        // первая мутация старого контроллера затёрла бы его. И при сбое
+        // посреди записи — часть уже легла на диск.
+        await WorkspaceController.I.remountAfterExternalWrite();
+      }
 
       // §641 — итог одной строкой: замена правил приёмника названа хвостом,
       // а не посчитана в «не применено».
-      showSnack(lxImportSnackText(
-        result.file,
-        appliedDirections: result.appliedDirections,
-        appliedSettings: result.appliedSettings,
-        appliedChains: result.appliedChains,
+      messenger.showSnackBar(SnackBar(
+        content: Text(lxImportSnackText(
+          result.file,
+          appliedDirections: result.appliedDirections,
+          appliedSettings: result.appliedSettings,
+          appliedChains: result.appliedChains,
+        )),
+        duration: const Duration(seconds: 4),
       ));
     } catch (e) {
       if (!mounted) return;

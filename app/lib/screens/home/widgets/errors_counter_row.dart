@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../services/app_log.dart';
 import '../../../services/l10n/locale_controller.dart';
+import '../../../widgets/safe_bottom.dart';
 import '../../debug_screen.dart';
 
 /// §614 — красная строка «Errors (N)» под списком узлов: N — записи уровня
@@ -42,7 +43,12 @@ class ErrorsCounterRow extends StatelessWidget {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            // §754 — строка последняя в Column главного: без отступа под
+            // панель навигации она уходит под системные кнопки.
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ).withSafeBottom(context),
             child: Row(
               children: [
                 Icon(Icons.error_outline, size: 18, color: color),

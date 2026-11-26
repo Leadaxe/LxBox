@@ -1,28 +1,38 @@
-# L×Box v2.25.22
+# L×Box v2.25.23-rc.2
 
-**A patch on top of [v2.25.21](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.21).**
+**The second release candidate on top of [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).** Everything from rc.1 stays; new since rc.1: Block HTTPS/SVCB records, DNS options of a rule with port and protocol filters, the «Errors (N)» row above the navigation bar, and assistant checks while the core is not up yet.
 
-**Sniff guard** replaces the QUIC anti-sniff decoy: the core hides the first
-handshake packet of TLS and QUIC nodes from a relay that redirects by SNI and
-learns which paths need it. ⚠️ The four «Anti-sniff decoy» settings are gone,
-their values are not carried over. ⚠️ A server whose detour is unavailable no
-longer disappears from the config: it connects directly and gets a ⚠.
-**Test servers** now follow the source's detour. The app no longer freezes
-when the core stops answering. **System colors** (Material You), TV remote
-fixes in the app picker, two import fixes for **Xray** nodes. Core
-`v1.14.4-lx.35`, contract 1.1.171.
+This is a pre-release on GitHub; in Google Play it goes to Open testing. It is
+not offered to users of the stable release. It is a candidate because the app
+was split into two processes and this was checked on emulators only.
 
-**Патч поверх [v2.25.21](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.21).**
+**Domain rules no longer miss sites with ECH** ([#227](https://github.com/Leadaxe/LxBox/issues/227)):
+a rule's DNS & Resolve section gets **Block HTTPS/SVCB records**, and a preset
+of the same name does it for every site. **DNS options of a rule work with
+port and protocol filters.** **The app now runs as two processes**: the VPN tunnel and the window live apart, so closing the window frees its memory while the VPN keeps working, and with the VPN off and the window closed nothing stays in memory. **An AI assistant** (Android 16+) can diagnose and manage the network. **An imported backup is no longer lost**: it shows up at once, without a
+restart. **Android TV remote**: the arrow keys no longer get stuck in option lists
+(theme, language and others) or in text fields of forms. **Comments in a
+server's JSON are kept** on the Source tab and in backups. Greyed-out
+dependent settings no longer look enabled. Inside a folder, a server whose
+detour is unavailable gets its own ⚠. Core `v1.14.4-lx.35` (unchanged),
+contract 1.1.173.
 
-**Защита от сниффинга** заменяет QUIC-обманку: ядро прячет первый пакет
-рукопожатия TLS- и QUIC-узлов от релея, который перенаправляет по SNI, и
-само учится, каким путям это нужно. ⚠️ Четыре настройки «Обманки от
-сниффинга» убраны, их значения не переносятся. ⚠️ Сервер с недоступным
-detour больше не пропадает из конфига: он подключается напрямую и получает
-⚠. **Тест серверов** теперь учитывает detour источника. Приложение больше
-не зависает, когда ядро перестаёт отвечать. **Системные цвета** (Material
-You), исправления пульта TV в выборе приложений, два исправления импорта
-узлов **Xray**. Ядро `v1.14.4-lx.35`, контракт 1.1.171.
+**Второй релиз-кандидат поверх [v2.25.22](https://github.com/Leadaxe/LxBox/releases/tag/v2.25.22).** Всё из rc.1 остаётся; нового с rc.1: Block HTTPS/SVCB records, DNS-опции правила с фильтрами по портам и протоколам, строка «Errors (N)» над панелью навигации и проверки ассистента, пока ядро ещё не поднялось.
+
+На GitHub это pre-release; в Google Play он уходит в открытое тестирование.
+Пользователям стабильной версии не предлагается. Кандидат — потому что
+приложение разделено на два процесса, а проверено это только на эмуляторах.
+
+**Правила по домену больше не пропускают сайты с ECH** ([#227](https://github.com/Leadaxe/LxBox/issues/227)):
+в секции DNS & Resolve правила — **Block HTTPS/SVCB records**, а одноимённый
+пресет делает то же для всех сайтов. **DNS-опции правила работают с фильтрами
+по портам и протоколам.** **Приложение теперь работает в двух процессах**: туннель VPN и окно живут раздельно — закрыли окно, его память освободилась, а VPN работает; при выключенном VPN и закрытом окне в памяти не остаётся ничего. **ИИ-ассистент** (Android 16+) может диагностировать сеть и управлять ей. **Импортированный бэкап больше не теряется**: он виден сразу, без
+перезапуска. **Пульт Android TV**: стрелки больше не застревают в списках-переключателях
+(тема, язык и другие) и в текстовых полях форм. **Комментарии в JSON
+сервера сохраняются** — на вкладке Source и в бэкапе. Серые зависимые
+настройки больше не выглядят включёнными. В папке сервер с недоступным
+detour получает свой ⚠. Ядро `v1.14.4-lx.35` (без изменений), контракт
+1.1.173.
 
 ---
 
@@ -31,132 +41,117 @@ You), исправления пульта TV в выборе приложени�
 
 ## ⚠️ Changed
 
-- **Sniff guard replaces the QUIC anti-sniff decoy ([task 729](docs/spec/tasks/729-sniff-guard-block.md), [#215](https://github.com/Leadaxe/LxBox/issues/215)).**
-  Core settings get a **Sniff guard** section: the TLS method (Record
-  fragment by default), the QUIC method (Decoy byte by default), «Only nodes
-  with a masked SNI» (on) and «Remember relays across restarts» (off). The
-  core hides the first handshake packet from a relay or router that redirects
-  connections by SNI, and learns from connection outcomes which paths need
-  it: paths through direct, SSH and SOCKS start unprotected, other relays
-  start protected. The decoy byte is never sent through a SOCKS relay.
-  - The four «Anti-sniff decoy» settings are gone and their saved values are
-    not carried over. The decoy, off by default before, is now on.
-  - The core no longer splits the TLS ClientHello for every node behind a
-    detour on its own. A node whose detour is a group with `direct` selected
-    now starts without the split — the case from #215, where a network drops
-    a ClientHello split into TLS records.
-  - If a node stopped connecting after the update, try another TLS method or
-    Off in Core → Sniff guard.
-  - Node checks use the same protection as the tunnel.
-- **Merged duplicates can be opened ([task 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
-  The «N duplicates merged» line on the subscription page is now tappable:
-  it opens a sheet with a card for every server that was kept, showing how
-  many repeats it absorbed and under which names.
-- **An unavailable detour no longer removes the server ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
-  When a detour target is not available — the Direction is turned off, the
-  server was deleted, renamed or disappeared from its subscription — the
-  config is built without that detour: the server stays and connects
-  directly. Before, such a server either vanished from the config or went
-  direct with only a line in the build report. Now a ⚠ «Hop … unavailable:
-  hop removed» marks the subscription, folder or server in the source list
-  and the node's own card. On the subscription and folder pages the same
-  warning is a tappable line, like «N entries dropped»: tap it to read what
-  happened and what to do. A detour onto the node itself and a ring of
-  detours still drop the node; chains are unchanged.
-- **TLS settings say they skip servers with a detour ([task 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
-  TLS fragmentation and mixed-case SNI apply only to servers that connect
-  directly; a server with a detour runs its TLS inside the hop, where Sniff
-  guard decides. The global section, the subscription and folder TLS section
-  and the server screen now say so. The behaviour is unchanged.
+- **Block HTTPS/SVCB records: domain rules see sites behind ECH ([task 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227)).** New since rc.1.
+  Without FakeIP, Chrome took the ECH key from the site's HTTPS DNS record and
+  hid the real name behind a shared one such as `cloudflare-ech.com`. A rule
+  like `rutracker.org → vpn-1` then never matched, and the traffic silently
+  left by the default route. A rule's DNS & Resolve section now has **Block
+  HTTPS/SVCB records**: HTTPS and SVCB queries for the rule's domains get an
+  empty answer, the browser sends the name in the clear, and the rule
+  matches. Defaults: the box ticks itself when you fill in domains in a new
+  or edited rule; it is unavailable without a domain condition; **saved rules
+  are not changed** — open the rule and tick it. A new preset of the same name
+  (Routing → Rules → +) does it for every site and is **off by default**.
+  Apps with their own DNS-over-HTTPS (a fixed Secure DNS provider in Chrome,
+  DoH in Firefox) are not affected. **Not checked on a device.**
+- **DNS options of a rule work with port and protocol filters ([task 755](docs/spec/tasks/755-block-https-svcb-records.md)).** New since rc.1.
+  Dedicated server, Fixed IP, Force IPv4 and Block HTTPS were greyed out once
+  a rule had a port, protocol or network filter. They now apply to the rule's
+  domains on any port and protocol; a custom rule's ports moved from its
+  rule-set to the routing rule, the match is the same. **Note:** a Force IPv4
+  box or a DNS option that was set on such a rule and silently did nothing
+  now takes effect.
 
-## ✨ Added
-
-- **System colors (Material You) ([task 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).**
-  App Settings → Appearance has a «System colors» switch: the app takes its
-  accent color from the wallpaper palette, like other Android apps. It is off
-  by default, so nothing changes until you turn it on, and it is shown only
-  on Android 12 and newer, not on TV. Status colors (ping, online/offline)
-  stay green and orange.
-- **An HTTP proxy node says it carries only TCP ([task 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
-  Node Settings of an HTTP proxy shows a note under Server: nodes with a TCP
-  transport work through it fully, UDP-based nodes (Hysteria2, TUIC,
-  WireGuard) do not.
+- **Two processes: the tunnel and the window ([task 747](docs/spec/tasks/747-two-processes-ui-bg.md)).**
+  The VPN service with the core runs in its own process, the window with the
+  interface in another. Closing the window (swiping the app away) ends its
+  process: with the VPN on, memory drops from about 240 MB to about 110 MB
+  (emulator); with the VPN off and the window closed the app leaves nothing in
+  memory. With the VPN off and the window open the core is unloaded too. While
+  the VPN is on and the window is only minimised, everything works as before:
+  subscription updates, automation, the Debug API. Opening the app after the
+  window was closed is a cold start (about 1.5 s on the emulator). The tile,
+  auto-start, automation and the assistant bring the tunnel process up by
+  themselves. **Checked on Android 14 and 16 emulators only, not on phones —
+  this is why it ships as a release candidate.** One unexplained case in about
+  a hundred attempts: a start issued a few seconds after a stop under heavy
+  host load did not bring the tunnel up; it was not reproduced, and the start
+  path now writes a trace into the log. If a start does nothing, press Start
+  again and send the debug dump.
+- **An AI assistant can diagnose and manage the network ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).**
+  On Android 16+ the functions for system assistants grow from three to ten;
+  the Debug API gets `/assistant/*` routes. Off by default («AI assistant
+  control» in App Settings). Not checked on a device.
+- **Comments in a server's JSON are kept ([task 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).**
+  A server pasted or edited as JSON keeps its `//`, `/* */` and `#`
+  comments: the Source tab shows the text as typed after pasting, saving and
+  restoring a backup, and the «Comments were removed.» message is gone.
+  Comments are skipped only when the app reads the JSON; the same server with
+  and without comments is still one server in a backup. Comments are still
+  lost where the app rewrites the text itself: a pasted whole config (only
+  its nodes are kept), the Format button, Edit JSON and the masquerade
+  section.
+- **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
+  Inside a folder, the server whose detour was removed at build now shows the
+  ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the
+  folder and the server's card. Tap it to read what happened; it goes away
+  after the next build once the target is back.
 
 ## 🐛 Fixed
 
-- **Test servers ignored the source's detour ([task 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
-  With the VPN off, the server test checked every node directly, so a
-  subscription behind an operator's HTTP proxy showed all nodes dead on a
-  network without direct internet. A detour that points at one specific node
-  is now followed in the test, as in the tunnel; in a folder, members' own
-  detours count too. A detour the test cannot follow — a Direction, its auto
-  node, a chain, a group, a node that is off or has its own detour — is named
-  under the test bar, which says either «Tested through <node>.» or that
-  nodes are checked directly. Node Diagnostics with the VPN off follows the
-  same rule.
-- **Test servers: the detour note and the «VPN is running» dialog ([task 738](docs/spec/tasks/738-probe-note-wording-vpn-gate-autoclose.md)).**
-  The note under the test no longer says «of this source» — a folder node
-  can have its own detour. It now reads «Detour is not applied in the test»,
-  in the singular for one node. The «VPN is running» dialog closes by itself
-  when the VPN is stopped elsewhere — the notification, the tile,
-  Automation — and the test goes on.
-- **The app no longer freezes when the core stops answering ([task 732](docs/spec/tasks/732-main-thread-core-calls-off-main.md), [#210](https://github.com/Leadaxe/LxBox/issues/210)).**
-  Connecting to the core and pausing/waking it on screen off/on and Doze ran
-  on Android's main thread; when the core could not be reached, buttons,
-  notification updates and Stop stopped responding. These calls now run in
-  the background, the retry pause grows up to 8 seconds, and a stuck call is
-  named in the app log. A server test can no longer start while the VPN is
-  still starting — that could leave pings at «err» until the VPN was
-  restarted.
-- **A ping the core never answered hung forever ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  The row stayed in «PING…», mass ping lost a slot and the log was silent.
-  The app now stops waiting 3 s after the test timeout, marks the node as
-  failed and writes a log line.
-- **A renamed copy of a folder node took over the original's links ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  Two folder members with the same name share one address, and the first
-  one holds it. Renaming the second one moved chain positions, detours and
-  auto-group members of the first onto the copy. Links now stay with the
-  node that holds the address.
-- **The chain editor showed stale nodes after folder edits ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  A new folder node was marked as lost and a deleted one stayed in the
-  position picker until the Servers screen was reopened. The editor now
-  rebuilds the config on open when sources changed since the last build.
-- **A file subscription without its file no longer stays silent ([#219](https://github.com/Leadaxe/LxBox/issues/219)).**
-  A backup keeps subscription settings, not their contents, so after a
-  restore on another phone or a reinstall a subscription added from a file
-  has no servers, and Update did nothing. The list row now says «Choose the
-  file again», the Nodes tab explains why (Android does not let the app read
-  the file again) with a button to pick the file, and Update shows the same
-  hint.
-- **Android TV: the app list could not be scrolled with the remote ([task 736](docs/spec/tasks/736-tv-search-field-dpad-mouse-drag.md), [#220](https://github.com/Leadaxe/LxBox/issues/220)).**
-  In the app picker (Routing → Tunnel apps, apps of a routing rule, URL
-  Check) the D-pad stopped at the search field. Up/Down now leave
-  single-line search fields above lists (app pickers, Logs filter, connection
-  filter, node filters). Lists also scroll by dragging with a mouse pointer,
-  which is how a TV remote in mouse mode works.
-- **XHTTP session id alphabet and length were lost on import from Xray ([task 726](docs/spec/tasks/726-xhttp-session-id-table-length.md), [#211](https://github.com/Leadaxe/LxBox/issues/211)).**
-  A server behind a CDN that blocks the default dashed-UUID session id
-  answered 403 when the node came from an Xray config or a share link, while
-  the same node written as sing-box JSON worked. `sessionIDTable` and
-  `sessionIDLength` now reach the node as `session_table` / `session_length`
-  — from Xray JSON (`xhttpSettings` / `splithttpSettings`, flat or in
-  `extra`) and from the `extra` and query of a link. One without the other is
-  removed with a warning: the core accepts them only together.
-- **A node imported from Xray JSON with `mux` enabled did not connect ([task 727](docs/spec/tasks/727-xray-mux-not-multiplex.md)).**
-  Xray `mux` was turned into sing-box `multiplex`, but these are different
-  protocols on the wire (Mux.Cool vs h2mux / smux / yamux), and an Xray
-  server refuses the latter. Xray `mux` is now dropped with an info note on
-  the node; the node connects without multiplexing. `multiplex` written
-  explicitly in sing-box JSON is kept. Nodes from a subscription are fixed on
-  the next subscription update.
+- **The «Errors (N)» row no longer hides under the navigation bar ([task 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** New since rc.1.
+  With three-button navigation the red row on the main screen was drawn
+  under the system buttons, and a tap hit the system button instead of
+  opening the error log. The row now sits above the bar.
+- **Assistant URL and exit checks while the core is not up ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New since rc.1.
+  `checkUrl` and `checkExit` called before the core is reachable answer «The
+  VPN core is not reachable yet», like `selectExit`, instead of a raw RPC
+  error.
+
+- **Imported backup shows up at once and is no longer lost ([task 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
+  After Settings → Backup → Transfer to desktop → Import, the imported
+  servers did not appear until the app was restarted. Worse, changing
+  anything in the server list before a restart, such as turning a server
+  off, wrote the old list back and the imported servers were gone. The same
+  happened after a regular restore if «Restart now» was not tapped. Now the
+  app reloads its state right after the import and returns to the main
+  screen: everything imported is visible at once and later changes keep it.
+  The running VPN is not stopped; the config is rebuilt like after any
+  settings change.
+- **TV remote no longer gets stuck in option lists ([task 744](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).**
+  In lists of round options — theme and language in App Settings →
+  Appearance, background mode, detour mode, rule type and others — the arrow
+  keys used to pick the next option at once and loop inside the list, so on
+  Android TV the theme changed while you just moved past it and there was no
+  way out with the remote. Arrows now only move the focus and leave the list
+  at its first and last option; OK, Enter, Space or a tap picks an option.
+  Switching a tab with the mouse or by touch also takes the focus off the
+  hidden tab, so the keys no longer change settings you cannot see.
+- **TV remote leaves text fields ([task 746](docs/spec/tasks/746-tv-text-field-dpad-exit.md)).**
+  On Android TV the remote got stuck in any text field of a form — a rule
+  name, OpenConnect fields, a subscription URL: up and down only moved the
+  cursor, so the buttons and switches below could not be reached. Now up and
+  down leave a one-line field; in a multi-line field they leave from its
+  first or last line. Left and right still move the cursor and leave the
+  field at the start or end of the text. While the on-screen keyboard is
+  open it keeps the arrows for itself — close it first.
+- **Dependent settings no longer look enabled when they are not in effect ([task 743](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).**
+  In VPN Settings → Core → WireGuard, with «Suspend idle tunnels» off, «Lazy
+  tunnel build» and «Built tunnels limit» are not passed to the core, but the
+  greyed rows kept showing «on» and «12». A greyed row now shows a switch as
+  off and a list as «Not in effect»; the saved value returns when the row
+  becomes active again.
 
 ## 🔧 Under the hood
 
-- Core `v1.14.4-lx.35`: `lx.sniff_guard`, upstream `stable` sync to
-  2026-11-14 (uTLS, REALITY client fixes, sing-tun).
-- Shared contract 1.1.171 (1.1.168: XHTTP session id; 1.1.169: Xray mux;
-  1.1.170: sniff guard; 1.1.171: warning code `detour_unavailable`).
-- The Debug API folder probe reports the detour the test followed.
+- Architecture pass ([task 740](docs/spec/tasks/740-architecture-revision-process-boundary.md),
+  742, 745): the boundary between the VPN service and the UI is drawn in
+  the code — one owner of the tunnel state, separate core command clients
+  for the service and for the UI. Behaviour is unchanged; this prepares
+  running the VPN in its own process.
+- CI checks the architecture boundaries on every push.
+- Shared contract 1.1.173: Block HTTPS/SVCB records — preset and rule field, DNS options without the port gate (since rc.1); 1.1.172 — comments in a JSON node source.
+- Core `v1.14.4-lx.35`, unchanged.
 
 </details>
 
@@ -165,135 +160,116 @@ You), исправления пульта TV в выборе приложени�
 
 ## ⚠️ Изменено
 
-- **Защита от сниффинга заменяет QUIC-обманку ([задача 729](docs/spec/tasks/729-sniff-guard-block.md), [#215](https://github.com/Leadaxe/LxBox/issues/215)).**
-  В настройках Core появилась секция **«Защита от сниффинга»**: метод для
-  TLS (по умолчанию Record fragment), метод для QUIC (по умолчанию
-  байт-обманка), «Только узлы с маскировочным SNI» (включено) и «Помнить
-  релеи между перезапусками» (выключено). Ядро прячет первый пакет
-  рукопожатия от релея или роутера, который перенаправляет соединения по
-  SNI, и по исходам подключений учится, каким путям это нужно: пути
-  напрямую, через SSH и SOCKS стартуют без защиты, через остальные релеи — с
-  защитой. Через SOCKS-релей байт-обманка не отправляется никогда.
-  - Четыре настройки «Обманки от сниффинга» убраны, их сохранённые значения
-    не переносятся. Обманка, раньше выключенная по умолчанию, теперь
-    включена.
-  - Ядро больше не режет TLS ClientHello само у каждого узла за detour. Узел,
-    у которого detour — группа с выбранным `direct`, теперь стартует без
-    разреза: это случай из #215, где сеть дропает ClientHello, разрезанный на
-    TLS-записи.
-  - Если после обновления узел перестал соединяться, попробуйте другой метод
-    TLS или Off в Core → «Защита от сниффинга».
-  - Проверка узлов использует ту же защиту, что и туннель.
-- **Склеенные дубли можно раскрыть ([задача 589](docs/spec/tasks/589-duplicates-collapsed-on-survivor.md)).**
-  Строка «N duplicates merged» на странице подписки теперь нажимается:
-  открывается шторка с карточкой на каждый оставшийся сервер — сколько
-  повторов в него слилось и под какими именами.
-- **Недоступный detour больше не убирает сервер ([задача 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
-  Если цель detour недоступна — Направление выключено, сервер удалён,
-  переименован или пропал из подписки, — конфиг собирается без этого
-  detour: сервер остаётся и подключается напрямую. Раньше такой сервер либо
-  исчезал из конфига, либо шёл напрямую, оставив только строку в отчёте
-  сборки. Теперь ⚠ «Hop … unavailable: hop removed» стоит у подписки, папки
-  или сервера в списке источников и на карточке самого узла. На странице
-  подписки и папки то же предупреждение — строка, по которой можно нажать,
-  как «N entries dropped»: по тапу видно, что случилось и что делать. detour на
-  самого себя и кольцо из detour по-прежнему убирают узел, цепочки не
-  менялись.
-- **Подписи у TLS-настроек говорят, что серверы с detour пропускаются ([задача 737](docs/spec/tasks/737-tls-skip-detour-toggle.md)).**
-  Фрагментация TLS и SNI в смешанном регистре применяются только к
-  серверам, которые подключаются напрямую; у сервера с detour TLS идёт
-  внутри хопа, и там решает защита от сниффинга. Об этом теперь сказано в
-  глобальном разделе, в разделе TLS у подписки и папки и на экране сервера.
-  Поведение не менялось.
+- **Block HTTPS/SVCB records: правила по домену видят сайты за ECH ([задача 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227)).** Новое с rc.1.
+  Без FakeIP Chrome брал ключ ECH из HTTPS-записи DNS сайта и прятал настоящее
+  имя за общим вроде `cloudflare-ech.com`. Правило вида `rutracker.org → vpn-1`
+  тогда не срабатывало, и трафик молча уходил маршрутом по умолчанию. В
+  секции DNS & Resolve правила появилась галочка **Block HTTPS/SVCB records**:
+  на HTTPS- и SVCB-запросы доменов правила — пустой ответ, браузер шлёт имя
+  открыто, и правило срабатывает. По умолчанию: галочка ставится сама, когда
+  вы заполняете домены в новом или редактируемом правиле; без условия по
+  домену она недоступна; **сохранённые правила не меняются** — откройте
+  правило и отметьте её. Новый одноимённый пресет (Routing → Rules → +)
+  делает то же для всех сайтов и **по умолчанию выключен**. На приложения со
+  своим DNS-over-HTTPS (заданный провайдер Secure DNS в Chrome, DoH в Firefox)
+  это не действует. **На устройстве не проверено.**
+- **DNS-опции правила работают с фильтрами по портам и протоколам ([задача 755](docs/spec/tasks/755-block-https-svcb-records.md)).** Новое с rc.1.
+  Dedicated server, Fixed IP, Force IPv4 и Block HTTPS были серыми, как только
+  у правила появлялся фильтр по порту, протоколу или сети. Теперь они
+  действуют на домены правила на любом порту и протоколе; порты своего
+  правила переехали из его набора на маршрутное правило, смысл тот же.
+  **Внимание:** отмеченная у такого правила Force IPv4 или DNS-опция, которая
+  раньше молча не действовала, теперь начнёт действовать.
 
-## ✨ Добавлено
-
-- **Системные цвета (Material You) ([задача 735](docs/spec/tasks/735-material-you-system-colors.md), [#218](https://github.com/Leadaxe/LxBox/issues/218)).**
-  В App Settings → Appearance появился переключатель «Системные цвета»:
-  приложение берёт акцентный цвет из палитры обоев, как другие приложения
-  Android. По умолчанию он выключен, так что ничего не меняется, пока вы
-  его не включите, и показывается только на Android 12 и новее, не на TV.
-  Цвета статусов (пинг, online/offline) остаются зелёным и оранжевым.
-- **Узел HTTP-прокси говорит, что передаёт только TCP ([задача 728](docs/spec/tasks/728-http-proxy-tcp-only-notice.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
-  На экране настроек HTTP-прокси под строкой Server стоит заметка: узлы с
-  TCP-транспортом работают через него полностью, узлы на UDP (Hysteria2,
-  TUIC, WireGuard) — нет.
+- **Два процесса: туннель и окно ([задача 747](docs/spec/tasks/747-two-processes-ui-bg.md)).**
+  Сервис VPN с ядром работает в своём процессе, окно с интерфейсом — в другом.
+  Закрыли окно (смахнули приложение) — его процесс завершается: при включённом
+  VPN память падает примерно с 240 до 110 МБ (эмулятор); при выключенном VPN и
+  закрытом окне приложение не оставляет в памяти ничего. При выключенном VPN и
+  открытом окне ядро тоже выгружается. Пока VPN включён, а окно только
+  свёрнуто, всё работает как раньше: обновление подписок, автоматизация, Debug
+  API. Открытие приложения после закрытия окна — холодный старт (около 1,5 с на
+  эмуляторе). Плитка, автозапуск, автоматизация и ассистент поднимают процесс
+  туннеля сами. **Проверено только на эмуляторах Android 14 и 16, на телефонах
+  не проверялось — поэтому это релиз-кандидат.** Один необъяснённый случай
+  примерно на сто попыток: старт через несколько секунд после остановки при
+  сильной нагрузке хоста не поднял туннель; повторить не удалось, путь старта
+  теперь пишет след в журнал. Если Start ничего не сделал — нажмите ещё раз и
+  пришлите отладочный дамп.
+- **ИИ-ассистент может диагностировать сеть и управлять ей ([задача 750](docs/spec/tasks/750-ai-assistant-network-control.md)).**
+  На Android 16+ функций для системных ассистентов становится десять вместо
+  трёх; в Debug API появляются маршруты `/assistant/*`. По умолчанию выключено
+  («AI assistant control» в App Settings). На устройстве не проверялось.
+- **Комментарии в JSON сервера сохраняются ([задача 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), контракт 1.1.172).**
+  Сервер, вставленный или отредактированный как JSON, сохраняет комментарии
+  `//`, `/* */` и `#`: вкладка Source показывает текст как набран — после
+  вставки, сохранения и восстановления из бэкапа; сообщение «Comments were
+  removed.» убрано. Комментарии пропускаются только при чтении JSON; один и
+  тот же сервер с комментариями и без — по-прежнему один сервер в бэкапе.
+  Комментарии всё ещё теряются там, где приложение само переписывает текст:
+  вставленный целый конфиг (из него берутся только узлы), кнопка Format,
+  Edit JSON и секция маскировки.
+- **В папке сервер с недоступным detour отмечен в списке ([задача 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
+  В списке серверов папки строка ⚠ «Hop … unavailable: hop removed» теперь
+  стоит у того сервера, у которого detour снят при сборке, а не только у
+  папки и на карточке сервера. По нажатию — что случилось; строка пропадает
+  после следующей сборки, когда цель снова доступна.
 
 ## 🐛 Исправлено
 
-- **Тест серверов не учитывал detour источника ([задача 730](docs/spec/tasks/730-probe-test-source-detour.md), [#187](https://github.com/Leadaxe/LxBox/issues/187)).**
-  При выключенном VPN тест проверял каждый узел напрямую, поэтому подписка
-  за HTTP-прокси оператора в сети без прямого интернета показывала все узлы
-  мёртвыми. Теперь detour, который указывает на конкретный узел, в тесте
-  учитывается так же, как в туннеле; в папке учитываются и личные detour
-  её узлов. detour, который тест учесть не может, — Направление, его
-  auto-узел, цепочка, группа, выключенный узел или узел со своим detour —
-  назван под полосой теста: там написано либо «Tested through <узел>.», либо
-  что узлы проверяются напрямую. Диагностика узла без VPN работает так же.
-- **Тест серверов: пометка про detour и диалог «VPN is running» ([задача 738](docs/spec/tasks/738-probe-note-wording-vpn-gate-autoclose.md)).**
-  Пометка под тестом больше не говорит «этого источника» — у узла папки
-  detour бывает личным. Теперь там «Detour is not applied in the test», для
-  одного узла — в единственном числе. Диалог «VPN is running» закрывается
-  сам, если VPN остановили в другом месте — из уведомления, плитки,
-  Automation, — и тест продолжается.
-- **Приложение больше не зависает, когда ядро перестаёт отвечать ([задача 732](docs/spec/tasks/732-main-thread-core-calls-off-main.md), [#210](https://github.com/Leadaxe/LxBox/issues/210)).**
-  Подключение к ядру и его пауза/пробуждение при гашении экрана и в Doze
-  шли с главного потока Android; если ядро было недоступно, кнопки,
-  обновление уведомления и Stop переставали отвечать. Теперь эти вызовы
-  идут в фоне, пауза между повторами растёт до 8 секунд, а зависший вызов
-  назван в журнале приложения. Тест серверов больше не стартует, пока VPN
-  ещё запускается, — из-за этого пинги могли показывать «err» до
-  перезапуска VPN.
-- **Пинг, на который ядро не ответило, висел бесконечно ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  Строка оставалась в «PING…», массовый пинг терял слот, в журнале было
-  пусто. Теперь приложение перестаёт ждать через 3 с после таймаута замера,
-  узел получает ошибку, в журнал идёт строка.
-- **Переименованная копия узла папки забирала ссылки оригинала ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  Два узла папки с одинаковым именем делят один адрес, и держит его первый.
-  Переименование второго переносило на копию позиции цепочек, detour и
-  членство в автогруппах первого. Теперь ссылки остаются у узла, который
-  держит адрес.
-- **Редактор цепочки показывал устаревшие узлы после правок в папке ([задача 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).**
-  Новый узел папки отмечался потерянным, а удалённый оставался в списке
-  позиций, пока не откроешь экран серверов заново. Теперь при открытии
-  редактор пересобирает конфиг, если источники менялись с последней сборки.
-- **Файловая подписка без файла больше не молчит ([#219](https://github.com/Leadaxe/LxBox/issues/219)).**
-  Резервная копия хранит настройки подписок, а не их содержимое, поэтому
-  после восстановления на другом телефоне или переустановки у подписки,
-  добавленной из файла, нет серверов, а Update ничего не делал. Теперь в
-  списке написано «Выберите файл заново», на вкладке Nodes объяснено
-  почему (Android не даёт приложению прочитать файл снова) и есть кнопка
-  выбора файла, а Update показывает ту же подсказку.
-- **Android TV: список приложений не прокручивался пультом ([задача 736](docs/spec/tasks/736-tv-search-field-dpad-mouse-drag.md), [#220](https://github.com/Leadaxe/LxBox/issues/220)).**
-  В выборе приложений (Routing → Tunnel apps, приложения правила
-  маршрутизации, URL Check) D-pad упирался в строку поиска. Теперь ↑/↓
-  уводят из однострочного поля поиска в список под ним (выбор приложений,
-  фильтр Logs, фильтр соединений, фильтры узлов). Ещё списки прокручиваются
-  перетаскиванием указателем мыши — так работает пульт TV в режиме мыши.
-- **Алфавит и длина идентификатора сессии XHTTP терялись при импорте из Xray ([задача 726](docs/spec/tasks/726-xhttp-session-id-table-length.md), [#211](https://github.com/Leadaxe/LxBox/issues/211)).**
-  Сервер за CDN, который блокирует стандартный идентификатор сессии в виде
-  UUID с дефисами, отвечал 403, если узел пришёл из конфига Xray или из
-  ссылки, — хотя тот же узел в виде sing-box JSON работал. `sessionIDTable`
-  и `sessionIDLength` теперь доезжают до узла как `session_table` /
-  `session_length` — из Xray JSON (`xhttpSettings` / `splithttpSettings`,
-  плоско или в `extra`) и из `extra` и параметров ссылки. Одно поле без
-  второго снимается с предупреждением: ядро принимает их только вместе.
-- **Узел из Xray JSON с включённым `mux` не соединялся ([задача 727](docs/spec/tasks/727-xray-mux-not-multiplex.md)).**
-  Xray `mux` превращался в `multiplex` sing-box, но на проводе это разные
-  протоколы (Mux.Cool против h2mux / smux / yamux), и сервер Xray второй не
-  принимает. Теперь Xray `mux` снимается с пометкой на узле, узел
-  соединяется без мультиплексирования. `multiplex`, явно записанный в
-  sing-box JSON, остаётся. Узлы из подписки исправятся при следующем её
-  обновлении.
+- **Строка «Errors (N)» больше не уходит под панель навигации ([задача 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** Новое с rc.1.
+  При трёхкнопочной навигации красная строка на главном рисовалась под
+  системными кнопками, и тап попадал в системную кнопку вместо журнала
+  ошибок. Теперь строка стоит над панелью.
+- **Проверки адреса и выхода у ассистента, пока ядро не поднялось ([задача 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** Новое с rc.1.
+  `checkUrl` и `checkExit`, вызванные до того, как ядро стало доступно,
+  отвечают «The VPN core is not reachable yet», как `selectExit`, а не сырой
+  ошибкой RPC.
+
+- **Импортированный бэкап виден сразу и больше не теряется ([задача 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).**
+  После Settings → Backup → Transfer to desktop → Import импортированные
+  серверы не появлялись до перезапуска приложения. Хуже того: любая правка
+  списка серверов до перезапуска, например выключение сервера, записывала
+  старый список, и импортированное пропадало. То же случалось после
+  обычного восстановления, если не нажать «Restart now». Теперь приложение
+  сразу перечитывает состояние после импорта и возвращается на главный
+  экран: всё импортированное видно и сохраняется при дальнейших правках.
+  Работающий VPN не останавливается; конфиг пересобирается, как после любой
+  смены настроек.
+- **Пульт TV не застревает в списках-переключателях ([задача 744](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).**
+  В списках-переключателях — тема и язык в App Settings → Appearance,
+  фоновый режим, режим detour, тип правила и другие — стрелки сразу выбирали
+  соседний пункт и крутились по кругу: на Android TV тема менялась при
+  простом перемещении, а выйти из списка пультом было нельзя. Теперь стрелки
+  только двигают фокус и выводят из списка на первом и последнем пункте;
+  выбор — OK, Enter, Space или касание. При переключении вкладки мышью или
+  касанием фокус уходит со скрытой вкладки, и клавиши больше не меняют
+  настройки, которых не видно.
+- **Пульт TV выходит из текстовых полей ([задача 746](docs/spec/tasks/746-tv-text-field-dpad-exit.md)).**
+  На Android TV пульт застревал в любом текстовом поле формы — имя правила,
+  поля OpenConnect, URL подписки: стрелки вверх и вниз двигали только
+  курсор, и до кнопок и переключателей ниже было не добраться. Теперь вверх
+  и вниз выводят из однострочного поля; из многострочного — с первой или
+  последней строки. Влево и вправо по-прежнему двигают курсор и выводят из
+  поля в начале или в конце текста. Пока открыта экранная клавиатура, стрелки
+  принадлежат ей — сначала закройте её.
+- **Зависимые настройки больше не выглядят включёнными, когда не действуют ([задача 743](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).**
+  В VPN Settings → Core → WireGuard при выключенном «Suspend idle tunnels»
+  настройки «Lazy tunnel build» и «Built tunnels limit» ядру не передаются,
+  но серые строки продолжали показывать «включено» и «12». Теперь в серой
+  строке переключатель рисуется выключенным, список — «Не действует»;
+  сохранённое значение возвращается, когда строка снова активна.
 
 ## 🔧 Под капотом
 
-- Ядро `v1.14.4-lx.35`: `lx.sniff_guard`, синк с `stable` апстрима до
-  14.11.2026 (uTLS, правки клиента REALITY, sing-tun).
-- Общий контракт 1.1.171 (1.1.168 — session id XHTTP; 1.1.169 — Xray mux;
-  1.1.170 — защита от сниффинга; 1.1.171 — код предупреждения
-  `detour_unavailable`).
-- Проба папки в Debug API сообщает, какой detour учёл тест.
+- Архитектурная ревизия ([задача 740](docs/spec/tasks/740-architecture-revision-process-boundary.md),
+  742, 745): граница между сервисом VPN и интерфейсом проведена в коде —
+  один владелец состояния туннеля, отдельные командные клиенты ядра у
+  сервиса и у интерфейса. Поведение не менялось; это подготовка к запуску
+  VPN в отдельном процессе.
+- CI проверяет архитектурные границы на каждом push.
+- Общий контракт 1.1.173: Block HTTPS/SVCB records — пресет и поле правила, DNS-опции без гейта портов (с rc.1); 1.1.172 — комментарии в JSON-исходнике узла.
+- Ядро `v1.14.4-lx.35`, без изменений.
 
 </details>
 
@@ -302,7 +278,7 @@ You), исправления пульта TV в выборе приложени�
 ## Install / Установка
 
 ```bash
-adb install -r LxBox-v2.25.22-arm64-v8a.apk
+adb install -r LxBox-v2.25.23-arm64-v8a.apk
 ```
 
 Без uninstall! Поверх существующей установки. Настройки и подписки сохранятся.
@@ -312,4 +288,4 @@ are preserved.
 
 ---
 
-Previous release / Предыдущий релиз: [v2.25.21](docs/releases/v2.25.21.md).
+Previous release / Предыдущий релиз: [v2.25.22](docs/releases/v2.25.22.md).

@@ -23,10 +23,15 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`awg_mtu_clamped`](#awg_mtu_clamped) · `warning` — AmneziaWG: MTU lowered to 1280
 - [`awg_mtu_high`](#awg_mtu_high) · `info` — AmneziaWG: MTU above 1280
 - [`chain_cycle_through_direction`](#chain_cycle_through_direction) · `warning` — Chain {chain} excluded from {direction}
+- [`chain_detour_conflict`](#chain_detour_conflict) · `error` — Chain {chain}: {node} is already used by chain {other}
+- [`chain_detour_ring`](#chain_detour_ring) · `error` — Chain {chain}: {node} is on the entry and inside {group}
+- [`chain_detour_ring_detour`](#chain_detour_ring_detour) · `error` — Chain {chain}: a detour leads back into {node}
+- [`chain_hop_local_port`](#chain_hop_local_port) · `error` — Chain {chain}: {node} has a fixed local port
 - [`chain_hop_missing`](#chain_hop_missing) · `error` — Chain: hop {position} not found
+- [`chain_hop_tag_taken`](#chain_hop_tag_taken) · `error` — Chain {chain}: the name {tag} is taken
 - [`chain_invalid`](#chain_invalid) · `error` — Chain is malformed
 - [`chain_nested_position`](#chain_nested_position) · `error` — Chain: nested chain at position {position}
-- [`chain_strip_utls_on_reality`](#chain_strip_utls_on_reality) · `warning` — Chain: uTLS kept because of REALITY
+- [`chain_rewrite_detour`](#chain_rewrite_detour) · `error` — Chain {chain}: rewrite changes detour
 - [`chain_unsupported_by_core`](#chain_unsupported_by_core) · `error` — Chains are unavailable in core {version}
 - [`core_rejected`](#core_rejected) · `error` — The core rejected this server
 - [`detour_chain_too_deep`](#detour_chain_too_deep) · `warning` — Chain shortened to {limit} hops
@@ -107,6 +112,9 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - [`tls_not_applicable_quic`](#tls_not_applicable_quic) · `info` — QUIC: TLS field {path} not applicable
 - [`transport_header_unsupported`](#transport_header_unsupported) · `error` — TCP header obfuscation {value} is not supported
 - [`transport_unsupported`](#transport_unsupported) · `warning` — Transport replaced with {fallback}
+- [`tt_field_unsupported`](#tt_field_unsupported) · `warning` — TrustTunnel link: {field} not applied
+- [`tt_subscription_ignored`](#tt_subscription_ignored) · `info` — TrustTunnel link: subscription address not used
+- [`tt_subscription_only`](#tt_subscription_only) · `error` — TrustTunnel link: a subscription link, not a server
 - [`tuic_congestion_invalid`](#tuic_congestion_invalid) · `warning` — Field removed: unknown congestion control
 - [`tuic_udp_relay_mode_invalid`](#tuic_udp_relay_mode_invalid) · `warning` — Field removed: unknown UDP relay mode
 - [`type_invalid`](#type_invalid) · `warning` — Field {path} removed: wrong type
@@ -381,6 +389,73 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
+<a id="chain_detour_conflict"></a>
+### chain_detour_conflict
+
+**severity:** `error` · **params:** `chain`, `node`, `other`
+
+**Chain {chain}: {node} is already used by chain {other}**
+
+- **What happened:** The core routes every node and group after the first position of a chain through that chain, so such a node or group can stand in one place only. {node} is needed by chain {chain} and by chain {other} (directly or as a member of a group), and at least one of them needs it after the first position. Make a copy of {node} for one of the chains — a group together with its nodes; a WireGuard node with other keys. Until then the chain {chain} is not built: the core would refuse the whole config.
+- **Why it happens:** Two chains share a node or a group and at least one of them uses it after the first position, or one chain has it on two positions after the first. A shared first position of two chains is allowed.
+- **What you can do:**
+  - Make a copy of {node} for one of the chains: a group with copies of its nodes, a WireGuard node with other keys.
+  - Or use a different node or group in one of the chains.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="chain_detour_ring"></a>
+### chain_detour_ring
+
+**severity:** `error` · **params:** `chain`, `node`, `group`, `position`
+
+**Chain {chain}: {node} is on the entry and inside {group}**
+
+- **What happened:** In a chain every node after the first position goes through the position below it. {node} is the entry of chain {chain} and also a member of {group} on position {position}, so its path would go around in a circle. Make a copy of {group} without {node} for this position. Until then the chain {chain} is not built: the core would refuse the whole config.
+- **Why it happens:** The first position is a node (or a group with it), and a group on a later position also contains that node.
+- **What you can do:**
+  - Make a copy of {group} without {node} and put it on position {position}.
+  - Or choose another first position.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="chain_detour_ring_detour"></a>
+### chain_detour_ring_detour
+
+**severity:** `error` · **params:** `chain`, `node`, `position`
+
+**Chain {chain}: a detour leads back into {node}**
+
+- **What happened:** In a chain every node after the first position goes through the position below it. The own detour of a node on a lower position leads into {node} on position {position}, so the path would go around in a circle. Clear that detour, or take {node} out of the chain. Until then the chain {chain} is not built: the core would refuse the whole config.
+- **Why it happens:** A node on a lower position of the chain has its own detour that leads into a node on a later position.
+- **What you can do:**
+  - Clear the detour of the lower node.
+  - Or take {node} out of the chain.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="chain_hop_local_port"></a>
+### chain_hop_local_port
+
+**severity:** `error` · **params:** `chain`, `node`, `position`, `fields`
+
+**Chain {chain}: {node} has a fixed local port**
+
+- **What happened:** {node} at position {position} of chain {chain} connects through the position below, and that hop opens its socket, so a fixed local port ({fields}) cannot work. The chain {chain} was excluded, because the core rejects such a config.
+- **Why it happens:** A WireGuard, Tailscale or OpenConnect node inside a chain has a fixed local port.
+- **What you can do:**
+  - Clear the local port of the node, or use the node outside chains.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
 <a id="chain_hop_missing"></a>
 ### chain_hop_missing
 
@@ -393,6 +468,22 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - **What you can do:**
   - Open the chain and put an existing node or direction into that position.
   - If the chain references something declared below it, move that entry above the chain.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="chain_hop_tag_taken"></a>
+### chain_hop_tag_taken
+
+**severity:** `error` · **params:** `chain`, `tag`
+
+**Chain {chain}: the name {tag} is taken**
+
+- **What happened:** The core gives the hops of chain {chain} the names {chain}#1, {chain}#2 and so on in its own numbering, and {tag} is already the name of another node. The chain {chain} was excluded, because the core rejects such a config.
+- **Why it happens:** A node is named like a hop of the chain: the chain name, # and a number.
+- **What you can do:**
+  - Rename the chain or the node.
 
 **Where it comes from:**
 
@@ -432,23 +523,21 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 
 - Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
-<a id="chain_strip_utls_on_reality"></a>
-### chain_strip_utls_on_reality
+<a id="chain_rewrite_detour"></a>
+### chain_rewrite_detour
 
-**severity:** `warning` · **params:** `target`
+**severity:** `error` · **params:** `chain`, `type`
 
-**Chain: uTLS kept because of REALITY**
+**Chain {chain}: rewrite changes detour**
 
-- **What happened:** The chain is set to strip uTLS, but hop {target} runs REALITY, which cannot work without it. Stripping uTLS was turned off for this chain, so every hop keeps its fingerprint; the chain works.
-- **Why it happens:** The chain was set up to strip uTLS from its inner hops, and a node in one of those positions runs REALITY. In REALITY the TLS fingerprint (the ClientHello) is a load-bearing part of the protocol, not camouflage, and the core applies the strip list to all hops at once, so it cannot spare just one.
+- **What happened:** The rewrite of chain {chain} for {type} nodes changes detour, but inside a chain the node's path is set by the chain. The chain {chain} was excluded, because the core rejects such a config.
+- **Why it happens:** The chain's rewrite table has a detour row.
 - **What you can do:**
-  - Nothing to do if the chain works.
-  - To strip uTLS on the other hops, put a node without REALITY into that position.
+  - Remove the detour row from the rewrite table.
 
 **Where it comes from:**
 
-- [`chain`](protocols/chain.md)
-  - [`strip.tls.utls`](protocols/chain.md#body-strip-tls-utls) — a hop at position 2 or later requires this path → not stripped
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
 
 <a id="chain_unsupported_by_core"></a>
 ### chain_unsupported_by_core
@@ -1967,6 +2056,57 @@ The `contract/registry/warnings.json` dictionary is shared with LxBox: both apps
 - **What you can do:**
   - Check that the node works after the replacement — if it does not connect, pick another node.
   - Ask the subscription provider for a link in a format sing-box supports.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="tt_field_unsupported"></a>
+### tt_field_unsupported
+
+**severity:** `warning` · **params:** `field`
+
+**TrustTunnel link: {field} not applied**
+
+- **What happened:** The link sets {field}, which the core's TrustTunnel node cannot express. The node was imported without it; whether it connects depends on what the server requires.
+- **Why it happens:** The tt:// link is the format of the AdGuard TrustTunnel clients and carries their own settings: a separate SNI (custom_sni), a TLS client-random prefix or key the server recognises the client by, the anti-DPI mode, extra endpoint addresses, the profile's DNS servers, an IPv6 ban, a ClientHello profile together with HTTP/3. The sing-box outbound has no field for them.
+- **What you can do:**
+  - Nothing to do if the node connects.
+  - If it does not: client_random_prefix and client_random_auth_key are how some servers admit clients — ask the provider for access without them, or use the AdGuard TrustTunnel client for this server.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="tt_subscription_ignored"></a>
+### tt_subscription_ignored
+
+**severity:** `info`
+
+**TrustTunnel link: subscription address not used**
+
+- **What happened:** Besides the server, the link carries a subscription address. The server was imported from the link itself; the subscription is not read, so later changes on the provider's side will not arrive on their own.
+- **Why it happens:** A version 2 tt:// link may carry subscription_url next to the static connection parameters; AdGuard clients refresh the server from it. This application does not read TrustTunnel subscriptions yet.
+- **What you can do:**
+  - Nothing to do: the node works.
+  - If the server stops working, ask the provider for a fresh link.
+
+**Where it comes from:**
+
+- Node or subscription level: no field in the registry points at this code, so it is raised while the entry as a whole is being read.
+
+<a id="tt_subscription_only"></a>
+### tt_subscription_only
+
+**severity:** `error` · **params:** `subscription_url`
+
+**TrustTunnel link: a subscription link, not a server**
+
+- **What happened:** The link carries only a subscription address and no server of its own, so there is no node to import from it. Added as a source on its own, it becomes a subscription: the server is fetched from that address.
+- **Why it happens:** A version 2 tt:// link may consist of subscription_url alone; an AdGuard client then fetches the server parameters from that address. There is no node in such a link to import.
+- **What you can do:**
+  - Add the link as a source of its own (Sources → Add): it is turned into a subscription.
+  - Or ask the provider for a link with the server parameters.
 
 **Where it comes from:**
 

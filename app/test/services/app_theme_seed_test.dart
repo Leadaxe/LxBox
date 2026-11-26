@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/main.dart' show ThemeNotifier;
-import 'package:lxbox/services/app_theme_seed.dart';
-import 'package:lxbox/services/platform_channels.dart';
+import 'package:lxbox/widgets/app_theme_seed.dart';
+import 'package:lxbox/vpn/platform_channels.dart';
 import 'package:lxbox/services/settings_storage.dart';
 
 /// §735 — опция «System colors»: seed темы из системной палитры только при

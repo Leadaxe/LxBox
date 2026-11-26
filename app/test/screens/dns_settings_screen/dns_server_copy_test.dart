@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/dns_ref.dart';
 import 'package:lxbox/screens/dns_server_edit/edit_controller.dart';
 import 'package:lxbox/screens/dns_settings_screen/dns_server_copy.dart';
-import 'package:lxbox/screens/dns_settings_screen/resolved_server.dart';
+import 'package:lxbox/services/dns/resolved_server.dart';
 
 /// §682 — копия шаблонного/пресетного DNS-сервера.
 void main() {

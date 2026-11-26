@@ -8,6 +8,7 @@ import 'package:lxbox/models/node_link.dart';
 import 'package:lxbox/models/source_chain.dart';
 import 'package:lxbox/services/backup_service.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/template_loader.dart';
 
 /// §607 — канал нативных методов VPN (зеркало тумблеров пишет и туда).
 const _vpnMethods = MethodChannel('com.leadaxe.lxbox/methods');
@@ -1105,6 +1106,10 @@ void main() {
       final svc = const BackupService();
       final contents = await svc.parseImport(archive());
       await SettingsStorage.replaceRaw(contents.storage!);
+      // §757 — шаг после восстановления, как в `applyImport`: архив без
+      // маркера получает перезапись ссылок на теги наборов и маркер.
+      await SettingsStorage.migrateRuleSetTagRefsIfNeeded(
+          await TemplateLoader.load());
       final whole = await SettingsStorage.exportRaw();
 
       expect(jsonEncode(perCategory), jsonEncode(whole));

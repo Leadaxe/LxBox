@@ -240,7 +240,7 @@ List<String> _axis(List<CustomRule> rules) => [
 CustomRulePreset _preset(String id) =>
     CustomRulePreset(name: id, presetId: id, varsValues: const {});
 
-CustomRuleInline _inline(String name) => CustomRuleInline(name: name);
+CustomRuleTree _inline(String name) => CustomRuleTree.flat(name: name);
 
 /// Снимок storage с эмулятора (§369 §0) + vowifi: 13 правил без `num`,
 /// в том порядке, в каком они там лежали.
@@ -258,7 +258,7 @@ List<CustomRule> _deviceStorage() => [
       _preset('fakeip'),
       _inline('Warp'),
       _preset('unknown-traffic'),
-      CustomRuleSrs(name: 'Test SRS'),
+      CustomRuleTree.flat(name: 'Test SRS'),
       _preset('ru-inside'),
     ];
 

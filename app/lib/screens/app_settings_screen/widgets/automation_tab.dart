@@ -58,6 +58,8 @@ class _AutomationTabState extends State<AutomationTab> {
   // §721 — Android AppFunctions: строка видна только на Android 16+ (API 36).
   bool _appFunctionsSupported = false;
   bool _appFunctionsEnabled = false;
+  // §750 — шлюз ассистента: группа «Изменения» (по умолчанию выкл.).
+  bool _appFunctionsAllowChanges = false;
 
   @override
   void initState() {
@@ -71,6 +73,7 @@ class _AutomationTabState extends State<AutomationTab> {
     final state = await SettingsStorage.getAutomationEmitState();
     final subs = await SettingsStorage.getAutomationEmitSubs();
     final appFunctions = await SettingsStorage.getAppFunctionsEnabled();
+    final allowChanges = await SettingsStorage.getAppFunctionsAllowChanges();
     final appFunctionsSupported = await _isAndroid16OrNewer();
     if (!mounted) return;
     setState(() {
@@ -79,6 +82,7 @@ class _AutomationTabState extends State<AutomationTab> {
       _emitState = state;
       _emitSubs = subs;
       _appFunctionsEnabled = appFunctions;
+      _appFunctionsAllowChanges = allowChanges;
       _appFunctionsSupported = appFunctionsSupported;
       _loaded = true;
     });
@@ -97,6 +101,12 @@ class _AutomationTabState extends State<AutomationTab> {
     setState(() => _appFunctionsEnabled = value);
     await SettingsStorage.setAppFunctionsEnabled(value);
     await BoxVpnClient.I.setAppFunctionsEnabled(value);
+  }
+
+  /// §750 — тумблер читает сам шлюз (Dart); зеркало в натив не нужно.
+  Future<void> _onAllowChangesChanged(bool value) async {
+    setState(() => _appFunctionsAllowChanges = value);
+    await SettingsStorage.setAppFunctionsAllowChanges(value);
   }
 
   // ─── Master toggle ──────────────────────────────────────────────────────────
@@ -224,12 +234,27 @@ class _AutomationTabState extends State<AutomationTab> {
             title: Text(getLocalText.s("AI assistant control")),
             subtitle: Text(
               getLocalText.s(
-                "Let Android assistants turn the VPN on or off and read its status (Android 16+)",
+                "Let Android assistants control the VPN, run network checks and read your routing setup (Android 16+)",
               ),
             ),
             secondary: const Icon(Icons.assistant),
             value: _appFunctionsEnabled,
             onChanged: _loaded ? _onAppFunctionsChanged : null,
+          ),
+          // §750 — активен только при включённом первом; выключение первого
+          // второй не сбрасывает.
+          SwitchListTile(
+            title: Text(getLocalText.s("Let assistants change settings")),
+            subtitle: Text(
+              getLocalText.s(
+                "Assistants can add and edit routing rules and Directions and turn sources on or off without asking",
+              ),
+            ),
+            secondary: const Icon(Icons.edit_note),
+            value: _appFunctionsAllowChanges,
+            onChanged: _loaded && _appFunctionsEnabled
+                ? _onAllowChangesChanged
+                : null,
           ),
         ],
 

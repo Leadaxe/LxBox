@@ -19,6 +19,7 @@ import '../vpn/box_vpn_client.dart';
 import '../vpn/cc_channel.dart';
 import 'app_bottom_sheet.dart';
 import 'safe_bottom.dart';
+import 'dpad_radio_group.dart';
 
 /// Задача 581 — вызовы ядра вкладки Network. Отдельно от [CcChannel], чтобы
 /// тесты подставляли свои.
@@ -877,7 +878,7 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ),
           ],
         ),
-        RadioGroup<String>(
+        DpadRadioGroup<String>(
           groupValue: activeId,
           onChanged: (v) {
             if (v != null && !_busy) unawaited(_choose(v));

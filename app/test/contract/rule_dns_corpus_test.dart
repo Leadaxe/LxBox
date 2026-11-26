@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lxbox/models/codec/rule_record.dart';
-import 'package:lxbox/models/custom_rule.dart';
 import 'package:lxbox/services/builder/post_steps.dart';
 import 'package:lxbox/services/builder/rule_set_registry.dart';
 import 'package:lxbox/services/contract/registry.dart';
@@ -63,12 +62,14 @@ void main() {
                 unknownAsVerbatim: true)
             .value;
         expect(rule, isNotNull, reason: 'кодек не прочитал запись правила');
+        rule!;
 
         // Наборы srs считаются скачанными.
         final srsPaths = <String, String>{
-          if (rule is CustomRuleSrs) rule.id: '/corpus/${rule.id}.srs',
+          // §757 — ключ — id кэша набора по ссылке.
+          for (final c in rule.cacheIds) c: '/corpus/$c.srs',
         };
-        final mirrors = applyAllCustomRules(RuleSetRegistry(), [rule!], const [],
+        final mirrors = applyAllCustomRules(RuleSetRegistry(), [rule], const [],
                 srsPaths: srsPaths)
             .dnsMirrors;
         // Сервер правила считается выпущенным в `dns.servers`.

@@ -61,7 +61,7 @@ Map<String, dynamic> _withoutId(CustomRule r) => ruleToRecord(r)..remove('id');
 void main() {
   group('format: 2 — круг экспорт → разбор → санация', () {
     final rules = <CustomRule>[
-      CustomRuleInline(
+      CustomRuleTree.flat(
         id: 'r-corp',
         name: 'Corp',
         domainSuffixes: const ['.corp.example-1.com'],
@@ -73,7 +73,7 @@ void main() {
         dns: const RuleDns(enabled: true, serverTag: 'my-doh', forceIpv4: true),
         resolve: const RuleResolve(serverTag: 'my-doh'),
       ),
-      CustomRuleSrs(
+      CustomRuleTree.flat(
         id: 'r-geo',
         name: 'Geo',
         srsUrls: const [
@@ -128,7 +128,7 @@ void main() {
       expect(contents.rawDnsRules, [for (final r in dnsRules) dnsRuleToRecord(r)]);
       final geo = contents.rawRules[1] as Map;
       expect(geo['update_interval_hours'], 720);
-      expect(geo['refs'], hasLength(2));
+      expect((geo['body'] as Map)['refs'], hasLength(2)); // §757 — в теле
       expect((contents.rawRules[2] as Map)['verbatim'], isTrue);
     });
 
@@ -139,7 +139,8 @@ void main() {
         expect(s.warnings, isEmpty, reason: rules[i].name);
         final got = s.rule!;
         expect(got.id, isNot(rules[i].id));
-        final want = rules[i] is CustomRuleSrs
+        // §757 — выключается правило с наборами (вид srs выводится из дерева).
+        final want = rules[i].allRefs.isNotEmpty
             ? rules[i].withEnabled(false)
             : rules[i];
         expect(_withoutId(got), _withoutId(want), reason: rules[i].name);
@@ -149,7 +150,7 @@ void main() {
       expect(jsonDecode((json as CustomRuleJson).json),
           {'action': 'sniff', 'inbound': ['tun-in']});
       expect(
-          (_rule(contents.rawRules[1], contents.format).rule! as CustomRuleSrs)
+          (_rule(contents.rawRules[1], contents.format).rule! as CustomRuleTree)
               .updateIntervalHours,
           720);
     });
@@ -215,7 +216,7 @@ void main() {
       ]));
       expect(c.format, kRulesFormatLegacy);
 
-      final inline = _rule(c.rawRules[0], c.format).rule! as CustomRuleInline;
+      final inline = _rule(c.rawRules[0], c.format).rule! as CustomRuleTree;
       expect(inline.id, isNot('old-1'));
       expect(inline.name, 'Legacy inline');
       expect(inline.domainSuffixes, ['.example-1.com']);
@@ -224,7 +225,7 @@ void main() {
       expect(inline.orderNum, 5);
       expect(inline.dns, const RuleDns(enabled: true, serverTag: 'my-doh'));
 
-      final srs = _rule(c.rawRules[1], c.format).rule! as CustomRuleSrs;
+      final srs = _rule(c.rawRules[1], c.format).rule! as CustomRuleTree;
       expect(srs.srsUrls,
           ['https://example-2.com/a.srs', 'https://example-2.com/b.srs']);
       expect(srs.updateIntervalHours, 48);
@@ -341,7 +342,7 @@ void main() {
         'domains': ['a.example'],
         'outbound': 'vpn-1',
       }, kRulesExportFormatVersion)
-          .rule! as CustomRuleInline;
+          .rule! as CustomRuleTree;
       expect(old.domains, isEmpty);
       expect(old.outbound, isNot('vpn-1'));
     });

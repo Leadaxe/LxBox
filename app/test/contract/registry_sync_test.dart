@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import '../contract_paths.dart';
+import 'package:lxbox/services/contract/registry.dart';
 import 'package:lxbox/services/lx_backup.dart';
 import 'package:lxbox/services/parser/uri_utils.dart'
     show kMaxDetourDepth, maxAmneziaLinkLength, maxURILength;
@@ -99,6 +100,9 @@ const _codesInCode = <String>{
   // §640 — контракт 1.1.116: замещение правил приёмника файлом с ключом
   // `rules` (BACKUP.md §9 п. 7).
   kWarnRulesReplaced,
+  // §757 — контракт 1.1.178 (§181 п. 3): правило с `file://` в `refs`
+  // ввозится выключенным.
+  kWarnRuleRefLocalFile,
 };
 
 void main() {
@@ -154,6 +158,47 @@ void main() {
           _launcherOnlyBackupCodes.difference(registryCodes).toList()..sort();
       expect(unknownForeign, isEmpty,
           reason: 'в _launcherOnlyBackupCodes код, которого нет в реестре');
+    });
+
+    // §757 — таблица условий правила (контракт 1.1.179): загружается
+    // реестром и согласована со списками allowlists (те же проверки, что у
+    // загрузчика лаунчера: ключ один раз, ключ в route_rule_conditions,
+    // dns ⇔ rule_dns_mirror_match, group domain ⇔
+    // rule_dns_block_https_domains, set ⇔ group domain|address).
+    test('rule_conditions ↔ allowlists', () async {
+      await ContractRegistry.I.loadFromDirectory(kRegistryRoot);
+      final table = ContractRegistry.I.ruleConditions;
+      expect(table, isNotNull, reason: 'реестр не загрузил rule_conditions.json');
+
+      final raw = jsonDecode(
+          File('$kRegistryRoot/registry/rule_conditions.json')
+              .readAsStringSync()) as Map<String, dynamic>;
+      final rawKeys = [
+        for (final c in raw['conditions'] as List)
+          for (final k in (c as Map)['keys'] as List) (k as Map)['key'] as String,
+      ];
+      expect(rawKeys.toSet().length, rawKeys.length,
+          reason: 'ключ встречается в таблице дважды');
+      expect(table!.keys.map((k) => k.key).toList(), rawKeys);
+
+      final keys = table.keys.where((k) => !k.isRefs).toList();
+      final tableKeys = {for (final k in keys) k.key};
+      final route = _values(allowlists, 'route_rule_conditions').toSet();
+      expect(tableKeys.difference(route), isEmpty,
+          reason: 'ключ таблицы вне route_rule_conditions');
+
+      final mirror = _values(allowlists, 'rule_dns_mirror_match').toSet();
+      expect({for (final k in keys) if (k.dns) k.key},
+          mirror.intersection(tableKeys),
+          reason: 'dns: true ⇔ rule_dns_mirror_match');
+
+      expect({for (final k in keys) if (k.isDomain) k.key},
+          _values(allowlists, 'rule_dns_block_https_domains').toSet(),
+          reason: 'group domain ⇔ rule_dns_block_https_domains');
+
+      for (final k in keys) {
+        expect(k.set, k.group != null, reason: 'set ⇔ group у ${k.key}');
+      }
     });
 
     // Значение вне словаря обязано отвергаться — иначе allowlist декоративен.

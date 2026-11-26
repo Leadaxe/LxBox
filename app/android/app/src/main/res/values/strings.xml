@@ -119,5 +119,8 @@
     <string name="clip_copied">Copied</string>
 
     <!-- §721 AppFunctions: user-visible app description for assistants -->
-    <string name="appfunctions_display_description">Turn the VPN on or off and check whether it is connected.</string>
+    <string name="appfunctions_display_description">Turn the VPN on or off, run network checks, read the routing setup and, with your permission, change it.</string>
+    <!-- §750 мост шлюза ассистента: окно L×Box не открылось -->
+    <string name="assistant_channel_name">Assistant requests</string>
+    <string name="assistant_open_app_title">Open L×Box to let the assistant continue</string>
 </resources>

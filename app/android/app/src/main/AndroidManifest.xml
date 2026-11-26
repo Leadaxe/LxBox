@@ -74,6 +74,14 @@
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
 
+    <!-- §747 — процессов два, оба именованные: `:ui` — окно (MainActivity с
+         Flutter-движком), `:bg` — всё сервисное (VPN-сервис с ядром, плитка,
+         приёмники, нативные окна Taildrop и автоматизации, AppFunctions,
+         BgControlProvider). Каждый компонент несёт android:process явно;
+         activity-alias атрибута не имеет и живёт в процессе своей цели.
+         Компонент без android:process (новый плагин со своим компонентом) —
+         ошибка сборки: проверка собранного манифеста в app/build.gradle.kts.
+         Процесса без имени не остаётся. -->
     <application
         android:label="@string/app_name"
         android:name=".vpn.BoxApplication"
@@ -82,6 +90,7 @@
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
             android:name=".MainActivity"
+            android:process=":ui"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -109,6 +118,7 @@
 
         <service
             android:name=".vpn.BoxVpnService"
+            android:process=":bg"
             android:exported="false"
             android:foregroundServiceType="specialUse"
             android:permission="android.permission.BIND_VPN_SERVICE">
@@ -130,6 +140,7 @@
              вернуть @drawable/ic_lxbox_tile: тайл обязан быть монохромным. -->
         <service
             android:name=".vpn.LxBoxTileService"
+            android:process=":bg"
             android:label="@string/app_name"
             android:icon="@drawable/ic_lxbox_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
@@ -141,6 +152,7 @@
 
         <receiver
             android:name=".vpn.BootReceiver"
+            android:process=":bg"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -158,10 +170,12 @@
              PendingIntent от AlarmManager — non-exported легален. -->
         <receiver
             android:name=".vpn.VpnWatchdogReceiver"
+            android:process=":bg"
             android:exported="false" />
 
         <receiver
             android:name=".vpn.LocaleChangedReceiver"
+            android:process=":bg"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.LOCALE_CHANGED" />
@@ -177,6 +191,7 @@
              `checkCallingPermission` в broadcast-onReceive недетерминирован). -->
         <receiver
             android:name=".vpn.LxBoxIntentReceiver"
+            android:process=":bg"
             android:exported="true"
             android:enabled="false">
             <intent-filter>
@@ -199,6 +214,7 @@
              поднят и есть узел Tailscale с Allow Taildrop (TaildropClip). -->
         <activity
             android:name=".vpn.TaildropShareActivity"
+            android:process=":bg"
             android:enabled="false"
             android:exported="true"
             android:label="@string/taildrop_share_label"
@@ -219,6 +235,7 @@
              без Flutter; главное окно не поднимается. -->
         <activity
             android:name=".vpn.TaildropClipActivity"
+            android:process=":bg"
             android:exported="false"
             android:label="@string/clip_window_label"
             android:icon="@mipmap/ic_launcher"
@@ -246,11 +263,13 @@
         <!-- §707 — Cancel в уведомлении отправки Taildrop. -->
         <receiver
             android:name=".vpn.TaildropCancelReceiver"
+            android:process=":bg"
             android:exported="false" />
 
         <!-- §707 — Cancel / Save / Delete в уведомлениях приёма Taildrop. -->
         <receiver
             android:name=".vpn.TaildropNoteReceiver"
+            android:process=":bg"
             android:exported="false" />
 
         <!-- §047 Шаг 2 — Locale / Tasker plugin-стандарт (twofortyfouram).
@@ -263,6 +282,7 @@
              url-test, refresh, rebuild, reset) + значение extra. -->
         <activity
             android:name=".automation.LocaleSettingEditActivity"
+            android:process=":bg"
             android:exported="true"
             android:label="@string/label_plugin_custom"
             android:icon="@mipmap/ic_launcher"
@@ -277,6 +297,7 @@
              headless'ом сразу отдаёт готовый bundle и finish (UI не рисует). -->
         <activity
             android:name=".automation.LocaleQuickActionActivity"
+            android:process=":bg"
             android:exported="true"
             android:theme="@android:style/Theme.NoDisplay" />
         <activity-alias
@@ -311,6 +332,7 @@
         </activity-alias>
         <receiver
             android:name=".automation.LocaleSettingReceiver"
+            android:process=":bg"
             android:exported="true"
             android:enabled="false">
             <intent-filter>
@@ -320,6 +342,7 @@
 
         <activity
             android:name=".automation.LocaleConditionEditActivity"
+            android:process=":bg"
             android:exported="true"
             android:label="@string/app_name"
             android:icon="@mipmap/ic_launcher"
@@ -330,6 +353,7 @@
         </activity>
         <receiver
             android:name=".automation.LocaleConditionReceiver"
+            android:process=":bg"
             android:exported="true"
             android:enabled="false">
             <intent-filter>
@@ -346,6 +370,7 @@
              быть только один сервис с этим действием. -->
         <service
             android:name=".appfunctions.LxBoxAppFunctionService"
+            android:process=":bg"
             android:permission="android.permission.BIND_APP_FUNCTION_SERVICE"
             android:exported="true"
             tools:targetApi="36">
@@ -359,10 +384,65 @@
                 <action android:name="android.app.appfunctions.AppFunctionService" />
             </intent-filter>
         </service>
+        <!-- §747 — пустой сервис процесса окна: цель привязки из `:bg` (UiHold).
+             Пока туннель работает и окно подключено, привязка от процесса с
+             foreground-сервисом VPN держит свёрнутое окно живым — Dart
+             (таймеры обновления, автоматизация) работает, как в одном
+             процессе. Логики и данных через привязку нет. -->
+        <service
+            android:name=".vpn.UiKeepAliveService"
+            android:process=":ui"
+            android:exported="false" />
+        <!-- §747 — канал окна к сервисной стороне: вызов с ответом
+             (ContentProvider.call). Не экспортируется; табличного доступа нет. -->
+        <provider
+            android:name=".vpn.BgControlProvider"
+            android:process=":bg"
+            android:authorities="${applicationId}.bgcontrol"
+            android:exported="false" />
         <property
             android:name="android.app.appfunctions.app_metadata"
             android:resource="@xml/app_metadata" />
 
+        <!-- §747 — компоненты библиотек: процесс назначается здесь
+             (tools:node="merge" добавляет атрибут к объявлению библиотеки).
+             Всё, что обслуживает окно и плагины Flutter, — в `:ui`;
+             проверка вызывающего AppFunctions — рядом с сервисом, в `:bg`.
+             InitializationProvider (androidx.startup: ProcessLifecycle,
+             ProfileInstaller) работает только в `:ui` — сервисная сторона
+             ни ProcessLifecycleOwner, ни AppInitializer не использует. -->
+        <provider
+            android:name="io.flutter.plugins.imagepicker.ImagePickerFileProvider"
+            android:process=":ui"
+            tools:node="merge" />
+        <service
+            android:name="com.google.android.gms.metadata.ModuleDependencies"
+            android:process=":ui"
+            tools:node="merge" />
+        <provider
+            android:name="dev.fluttercommunity.plus.share.ShareFileProvider"
+            android:process=":ui"
+            tools:node="merge" />
+        <receiver
+            android:name="dev.fluttercommunity.plus.share.SharePlusPendingIntent"
+            android:process=":ui"
+            tools:node="merge" />
+        <service
+            android:name="androidx.camera.core.impl.MetadataHolderService"
+            android:process=":ui"
+            tools:node="merge" />
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:process=":ui"
+            tools:node="merge" />
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            android:process=":ui"
+            tools:node="merge" />
+        <receiver
+            android:name="androidx.appfunctions.internal.AppFunctionCallerVerificationReceiver"
+            android:process=":bg"
+            tools:node="merge" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

@@ -7,6 +7,16 @@ import '../../routing_screen.dart';
 import '../node_filter_view_model.dart';
 import '../../../services/l10n/locale_controller.dart';
 
+/// Иконка режима сортировки (UI-слой; сама модель `NodeSortMode` без Flutter).
+extension NodeSortModeIcon on NodeSortMode {
+  IconData get icon => switch (this) {
+        NodeSortMode.defaultOrder => Icons.swap_vert,
+        NodeSortMode.latencyAsc => Icons.signal_cellular_alt,
+        NodeSortMode.nameAsc => Icons.sort_by_alpha,
+        NodeSortMode.manual => Icons.drag_indicator,
+      };
+}
+
 /// Заголовок секции нод на главном экране: «Nodes (N)», кнопка сортировки
 /// (tap = cycle режима, long-press = меню опций; amber-точка когда sort
 /// non-default, §070/§071) и toggle панели фильтров (§048). Long-press по

@@ -461,3 +461,35 @@ Future<bool> _seedLateDefaultPresets(WizardTemplate? template) async {
   }
   return added;
 }
+
+// ---------------------------------------------------------------------------
+// §757 (контракт 1.1.182, TASKS_LXBOX §185) — разовая перезапись рукописных
+// ссылок `rule_set` на прежние теги наборов собственных правил. Маркер
+// `rule_set_tags_migrated`: голый `имя`, написанный пользователем ПОСЛЕ
+// обновления как ссылка на свой набор, повторно не переписывается. Архив
+// без маркера (до §757) после восстановления мигрирует заново.
+// ---------------------------------------------------------------------------
+
+Future<void> _migrateRuleSetTagRefsIfNeeded(WizardTemplate template) async {
+  final data = await _load();
+  if (data[kRuleSetTagsMigratedKey] == true) return;
+  final route = template.config['route'];
+  final sets = route is Map ? route['rule_set'] : null;
+  final changed = migrateRuleSetTagRefs(
+    data,
+    takenTags: [
+      if (sets is List)
+        for (final rs in sets)
+          if (rs is Map && rs['tag'] is String) rs['tag'] as String,
+    ],
+    presets: template.selectableRules,
+    order: (rules) =>
+        normalizeRuleOrder(rules, template.selectableRules, template),
+  );
+  data[kRuleSetTagsMigratedKey] = true;
+  SettingsStorage._cache = data;
+  if (changed > 0) SettingsStorage.markConfigDirty();
+  await _save();
+  AppLog.I.info('SettingsStorage: rule set tag references migration (§757): '
+      '$changed reference(s) rewritten');
+}

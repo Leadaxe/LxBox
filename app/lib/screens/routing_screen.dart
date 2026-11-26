@@ -22,16 +22,17 @@ import '../services/direction_mutations.dart';
 import '../services/error_format.dart';
 import '../services/file_export.dart';
 import '../services/file_import.dart';
-import '../services/l10n/template_aware_state.dart';
+import '../widgets/template_aware_state.dart';
 import '../services/preset_nodes_view.dart';
 import '../services/preset_on_change.dart';
 import '../services/rule_display_names.dart';
 import '../services/rule_set_downloader.dart';
+import '../services/storage_migration/rule_set_cache_ids.dart';
 import '../services/rule_transfer.dart';
 import '../services/selectable_to_custom.dart';
 import '../services/settings_storage.dart';
 import '../services/template_loader.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../services/url_launcher.dart';
 import '../services/utf8_decode.dart';
 import '../widgets/export_action_sheet.dart';
@@ -52,6 +53,7 @@ import 'routing_screen/widgets/routing_tabs.dart';
 import 'routing_screen/widgets/srs_status_button.dart';
 import 'tun_apps_tab.dart';
 import '../services/l10n/locale_controller.dart';
+import '../widgets/focus_safe_tab_bar_view.dart';
 
 part 'routing_screen/routing_srs_cache.dart';
 
@@ -406,7 +408,7 @@ class _RoutingScreenState extends State<RoutingScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      body: FocusSafeTabBarView(
         controller: _tabController,
         children: [
           // ─── Directions: Направления (CRUD) + Auto tuning ───
@@ -787,7 +789,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     // качает через ☁, потом включает switch (или toggle-on сам auto-
     // download'ит и enable на успехе).
     final needsSrs =
-        cr is CustomRuleSrs ||
+        cr.allRefs.isNotEmpty ||
         (cr is CustomRulePreset && _remoteRuleSetsOf(rule, cr).isNotEmpty);
     if (needsSrs) cr = cr.withEnabled(false);
 
@@ -1178,10 +1180,11 @@ class _RoutingScreenState extends State<RoutingScreen>
         ? (preset?.touchesDns ?? false)
         : (rule.dnsMirrorActive ||
             rule.forceIpv4Active ||
-            rule.dnsFixedActive); // §683 — Answer = Fixed IP
+            rule.dnsFixedActive || // §683 — Answer = Fixed IP
+            rule.blockHttpsActive); // §755
 
     Widget? statusButton;
-    if (rule is CustomRuleSrs) {
+    if (rule is CustomRuleTree && rule.allRefs.isNotEmpty) {
       statusButton = _srsStatusButton(rule);
     } else if (rule is CustomRulePreset &&
         preset != null &&
@@ -1211,7 +1214,9 @@ class _RoutingScreenState extends State<RoutingScreen>
       onTap: () => _openCustomRuleEditor(index),
       onLongPressStart: (pos) => _showRuleContextMenu(index, pos),
       onSwitchChanged: (v) {
-        if (v && rule is CustomRuleSrs && !_srsCached.contains(rule.id)) {
+        if (v &&
+            rule.allRefs.isNotEmpty &&
+            !_srsCached.contains(rule.id)) {
           unawaited(_enableAfterDownload(rule));
           return;
         }
@@ -1335,8 +1340,8 @@ class _RoutingScreenState extends State<RoutingScreen>
     });
     // Подчищаем cached-файлы: SRS — один файл по `id`, preset — по каждому
     // remote rule_set'у пресета + убираем composite-ключи из _srsCached.
-    if (rule is CustomRuleSrs) {
-      // ## 12 — файл на каждый набор.
+    if (rule.allRefs.isNotEmpty) {
+      // ## 12 / §757 — файл на каждый набор дерева.
       for (final cacheId in rule.cacheIds) {
         unawaited(RuleSetDownloader.delete(cacheId));
       }
@@ -1355,7 +1360,7 @@ class _RoutingScreenState extends State<RoutingScreen>
     // Новое пользовательское правило — inline (default). Juzer в редакторе
     // может переключить на srs; `preset` добавляется только через
     // каталог Presets.
-    final fresh = CustomRuleInline(
+    final fresh = CustomRuleTree.flat(
       name: _uniqueCustomRuleName('Rule ${_customRules.length + 1}', ''),
     );
     final result = await openCustomRuleEditor(
@@ -1423,9 +1428,10 @@ class _RoutingScreenState extends State<RoutingScreen>
       });
     } else if (result.saved != null) {
       final saved = result.saved!;
+      // §757 — все ссылки дерева (кэш набора — по ссылке).
       final urlChanged =
           current.kind == CustomRuleKind.srs &&
-          current.srsUrls.join('\n') != saved.srsUrls.join('\n');
+          current.allRefs.join('\n') != saved.allRefs.join('\n');
       final kindChanged = current.kind != saved.kind;
       setState(() {
         // URL или kind поменялись → старый cached-файл невалидный, правило
@@ -1439,10 +1445,13 @@ class _RoutingScreenState extends State<RoutingScreen>
       });
       if (urlChanged || kindChanged) {
         // ## 12 — старые файлы всех наборов прежнего правила.
-        for (final cacheId in current is CustomRuleSrs
-            ? current.cacheIds
-            : <String>[current.id]) {
-          unawaited(RuleSetDownloader.delete(cacheId));
+        // §757 — файлы ссылок, которых в новом правиле нет (id кэша — по
+        // ссылке, файл оставшейся ссылки валиден).
+        final keep = saved.cacheIds.toSet();
+        for (final cacheId in current.cacheIds) {
+          if (!keep.contains(cacheId)) {
+            unawaited(RuleSetDownloader.delete(cacheId));
+          }
         }
       }
     }

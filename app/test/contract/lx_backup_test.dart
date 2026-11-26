@@ -558,10 +558,9 @@ void main() {
       expect(c.enabled, isTrue, reason: 'отсутствие ключа = true по схеме');
       expect(c.tag, isNotEmpty); // §594 — `label` цепочки отброшен молча
       expect(c.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
-      expect(c.idleTimeout, '0s');
-      // Трёхзначность: явный false НЕ должен слипаться с «ключа не было».
-      expect(c.stripEvasion, isFalse);
-      expect(c.strip, {'xhttp.padding': true, 'tls.utls': false});
+      // §761 — `idle_timeout`, `strip_evasion`, `strip` старого бэкапа
+      // отбрасываются молча (контракт 1.1.184): ядро lx.37-rc.2 их отвергает.
+      expect(c.toCanonJson().keys.toSet(), {'hops', 'rewrite'});
       expect(c.rewrite, {
         'vless': {'flow': null},
       });
@@ -571,17 +570,6 @@ void main() {
         reason: 'null внутри rewrite = удаление ключа по RFC 7396, '
             'схлопывать его значит поменять патч',
       );
-    });
-
-    test('ключа strip_evasion не было → null, а не false', () {
-      const raw = '''
-{
-  "lx_backup": 1,
-  "chains": [{"tag": "relay", "chain": {"hops": ["a", "b"]}}]
-}''';
-      final c = parseLxBackup(raw).chains.single;
-      expect(c.stripEvasion, isNull,
-          reason: 'умолчание ядра (true) и явное выключение — разные вещи');
     });
 
     test('битая запись пропускается молча: нет тега / нет канона', () {
@@ -622,9 +610,6 @@ void main() {
       const source = SourceChain(
         tag: 'chain-1',
         hops: [NodeLink(tag: 'warp'), NodeLink(tag: 'vpn ②')],
-        idleTimeout: '0s',
-        stripEvasion: false,
-        strip: {'tls.utls': false},
         // RFC 7396: null удаляет ключ и обязан пережить перенос как есть.
         rewrite: {
           'vless': {'flow': null},
@@ -645,7 +630,7 @@ void main() {
       expect(body['type'], 'chain');
       expect(body.containsKey('tag'), isFalse);
       expect(body.containsKey('hops'), isFalse);
-      expect(body['strip_evasion'], isFalse);
+      expect(body.keys.toSet(), {'type', 'rewrite'});
       expect(body['rewrite'], {
         'vless': {'flow': null},
       });
@@ -657,9 +642,6 @@ void main() {
       final back = parseLxBackup(out).chains.single;
       expect(back.tag, source.tag);
       expect(back.hops, source.hops);
-      expect(back.idleTimeout, source.idleTimeout);
-      expect(back.stripEvasion, isFalse);
-      expect(back.strip, source.strip);
       expect(back.rewrite, source.rewrite);
     });
 
@@ -858,7 +840,7 @@ void main() {
       expect(preset.presetId, 'block-ads');
       expect(preset.varsValues['outbound'], 'direct',
           reason: 'значения переменных пресета потеряны на импорте');
-      final srs = file.rules.last as CustomRuleSrs;
+      final srs = file.rules.last as CustomRuleTree;
       expect(srs.srsUrl, 'https://example-1.com/geo.srs',
           reason: 'URL rule-set потерян — правило приедет пустым');
     });
@@ -904,22 +886,25 @@ void main() {
         final raw = (await buildLxBackup(
           lists: const [],
           rules: [
-            CustomRuleSrs(
+            CustomRuleTree.flat(
               name: 'Multi',
               srsUrls: const ['https://x/a.srs', 'https://x/b.srs'],
               outbound: 'direct',
             ),
-            CustomRuleSrs(name: 'Single', srsUrl: 'https://x/d.srs', outbound: 'direct'),
+            CustomRuleTree.flat(name: 'Single', srsUrl: 'https://x/d.srs', outbound: 'direct'),
           ],
           vars: const {},
         )).json;
         final rules = (jsonDecode(raw) as Map<String, dynamic>)['rules'] as List;
         final multi = rules[0] as Map<String, dynamic>;
         final single = rules[1] as Map<String, dynamic>;
-        // §438 — в 1.0 `refs` всегда список, одиночного `ref` у srs нет.
+        // §438 — в 1.0 `refs` всегда список, одиночного `ref` у srs нет;
+        // §757 — `refs` в теле правила, не на записи.
         expect(multi.containsKey('ref'), isFalse);
-        expect(multi['refs'], ['https://x/a.srs', 'https://x/b.srs']);
-        expect(single['refs'], ['https://x/d.srs']);
+        expect(multi.containsKey('refs'), isFalse);
+        expect((multi['body'] as Map)['refs'],
+            ['https://x/a.srs', 'https://x/b.srs']);
+        expect((single['body'] as Map)['refs'], ['https://x/d.srs']);
 
         // Круг: import(export(x)) = x по составу наборов.
         final back = parseLxBackup(raw, knownOutbounds: {'direct'});

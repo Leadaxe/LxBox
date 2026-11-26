@@ -1,5 +1,5 @@
 import '../services/l10n/locale_controller.dart';
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 import 'version_info.dart';
 
 /// §362 — единственный источник ссылок проекта. До этого адреса лежали

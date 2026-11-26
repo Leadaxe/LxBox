@@ -7,7 +7,7 @@ import 'package:lxbox/screens/custom_rule_edit/edit_controller.dart';
 
 CustomRuleEditController _ctrl({RuleDns? dns, RuleResolve? resolve}) =>
     CustomRuleEditController(
-      initial: CustomRuleInline(
+      initial: CustomRuleTree.flat(
         id: 'r1',
         name: 'gov',
         domains: const ['gosuslugi.ru'],
@@ -73,7 +73,7 @@ void main() {
     test('snapshot содержит resolve с сервером', () {
       final c = _ctrl(dns: const RuleDns(serverTag: 'dns_ru'));
       c.setDnsAnswerMode(DnsAnswerMode.dedicated);
-      final snap = c.snapshot() as CustomRuleInline;
+      final snap = c.snapshot() as CustomRuleTree;
       expect(snap.resolve, isNotNull);
       expect(snap.resolve!.serverTag, 'dns_ru');
       expect(snap.dns!.serverTag, 'dns_ru');

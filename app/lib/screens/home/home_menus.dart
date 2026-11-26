@@ -6,6 +6,7 @@ import '../../services/settings_storage.dart';
 import '../../services/template_loader.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/app_bottom_sheet.dart';
+import 'widgets/nodes_header.dart' show NodeSortModeIcon;
 
 /// §070 — modal bottom sheet опций сортировки нод (long-press по sort-кнопке
 /// в [NodesHeader]). Sheet остаётся открытым — можно тоггнуть несколько опций

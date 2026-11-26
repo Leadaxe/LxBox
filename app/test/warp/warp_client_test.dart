@@ -164,7 +164,7 @@ void main() {
     expect(acc.peerPub, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbA='); // регистрация всё равно прошла
   });
 
-  test('toWireguardUri несёт reserved и парсится; §137 тег Cloudflare WARP',
+  test('toWireguardUri без reserved (§142) и парсится; §137 тег Cloudflare WARP',
       () async {
     final client = MockClient(
         (req) async => http.Response(jsonEncode(regResponse()), 200));
@@ -175,9 +175,8 @@ void main() {
     // §137 — тег с эмодзи (plain = облако), URL-энкодится во фрагменте.
     final parsed = Uri.parse(uri);
     expect(Uri.decodeComponent(parsed.fragment), '🔥☁️ WARP');
-    // Запятые URL-энкодятся (%2C) — parser декодит обратно. Проверяем по
-    // декодированному query, не по сырой строке.
-    expect(parsed.queryParameters['reserved'], '12,34,56');
+    // §142 — client_id в узел не пишется (DPI режет WARP по нему).
+    expect(parsed.queryParameters.containsKey('reserved'), isFalse);
   });
 
   // §304 — persistent keepalive для ручной регистрации WARP.

@@ -62,7 +62,7 @@ void main() {
     test('buildRulesExport пишет маркеры и все правила', () {
       final json = buildRulesExport(
         [
-          CustomRuleInline(name: 'A', domains: ['a.com']),
+          CustomRuleTree.flat(name: 'A', domains: ['a.com']),
           CustomRuleJson(name: 'B', json: '{"outbound":"direct-out"}'),
         ],
         appVersion: '9.9.9+999',
@@ -106,7 +106,7 @@ void main() {
     });
 
     test('round-trip: export → parse сохраняет элементы', () {
-      final rule = CustomRuleInline(
+      final rule = CustomRuleTree.flat(
         name: 'Round',
         domains: ['x.com'],
         ports: ['443'],
@@ -139,7 +139,7 @@ void main() {
     });
 
     test('битый элемент не topит остальные', () {
-      final file = buildRulesExport([CustomRuleInline(name: 'OK')]);
+      final file = buildRulesExport([CustomRuleTree.flat(name: 'OK')]);
       final decoded = jsonDecode(file) as Map<String, dynamic>;
       (decoded['rules'] as List).insert(0, {'kind': 'hologram'});
       final contents = parseRulesImport(jsonEncode(decoded));
@@ -160,7 +160,7 @@ void main() {
 
     test('§398 — правило с занятым именем неимпортируемо', () {
       final s = sanitizeImportedRule(
-        _fileEntry(CustomRuleInline(name: 'My Rule', domains: ['a.com'])),
+        _fileEntry(CustomRuleTree.flat(name: 'My Rule', domains: ['a.com'])),
         directionTags: directionTags,
         dnsServerTags: dnsTags,
         template: template,
@@ -173,7 +173,7 @@ void main() {
 
   group('санация: outbound', () {
     test('висячий тег → vpn-1 + выключение + warning', () {
-      final s = sanitize(_fileEntry(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleTree.flat(
         name: 'R',
         domains: ['a.com'],
         outbound: 'vpn-9',
@@ -189,7 +189,7 @@ void main() {
     test('спец-теги и существующее Направление — без лечения', () {
       for (final ob in ['reject', 'block', 'direct-out', 'vpn-2']) {
         final s = sanitize(
-            _fileEntry(CustomRuleInline(name: 'R', outbound: ob, domains: ['a.com'])));
+            _fileEntry(CustomRuleTree.flat(name: 'R', outbound: ob, domains: ['a.com'])));
         expect(s.warnings, isEmpty, reason: ob);
         expect(s.rule!.outbound, ob);
         expect(s.rule!.enabled, isTrue, reason: ob);
@@ -207,7 +207,7 @@ void main() {
 
   group('санация: dns / resolve', () {
     test('висячий dns.serverTag → опция выключена, forceIpv4 выжил', () {
-      final s = sanitize(_fileEntry(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleTree.flat(
         name: 'R',
         domains: ['a.com'],
         dns: const RuleDns(
@@ -223,7 +223,7 @@ void main() {
     });
 
     test('известный dns.serverTag — без лечения', () {
-      final s = sanitize(_fileEntry(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleTree.flat(
         name: 'R',
         domains: ['a.com'],
         dns: const RuleDns(enabled: true, serverTag: 'dns-cf'),
@@ -234,7 +234,7 @@ void main() {
     });
 
     test('висячий resolve.serverTag → auto', () {
-      final s = sanitize(_fileEntry(CustomRuleInline(
+      final s = sanitize(_fileEntry(CustomRuleTree.flat(
         name: 'R',
         domains: ['a.com'],
         resolve: const RuleResolve(serverTag: 'my-doh', strategy: 'ipv4_only'),
@@ -249,7 +249,7 @@ void main() {
 
   group('санация: srs', () {
     test('srs-правило приезжает выключенным даже если в файле включено', () {
-      final s = sanitize(_fileEntry(CustomRuleSrs(
+      final s = sanitize(_fileEntry(CustomRuleTree.flat(
         name: 'S',
         enabled: true,
         srsUrl: 'https://example.com/x.srs',
@@ -264,7 +264,7 @@ void main() {
   group('вставка: имя и num', () {
     test('чужой num из файла не переносится — правило садится в свою зону', () {
       final target = <CustomRule>[];
-      final raw = _fileEntry(CustomRuleInline(name: 'A', domains: ['a.com']))
+      final raw = _fileEntry(CustomRuleTree.flat(name: 'A', domains: ['a.com']))
         ..['num'] = 5; // чужая ось
       final s = sanitize(raw);
       final inserted = insertImportedRule(target, s.rule!, template: template);
@@ -277,12 +277,12 @@ void main() {
       final target = <CustomRule>[];
       final a = insertImportedRule(
           target,
-          sanitize(_fileEntry(CustomRuleInline(name: 'A', domains: ['a.com'])))
+          sanitize(_fileEntry(CustomRuleTree.flat(name: 'A', domains: ['a.com'])))
               .rule!,
           template: template);
       final b = insertImportedRule(
           target,
-          sanitize(_fileEntry(CustomRuleInline(name: 'B', domains: ['b.com'])))
+          sanitize(_fileEntry(CustomRuleTree.flat(name: 'B', domains: ['b.com'])))
               .rule!,
           template: template);
       expect(a.orderNum, kUserRuleNumStart);
@@ -292,7 +292,7 @@ void main() {
     test('§398 — имя при вставке не мутируется (суффиксов больше нет)', () {
       final target = <CustomRule>[];
       final s =
-          sanitize(_fileEntry(CustomRuleInline(name: 'My Rule', domains: ['a.com'])));
+          sanitize(_fileEntry(CustomRuleTree.flat(name: 'My Rule', domains: ['a.com'])));
       final inserted = insertImportedRule(target, s.rule!, template: template);
       expect(inserted.name, 'My Rule');
     });
@@ -301,7 +301,7 @@ void main() {
   group('DNS-секции конверта (§5.3a)', () {
     test('buildRulesExport пишет dns_servers/dns_rules, parse их читает', () {
       final json = buildRulesExport(
-        [CustomRuleInline(name: 'R', domains: ['a.com'])],
+        [CustomRuleTree.flat(name: 'R', domains: ['a.com'])],
         dnsServers: const [
           DnsServerInline(
               enabled: true,
@@ -317,22 +317,22 @@ void main() {
       expect(contents.rawDnsRules, hasLength(1));
       // Файл без секций → пустые списки, не ошибка.
       final bare = parseRulesImport(
-          buildRulesExport([CustomRuleInline(name: 'R')]));
+          buildRulesExport([CustomRuleTree.flat(name: 'R')]));
       expect(bare.rawDnsServers, isEmpty);
       expect(bare.rawDnsRules, isEmpty);
     });
 
     test('referencedDnsServerTags собирает dns/resolve-теги', () {
       final tags = referencedDnsServerTags([
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'A',
           dns: const RuleDns(enabled: true, serverTag: 'x-doh'),
         ),
-        CustomRuleInline(
+        CustomRuleTree.flat(
           name: 'B',
           resolve: const RuleResolve(serverTag: 'y-udp'),
         ),
-        CustomRuleInline(name: 'C'),
+        CustomRuleTree.flat(name: 'C'),
       ]);
       expect(tags, {'x-doh', 'y-udp'});
     });

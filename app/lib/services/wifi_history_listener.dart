@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-import 'platform_channels.dart';
+import '../vpn/platform_channels.dart';
 import 'settings_storage.dart';
 
 /// §051 Phase 3 — слушает MethodChannel `onWifiSeen` от native side

@@ -236,7 +236,8 @@ void main() {
             readLegacyCustomRule(legacy[i]),
             reason: legacy[i]['name'] as String);
       }
-      expect(rules[1]['refs'],
+      // §757 — `refs` в теле правила.
+      expect((rules[1]['body'] as Map)['refs'],
           ['https://example.com/a.srs', 'https://example.com/b.srs']);
       expect(rules[1]['update_interval_hours'], 720);
       expect(rules[2]['ref'], 'ru-direct');

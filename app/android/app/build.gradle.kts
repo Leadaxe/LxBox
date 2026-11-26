@@ -181,3 +181,51 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+// §747 — процессов два, оба именованные (`:ui` — окно, `:bg` — сервисная
+// сторона), и каждый компонент несёт `android:process` явно. Исходный манифест
+// проверяет сторож `tool/arch/boundary_check.dart`; здесь — собранный: в него
+// попадают компоненты библиотек и плагинов. Компонент без `android:process`
+// запустился бы в третьем процессе без имени, где `BoxApplication` не выполняет
+// шагов ни одной стороны, — поэтому это ошибка сборки. Новый плагин со своим
+// компонентом: переобъявить компонент в `src/main/AndroidManifest.xml` с
+// `tools:node="merge"` и нужным процессом. `activity-alias` атрибута не имеет
+// (живёт в процессе цели).
+tasks.configureEach {
+    val match = Regex("^process(.+)Manifest$").matchEntire(name) ?: return@configureEach
+    if (name.endsWith("MainManifest")) return@configureEach
+    val variant = match.groupValues[1].replaceFirstChar { it.lowercase() }
+    val taskName = name
+    val merged = layout.buildDirectory.file(
+        "intermediates/merged_manifests/$variant/$taskName/AndroidManifest.xml",
+    )
+    doLast {
+        val file = merged.get().asFile
+        if (!file.exists()) {
+            throw GradleException("§747 manifest check: merged manifest not found: $file")
+        }
+        val ns = "http://schemas.android.com/apk/res/android"
+        val doc = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder().parse(file)
+        val bad = ArrayList<String>()
+        for (tag in listOf("activity", "service", "receiver", "provider")) {
+            val nodes = doc.getElementsByTagName(tag)
+            for (i in 0 until nodes.length) {
+                val e = nodes.item(i) as org.w3c.dom.Element
+                val process = e.getAttributeNS(ns, "process")
+                if (process != ":ui" && process != ":bg") {
+                    bad.add("<$tag ${e.getAttributeNS(ns, "name")}> android:process=\"$process\"")
+                }
+            }
+        }
+        if (bad.isNotEmpty()) {
+            throw GradleException(
+                "§747 manifest check: every component must carry android:process " +
+                    "\":ui\" or \":bg\" (redeclare a library component in " +
+                    "src/main/AndroidManifest.xml with tools:node=\"merge\"):\n  " +
+                    bad.joinToString("\n  "),
+            )
+        }
+    }
+}

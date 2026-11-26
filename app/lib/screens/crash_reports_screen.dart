@@ -7,7 +7,7 @@ import '../services/crash_share.dart';
 import '../services/format_utils.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/stderr_reader.dart';
-import '../services/ui_helpers.dart';
+import '../widgets/ui_helpers.dart';
 import '../widgets/big_text_view.dart';
 
 /// §316 — вкладка «Crashes» на экране Debug: история Go-паник ядра.

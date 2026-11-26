@@ -81,6 +81,16 @@ button, and the response is shown to you verbatim.
 **Speed tests.** A test file is downloaded from the endpoint you select to
 measure throughput.
 
+**AI assistants.** On Android 16 and newer you can let a system assistant call
+L×Box functions — **off by default**. With *AI assistant control* on, the
+assistant you talk to receives what it asks for: the names of servers,
+Directions, connections, rules and matching installed apps, the result of an
+address check, and — from the exit check, a request to
+`1.1.1.1/cdn-cgi/trace` through the tunnel — the exit's IP address and country
+code. It never receives the config, server addresses and keys, subscription
+links, backups or logs. L×Box itself sends this data nowhere; what the
+assistant does with it is governed by that assistant's privacy policy.
+
 ## Permissions
 
 | Permission | Why | Leaves the device? |
@@ -88,7 +98,7 @@ measure throughput.
 | Internet, network state | Connect to servers, detect network changes | — |
 | Location (incl. background) | Android only reveals the Wi-Fi network name (SSID) to apps holding a location permission. The SSID is used to match routing rules you write, such as "on my home network, bypass the tunnel". The tunnel runs as a foreground service and evaluates rules with the screen off, which is why the background variant is required. | **No.** Coordinates are never requested, stored or transmitted. |
 | Camera | Scanning configuration QR codes | **No.** Decoding happens on device. |
-| Installed applications | Per-app routing: choosing which apps use the tunnel | **No.** The list stays on the device. |
+| Installed applications | Per-app routing: choosing which apps use the tunnel | **No.** The list stays on the device. With *AI assistant control* on, the names of apps matching an assistant's search are returned to that assistant. |
 | Notifications | Showing tunnel status | — |
 | Run at startup, ignore battery optimisation | Optional auto-start and keeping the tunnel alive | — |
 
