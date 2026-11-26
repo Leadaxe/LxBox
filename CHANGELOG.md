@@ -8,80 +8,186 @@
 
 ## [Unreleased]
 
+## [2.26.0] — 2026-11-26
+
+Stable release. Includes everything since 2.25.22, together with the
+2.25.23 release candidates, which never became stable. Core
+`v1.14.4-lx.37` (was `v1.14.4-lx.35`), contract 1.1.184.
+
 ### Changed
 
-- **Hop chains for core `v1.14.4-lx.37-rc.2` ([task 761](docs/spec/tasks/761-core-rc2-chain-detour.md)).**
-  The core will route every node past the first chain position through the
-  chain itself, with no link copies. The config no longer carries the chain
-  keys `idle_timeout`, `strip_evasion` and `strip`, and they are no longer
-  kept: a saved chain or a backup is read with them dropped, as in the
-  launcher (contract 1.1.184); the chain editor loses its Advanced block. The
-  `mtu_align` setting is written to `lx.detour.mtu_align`, old mixins are
-  rewritten. One node or group has one path: a ring (a node at the entry and
-  also inside a Direction higher in the chain, or a detour back into the
-  chain) or a conflict (a node or group on a later position used again in the
-  chain or in another chain) is an error. The editor does not save such a
-  chain and says which copy to make; the build drops it with the same hint,
-  and the home screen shows a banner for such a saved chain with a button
-  that opens it (dismissed until the config changes). A node past the first
-  position with a fixed local port (WireGuard/AWG `listen_port`, Tailscale
-  `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port`) is an
-  error of the same kind, as in the launcher: the port is not removed, the
-  chain drops. Both chains of a conflict are named by tag in the editor too.
-  Internal `chain-hop`
-  outbounds are hidden. The JSON tab of the node screen shows the node as the
-  core runs it, with the core's changes. Contract 1.1.184.
+- **Hop chains follow the new core: one path per node ([details](docs/spec/tasks/761-core-rc2-chain-detour.md)).**
+  The core routes every node past the first chain position through the chain
+  by rewriting its `detour` and no longer makes copies of nodes. One node or
+  Direction now has one path. A ring (a node at the entry that is also inside
+  a Direction further down the same chain, or a detour that leads back into
+  the chain) and a conflict (a node or Direction past the first position that
+  is used again at another such position or in another chain) are errors; a
+  shared entry of two chains is not a conflict. The editor does not save such
+  a chain and says which copy to make; the build drops a saved one with the
+  same hint; the home screen shows a «Hop chain "…" is not built» banner with
+  **Open chain** (Dismiss hides it until the config changes). A typical old
+  chain `[node, Direction with all nodes]` is a ring of this kind. A node past
+  the first position with a fixed local port (WireGuard/AmneziaWG
+  `listen_port`, Tailscale `listen_port`/`relay_server_port`, OpenConnect
+  `dtls_local_port`) drops the chain too; the port is not removed. The chain
+  keys `idle_timeout`, `strip` and `strip_evasion` are no longer supported:
+  a saved chain or a backup is read without them, and the editor loses its
+  Advanced block. Both chains of a conflict are named by tag. An editor with a
+  chain that cannot be saved can be left without saving. The core's internal
+  `chain-hop` outbounds are hidden from lists. Contract 1.1.184.
+  (RU: цепочки под новое ядро — у узла один путь. Ядро ведёт каждый узел
+  после первой позиции через цепочку, переписывая его `detour`, и копий узлов
+  больше не делает. Кольцо (узел на входе стоит и внутри Направления дальше в
+  той же цепочке, или detour ведёт обратно в цепочку) и конфликт (узел или
+  Направление после первой позиции встречается ещё на такой же позиции или в
+  другой цепочке) — ошибка; общий вход двух цепочек конфликтом не считается.
+  Редактор такую цепочку не сохраняет и подсказывает, какую копию сделать;
+  сохранённую раньше сборка снимает с той же подсказкой, на главном — плашка
+  «Hop chain "…" is not built» с кнопкой Open chain (Dismiss скрывает её до
+  следующего изменения конфига). Старая цепочка вида `[узел, Направление со
+  всеми узлами]` — как раз такое кольцо. Узел после первой позиции с
+  фиксированным локальным портом (`listen_port` WireGuard/AmneziaWG,
+  `listen_port`/`relay_server_port` Tailscale, `dtls_local_port` OpenConnect)
+  тоже снимает цепочку; порт не убирается. Ключи цепочки `idle_timeout`,
+  `strip`, `strip_evasion` больше не поддерживаются: сохранённая цепочка и
+  бэкап читаются без них, блок Advanced из редактора убран. Обе цепочки
+  конфликта названы по тегу. Из редактора цепочки, которую нельзя сохранить,
+  можно выйти без сохранения. Служебные outbound `chain-hop` ядра в списках
+  скрыты. Контракт 1.1.184.)
 
-- **Core `v1.14.4-lx.37-rc.1`.** `round_robin` repairs itself on a failed
-  connection instead of waiting for the next check: a retry through another
-  slot, a dead node replaced from a reserve of live nodes, a node that fails
-  more than the rest set aside until the next check. A manual group test now
-  clears the latency of nodes that did not answer. Also: a `tls.fragment`
-  hang fixed, `least_test` and `failover` leave a node whose server refuses
-  connections, SOCKS and ShadowTLS handshakes limited to 15 s.
+- **A route rule is built from conditions ([details](docs/spec/tasks/757-rule-conditions-tree.md), contract 1.1.182).**
+  The body of a custom rule is a stack of conditions joined by AND; values
+  inside one condition are «any of». **+ Condition** opens a menu of
+  conditions; its **Rule group** item adds a group with «all of / any of» and
+  **Not**, whose nested rules open in the same editor at any depth. Rule sets by URL are the
+  **Destination / Rule sets** field of a condition stack: the Inline / Remote
+  switch is gone, the mode is **Conditions / Raw JSON**. The screen of a
+  custom rule has the tabs **Params | DNS | View**; the DNS & Resolve block
+  moved to the DNS tab unchanged. The network type segment became the
+  **Network type** condition. A rule without conditions is not saved. OR, NOT and
+  a rule set next to the rule's own domains, which used to need hand-written
+  JSON and lost the DNS options, are now built in the form. Rule-set tags in the config follow the norm shared with the
+  launcher; downloaded rule-set files are renamed to the new names, not
+  downloaded again. A backup is now written as format 3, which L×Box before
+  2.26.0 refuses as a whole.
+  (RU: правило маршрута собирается из условий: тело своего правила — стопка
+  условий через И, значения внутри одного условия — «any of». + Condition
+  открывает меню условий; пункт Rule group добавляет группу с «all of / any
+  of» и Not, вложенные правила группы открываются тем же редактором на любую
+  глубину. Наборы
+  по ссылке — поле Destination / Rule sets у стопки условий; переключатель
+  Inline / Remote убран, режим — Conditions / Raw JSON. У своего правила
+  вкладки Params | DNS | View; блок DNS & Resolve переехал на вкладку DNS без
+  изменений. Сегмент типа сети стал условием Network type. Правило без
+  условий не сохраняется. ИЛИ, НЕ и набор рядом со своими доменами правила,
+  которые раньше требовали ручного JSON и теряли DNS-опции, теперь собираются
+  в форме. Теги наборов в конфиге — по общей с
+  лаунчером норме; скачанные файлы наборов переименовываются, а не качаются
+  заново. Бэкап пишется в формате 3; L×Box до 2.26.0 такой файл отвергает
+  целиком.)
 
-- **TrustTunnel `tt://` links by the registry ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.175).**
-  The link is now read by a table: the binary container is described in the
-  protocol record of the registry, and the application no longer carries a
-  decoder written for this one format. What changed for the node: the
-  certificate name (`tls.server_name`) is always the host name of the link —
-  a custom SNI is reported and not applied, because the core has one name for
-  both and the certificate is issued for the host name; a certificate chain
-  arrives as one PEM block per certificate; the TLS profile of the link turns
-  on uTLS (Chrome, Safari, Firefox, Android), except with HTTP/3. Notices are
-  the final ones: `tt_field_unsupported` names the setting the node cannot
+- **DNS options of a rule work with port and protocol filters ([details](docs/spec/tasks/755-block-https-svcb-records.md)).**
+  Dedicated server, Fixed IP, Force IPv4 and Block HTTPS were unavailable once
+  a rule had a port, protocol or network filter. Ports of a custom rule now
+  sit on the routing rule instead of its rule-set (the match is the same), and
+  the DNS options apply to the rule's domains on any port and protocol. A
+  Force IPv4 box that was ticked on such a rule and silently did nothing now
+  takes effect.
+  (RU: DNS-опции правила (Dedicated server, Fixed IP, Force IPv4, Block HTTPS)
+  работают и с фильтрами по портам, протоколам и сети — на домены правила на
+  любом порту. Порты правила стоят на маршрутном правиле, а не в его наборе;
+  смысл тот же. Отмеченная раньше, но молча не действовавшая Force IPv4 у
+  такого правила теперь действует.)
+
+- **Core `v1.14.4-lx.37` ([details](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).**
+  `round_robin` repairs itself on a failed connection instead of waiting for
+  the next check: a retry through another slot, a dead node replaced from a
+  reserve of live nodes, a site that one node cannot open moved to another, a
+  node that fails more than the rest set aside until the next check.
+  WireGuard and AmneziaWG tunnels without a detour are faster, and a queued
+  packet holds about 2 KiB instead of 64 KiB. DNS over a proxied stream no
+  longer loses queries in bursts; an HTTP proxy that never answers no longer
+  piles up connections; a `tls.fragment` hang is fixed; `least_test` and
+  `failover` leave a node whose server refuses connections; SOCKS and
+  ShadowTLS handshakes are limited to 15 s; a manual group test clears the
+  latency of nodes that did not answer. The core moved the tunnel sleep keys
+  into `lx.wg.idle` and the MTU alignment setting into `lx.detour.mtu_align`;
+  the app writes the new names, and a mixin with an old name is rewritten when
+  it is read.
+  (RU: ядро `v1.14.4-lx.37`. `round_robin` чинит себя при сбое
+  соединения, не дожидаясь следующей проверки: повтор через другой слот,
+  замена мёртвого узла из резерва живых, сайт, который не открывается через
+  один узел, уходит на другой, узел, который сбоит чаще остальных, отложен до
+  следующей проверки. Туннели WireGuard и AmneziaWG без detour быстрее, пакет
+  в очереди держит около 2 КБ вместо 64 КБ. DNS через проксированный поток не
+  теряет запросы пачками; молчащий HTTP-прокси не копит соединения; зависание
+  `tls.fragment` исправлено; `least_test` и `failover` уходят с узла, сервер
+  которого отказывает в соединении; рукопожатия SOCKS и ShadowTLS ограничены
+  15 с; ручной тест группы сбрасывает задержку не ответивших узлов. Ключи сна
+  туннелей ядро перенесло в `lx.wg.idle`, выравнивание MTU — в
+  `lx.detour.mtu_align`; приложение пишет новые имена, миксин со старым
+  именем переписывается при чтении.)
+
+- **Two processes: the tunnel and the window ([details](docs/spec/tasks/747-two-processes-ui-bg.md)).**
+  The VPN service with the core runs in the `:bg` process, the window with
+  Flutter in `:ui`; the window does not load the core at all and talks to
+  `:bg` over a provider call and an event pipe. Closing the window ends `:ui`
+  (VPN on: about 240 → 110 MB on the emulator); VPN off and window closed — no
+  process left; VPN off and window open — `:bg` restarts without the core.
+  While the VPN is on a minimised window is kept alive by the service, so
+  background Dart work is unchanged. Cold start of the window about 1.5 s on
+  the emulator. Checked on Android 14 and 16 emulators, not on phones; one
+  unreproduced lost start in about a hundred attempts — the start path now
+  leaves a trace in the log.
+  (RU: сервис VPN с ядром работает в процессе `:bg`, окно с Flutter — в
+  `:ui`; окно ядро не загружает и общается с `:bg` вызовами и каналом
+  событий. Закрытие окна завершает `:ui` (VPN включён: примерно 240 → 110 МБ
+  на эмуляторе); VPN выключен и окно закрыто — процессов нет; VPN выключен и
+  окно открыто — `:bg` перезапускается без ядра. Пока VPN включён, свёрнутое
+  окно удерживается сервисом, фоновая работа Dart не меняется. Холодный старт
+  окна около 1,5 с на эмуляторе. Проверено на эмуляторах Android 14 и 16, на
+  телефонах нет; один невоспроизведённый потерянный старт примерно на сто
+  попыток — путь старта теперь пишет след в лог.)
+
+- **TrustTunnel `tt://` links by the registry ([details](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.175).**
+  The link is read by a table described in the protocol record of the
+  registry instead of a decoder written for this one format. What changed for
+  the node: the certificate name (`tls.server_name`) is always the host name
+  of the link — a custom SNI is reported and not applied, because the core has
+  one name for both and the certificate is issued for the host name; a
+  certificate chain arrives as one PEM block per certificate; the TLS profile
+  of the link turns on uTLS (Chrome, Safari, Firefox, Android), except with
+  HTTP/3. Notices: `tt_field_unsupported` names the setting the node cannot
   express, `tt_subscription_ignored` — a subscription address next to a
-  server, `tt_subscription_only` — a link that carries only a subscription. A link with a subscription address that is not
-  `https://` is rejected. The engine can also build a `tt://` link back from a
-  node body, byte for byte as the AdGuard encoder. Issue #194.
-  (RU: Ссылки `tt://` TrustTunnel по реестру: ссылку читает таблица — бинарный
-  контейнер описан в записи протокола реестра, отдельного декодера под этот
-  формат в приложении больше нет. Что изменилось для узла: имя сертификата
+  server, `tt_subscription_only` — a link that carries only a subscription. A
+  link with a subscription address that is not `https://` is rejected.
+  Issue #194.
+  (RU: ссылки `tt://` TrustTunnel читает таблица из записи протокола в
+  реестре, отдельного декодера под этот формат нет. Для узла: имя сертификата
   (`tls.server_name`) — всегда имя хоста из ссылки; свой SNI называется в
   предупреждении и не применяется, потому что у ядра имя одно на оба смысла, а
   сертификат выписан на имя хоста; цепочка сертификатов приезжает блоком PEM
   на каждый сертификат; TLS-профиль ссылки включает uTLS (Chrome, Safari,
-  Firefox, Android), кроме HTTP/3. Предупреждения — финальные:
-  `tt_field_unsupported` называет настройку, которую узел выразить не может,
-  `tt_subscription_ignored` — адрес подписки рядом с сервером,
-  `tt_subscription_only` — ссылку, несущую только подписку. Ссылка с адресом подписки не `https://` отвергается. Движок
-  умеет собрать ссылку `tt://` обратно из тела узла, байт в байт как энкодер
-  AdGuard. Issue #194.)
-- **Core v1.14.4-lx.36 ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** WireGuard and AmneziaWG tunnels without a detour are faster and a queued packet holds about 2 KiB instead of 64 KiB; DNS over a proxied stream no longer loses queries in bursts; an HTTP proxy that never answers no longer piles up connections. The core moved the tunnel sleep keys into `lx.wg.idle`; the app writes the new names, and a mixin with an old name is rewritten when it is read.
-  (RU: ядро v1.14.4-lx.36 — туннели WireGuard и AmneziaWG без detour быстрее, пакет в очереди держит около 2 КБ вместо 64 КБ; DNS через проксированный поток не теряет запросы пачками; молчащий HTTP-прокси не копит соединения. Ключи сна туннелей ядро перенесло в `lx.wg.idle`; приложение пишет новые имена, миксин со старым именем переписывается при чтении.)
+  Firefox, Android), кроме HTTP/3. Предупреждения: `tt_field_unsupported` —
+  настройка, которую узел выразить не может, `tt_subscription_ignored` —
+  адрес подписки рядом с сервером, `tt_subscription_only` — ссылка, несущая
+  только подписку. Ссылка с адресом подписки не `https://` отвергается. Issue
+  #194.)
+
+- **WARP: the generator no longer writes `reserved`.** The WARP node generator put the registration's `client_id` into the peer as `reserved`; from Russian networks DPI recognises WARP by it and cuts an AmneziaWG tunnel after about 20 packets. The node is now built without `reserved`, the **Bind to this device (reserved)** option is removed from the WARP wizard, and the Debug API `POST /warp` no longer takes `includeReserved`. A node you already have keeps its `reserved` until you recreate it; imported links with `reserved` are read as before.
+  (RU: генератор WARP больше не пишет `reserved`: из российских сетей DPI узнаёт WARP по `client_id` и рвёт туннель AmneziaWG примерно после 20 пакетов. Узел строится без `reserved`, опция Bind to this device (reserved) убрана из мастера WARP, Debug API `POST /warp` больше не принимает `includeReserved`. Уже созданный узел сохраняет `reserved` до пересоздания; импортируемые ссылки с `reserved` читаются как раньше.)
+
+- **Comments in a server's JSON are kept ([details](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).** A server pasted or edited as JSON keeps its `//`, `/* */` and `#` comments: the Source tab shows the text as typed after pasting, saving and restoring a backup, and the «Comments were removed.» message is gone. Comments are skipped only when the app reads the JSON; the same server with and without comments is still one server in a backup. Comments are still lost where the app rewrites the text itself: a pasted whole config (only its nodes are kept), the Format button, Edit JSON and the masquerade section.
+  (RU: комментарии `//`, `/* */` и `#` в JSON сервера сохраняются: вкладка Source показывает текст как набран после вставки, сохранения и восстановления из бэкапа; сообщение «Comments were removed.» убрано. Теряются там, где приложение само переписывает текст: вставленный целый конфиг, кнопка Format, Edit JSON и секция маскировки.)
+
+- **A folder's server with an unavailable detour is marked in the list ([details](docs/spec/tasks/739-detour-unavailable-node-warning.md)).**
+  Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
+  (RU: в списке серверов папки ⚠ «Hop … unavailable» теперь стоит у строки того сервера, у которого detour снят при сборке.)
 
 ### Added
 
-- **Debug API controls the core's `impair` test outbound ([task 762](docs/spec/tasks/762-debug-api-impair.md)).**
-  `GET /impair/{tag}`, `POST /impair/{tag}/set` and `POST /impair/{tag}/schedule`
-  read and change the line of an `impair` outbound in the running core, for
-  scripted balancing and failure tests. Needs core `v1.14.4-lx.37-rc3`; the
-  app has no UI for `impair`. An `impair` node added as a server keeps its
-  tag as written and shows `☠ impair` as its protocol. `POST /subs` returns
-  the final config tags; `PATCH /nodes/{tag}` sets or clears a node's detour.
-  (RU: Debug API управляет тестовым outbound ядра `impair` — линия, расписание, статус на ходу; нужно ядро rc3, в интерфейсе `impair` нет. Узел `impair` сохраняет тег как передан, протокол в строке узла — `☠ impair`. `POST /subs` отдаёт итоговые теги, `PATCH /nodes/{tag}` ставит и снимает detour узла.)
-
-- **Load balance: the pool's self-repair is visible ([task 759](docs/spec/tasks/759-pool-self-heal-state.md), core SPEC 138).**
+- **Load balance: the pool's self-repair is visible ([details](docs/spec/tasks/759-pool-self-heal-state.md)).**
   View pool and the pool section of the group screen show what the core does
   when connections fail: `quarantine` on a node taken out of rotation, the
   slot's connections and confirmed failures, and above the slots — the number
@@ -89,19 +195,35 @@
   problem, and a freeze with the seconds left. A healthy pool looks as before.
   The traffic profiler records the node a connection actually went through
   when the core reports it after the connection was opened.
+  (RU: View pool и секция пула на экране группы показывают, что ядро делает
+  при сбоях соединений: `quarantine` у узла, выведенного из ротации,
+  соединения и подтверждённые сбои слота, а над слотами — число
+  sticky-ключей, переехавших в другой слот, число адресов, признанных
+  проблемой, и заморозку с остатком секунд. Здоровый пул выглядит как
+  раньше. Профайлер трафика записывает узел, через который соединение
+  действительно пошло, если ядро сообщает его после открытия соединения.)
 
-- **Copy link for a TrustTunnel node from a sing-box config ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md)).**
-  A `trusttunnel` node that came as an `endpoints[]` entry of a config, not as
-  a link, now gives a `tt://` link on Copy link (and in Debug API
-  `GET /nodes/link`) instead of the JSON text of the entry; the node's tag
-  becomes the name in the link. Nodes that came as a link or from a
-  TrustTunnel subscription give their original link, as before.
-  (RU: Copy link у узла TrustTunnel из конфига sing-box: узел `trusttunnel`,
-  пришедший записью `endpoints[]`, а не ссылкой, отдаёт ссылку `tt://` вместо
-  текста записи JSON — и в Debug API `GET /nodes/link`; имя в ссылке — тег
-  узла. Узлы из ссылки и из подписки TrustTunnel отдают исходную ссылку, как
-  раньше.)
-- **TrustTunnel subscriptions ([task 717](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.176).**
+- **The JSON tab of a node shows the node from the core ([details](docs/spec/tasks/761-core-rc2-chain-detour.md)).**
+  The tab shows the node as the running core holds it (Effective), with an
+  Effective / Original switch when the core changed it, and the list of
+  changes as `field: from → to` with the reason: a chain and its position, the
+  node type or a mode. With the tunnel down or a tag unknown to the core the
+  tab says «No data from the core» and does not substitute the app's config.
+  The Copy buttons still copy the node from the app's config.
+  (RU: вкладка JSON узла показывает узел таким, каким его держит работающее
+  ядро (Effective); если ядро его изменило — переключатель Effective /
+  Original и список изменений `поле: было → стало` с причиной: цепочка и
+  позиция, тип узла или режим. Туннель не поднят или тег ядру неизвестен —
+  «No data from the core», свой конфиг не подставляется. Кнопки Copy
+  по-прежнему копируют узел из конфига приложения.)
+
+- **Block HTTPS/SVCB records ([details](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227), contract 1.1.173).** Without FakeIP, Chrome took the ECH key from the HTTPS DNS record and hid the site name behind `cloudflare-ech.com`, so a domain rule silently missed and the traffic left by the default route. The DNS settings of a rule get a **Block HTTPS/SVCB records** box: HTTPS/SVCB queries for the rule's domains get an empty answer, the browser sends the name in the clear and the rule matches. The box ticks itself when domains are filled in; it is unavailable without a domain condition; saved rules are not changed. A new preset of the same name (off by default) does it for every domain.
+  (RU: без FakeIP Chrome брал ключ ECH из HTTPS-записи DNS и прятал имя сайта за `cloudflare-ech.com` — правило по домену молча не срабатывало. В DNS-настройках правила — галочка Block HTTPS/SVCB records: пустой ответ на HTTPS/SVCB-запросы доменов правила, браузер шлёт имя открыто. Ставится сама при заполнении доменов, без условия по домену недоступна, сохранённые правила не меняются. Новый одноимённый пресет (выключен по умолчанию) — то же для всех доменов.)
+
+- **An AI assistant can diagnose and manage the network ([details](docs/spec/tasks/750-ai-assistant-network-control.md)).** On Android 16+ the set of functions for system assistants grows from three to ten: an address check by stages (`checkUrl`), the external IP and country of a Direction's exit (`checkExit`), the list of a Direction's exits and switching between them, an app search, and a gateway to a part of the Debug API (`getApiHelp`, `callApi`) — rules, Directions, sources and connections. Reading and checks sit behind «AI assistant control»; changing settings needs the new «Let assistants change settings» switch (App Settings → Automation → AI assistants), off by default. Config, keys, subscription links, backups and logs stay closed. The Debug API gets `/assistant/*` routes for an agent on a computer: network overview, a Direction's exits, the address and exit checks, an app search, which rule catches an app, switching the exit, turning a connection on or off. Guide: [AI assistants and your network](docs/AI_ASSISTANT.md).
+  (RU: ИИ-ассистент на Android 16+ получает десять функций вместо трёх: проверку адреса по стадиям, внешний IP и страну выхода Направления, список выходов и их смену, поиск приложения и шлюз к части Debug API — правила, Направления, источники, подключения. Чтения и проверки — под «AI assistant control»; изменения настроек — под новым тумблером «Let assistants change settings», выключенным по умолчанию. Конфиг, ключи, ссылки подписок, бэкапы и логи закрыты. В Debug API — маршруты `/assistant/*` для агента на компьютере. Гайд: [ИИ-ассистент и ваша сеть](docs/AI_ASSISTANT.ru.md).)
+
+- **TrustTunnel subscriptions and Copy link ([details](docs/spec/tasks/717-trusttunnel-deeplink-uri.md), contract 1.1.176).**
   The address a TrustTunnel server gives out as a subscription
   (`https://user:password@host/path`) is added as any subscription URL: the
   server's answer becomes a `trusttunnel` node, the same one its `tt://` link
@@ -109,78 +231,70 @@
   as HTTP Basic credentials — this now works for any subscription URL with
   credentials in it, and a password with special characters reaches the server
   intact; the password no longer appears in the text of a download error. A
-  `tt://` link that carries only a subscription address is no longer rejected
-  when you paste it, scan it or type it in: it is added as that subscription.
-  Inside a list of links or another subscription such a link is still skipped
-  with `tt_subscription_only`.
-  (RU: Подписки TrustTunnel: адрес, который сервер TrustTunnel выдаёт как
-  подписку (`https://user:password@host/path`), добавляется как любой URL
-  подписки — ответ сервера становится узлом `trusttunnel`, тем же, что дала бы
-  его ссылка `tt://`. Логин и пароль из адреса уходят серверу как HTTP Basic —
-  теперь это работает у любого URL подписки с учётными данными, и пароль со
-  спецсимволами доходит до сервера без искажений; в текст ошибки загрузки
-  пароль больше не попадает. Ссылка `tt://`, несущая только адрес подписки,
-  при вставке, сканировании или вводе больше не отвергается: по ней
-  добавляется эта подписка. Внутри списка ссылок или чужой подписки такая
-  ссылка по-прежнему пропускается с `tt_subscription_only`.)
-- **Three new WireGuard / AmneziaWG settings ([task 758](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (8 by default, about 1 MiB per tunnel; the core's own default 128 costs about 16 MiB, and 1–2 suit dozens of nodes), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
+  `tt://` link that carries only a subscription address is added as that
+  subscription when you paste it, scan it or type it in; inside a list of
+  links or another subscription it is still skipped with
+  `tt_subscription_only`. A `trusttunnel` node that came as an `endpoints[]`
+  entry of a sing-box config gives a `tt://` link on Copy link (and in Debug
+  API `GET /nodes/link`) instead of the JSON text of the entry, with the
+  node's tag as the name.
+  (RU: адрес, который сервер TrustTunnel выдаёт как подписку
+  (`https://user:password@host/path`), добавляется как любой URL подписки —
+  ответ сервера становится узлом `trusttunnel`, тем же, что дала бы его
+  ссылка `tt://`. Логин и пароль из адреса уходят серверу как HTTP Basic —
+  теперь у любого URL подписки с учётными данными, пароль со спецсимволами
+  доходит без искажений и больше не попадает в текст ошибки загрузки. Ссылка
+  `tt://`, несущая только адрес подписки, при вставке, сканировании или вводе
+  добавляет эту подписку; внутри списка ссылок или чужой подписки
+  по-прежнему пропускается с `tt_subscription_only`. Узел `trusttunnel` из
+  записи `endpoints[]` конфига sing-box на Copy link (и в Debug API
+  `GET /nodes/link`) отдаёт ссылку `tt://` вместо текста JSON, имя в ссылке —
+  тег узла.)
+
+- **Three new WireGuard / AmneziaWG settings ([details](docs/spec/tasks/758-core-lx36-wg-idle-buffers-connected-socket.md)).** Settings → Core → WireGuard gets **Datagrams per read** (8 by default, about 1 MiB per tunnel; the core's own default 128 costs about 16 MiB, and 1–2 suit dozens of nodes), **MTU-sized send buffers** (a diagnostic switch, on) and **Connected tunnel socket** (more upload for a tunnel with one server, off: not yet tested on a phone that switches between Wi-Fi and mobile data). They apply to tunnels without a detour.
   (RU: в Settings → Core → WireGuard три новые опции: Datagrams per read (по умолчанию 8 — около 1 МБ на туннель; умолчание самого ядра 128 стоит около 16 МБ, 1–2 — для десятков узлов), MTU-sized send buffers (диагностический, включён) и Connected tunnel socket (быстрее отдача у туннеля с одним сервером; выключен — на телефоне со сменой Wi-Fi и мобильной сети не проверен). Действуют на туннели без detour.)
 
 ### Fixed
 
-- **The VPN notification comes back after it is swiped away ([task 223](docs/spec/tasks/223-notification-live-labels.md)).** On Android 14 and later the notification of a running VPN can be swiped away or cleared with the rest of the shade (HyperOS does it on "clear all"). The tunnel kept working, but the notification stayed gone until the next connect or node change. It now returns at once while the VPN is on; after Stop it does not come back.
+- **The VPN notification comes back after it is swiped away ([details](docs/spec/tasks/223-notification-live-labels.md)).** On Android 14 and later the notification of a running VPN can be swiped away or cleared with the rest of the shade (HyperOS does it on "clear all"). The tunnel kept working, but the notification stayed gone until the next connect or node change. It now returns at once while the VPN is on; after Stop it does not come back.
   (RU: уведомление VPN возвращается, если его смахнуть: на Android 14+ его можно убрать свайпом или очисткой шторки (HyperOS убирает его кнопкой «очистить всё»), туннель продолжал работать, а уведомление не появлялось до переподключения или смены узла. Теперь оно сразу возвращается, пока VPN включён; после Stop не появляется.)
 
-- **WARP: the generator no longer writes `reserved`.** The WARP node generator put the registration's `client_id` into the peer as `reserved`; from Russian networks DPI recognises WARP by it and cuts an AmneziaWG tunnel after about 20 packets. The node is now built without `reserved`, the **Bind to this device (reserved)** option is removed from the WARP wizard, and the Debug API `POST /warp` no longer takes `includeReserved`. A node you already have keeps its `reserved` until you recreate it; imported links with `reserved` are read as before.
-  (RU: генератор WARP больше не пишет `reserved`: из российских сетей DPI узнаёт WARP по `client_id` и рвёт туннель AmneziaWG примерно после 20 пакетов. Узел строится без `reserved`, опция Bind to this device (reserved) убрана из мастера WARP, Debug API `POST /warp` больше не принимает `includeReserved`. Уже созданный узел сохраняет `reserved` до пересоздания; импортируемые ссылки с `reserved` читаются как раньше.)
-
-### Fixed
-
-- **The server test of a subscription stopped at the same node with TLS Fragment on ([task 731](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).** With fragmentation the core waits for the server to acknowledge each piece of the handshake and does not apply the test timeout to that wait, so a server that accepts the connection and then stays silent never got a result. Ten such servers took all test slots, and the counter stopped. The app now stops waiting 3 s after the test timeout, as it already did for the ping with the VPN on, and marks the server as failed.
+- **The server test of a subscription stopped at the same node with TLS Fragment on ([details](docs/spec/tasks/731-chain-links-namesakes-ping-deadline.md)).** With fragmentation the core waits for the server to acknowledge each piece of the handshake and does not apply the test timeout to that wait, so a server that accepts the connection and then stays silent never got a result. Ten such servers took all test slots, and the counter stopped. The app now stops waiting 3 s after the test timeout, as it already did for the ping with the VPN on, and marks the server as failed.
   (RU: тест серверов подписки вставал на одном и том же числе при включённом TLS Fragment: ядро ждало от молчащего сервера подтверждения куска рукопожатия мимо таймаута замера, десять таких серверов занимали все слоты теста. Теперь приложение перестаёт ждать через 3 с после таймаута замера, как уже делал пинг при включённом VPN, и отмечает сервер недоступным.)
 
-## [2.25.23] — 2026-11-17
-
-### Added
-
-- **Block HTTPS/SVCB records ([task 755](docs/spec/tasks/755-block-https-svcb-records.md), [#227](https://github.com/Leadaxe/LxBox/issues/227), contract 1.1.173).** Without FakeIP, Chrome took the ECH key from the HTTPS DNS record and hid the site name behind `cloudflare-ech.com`, so a domain rule silently missed and the traffic left by the default route. A rule's DNS & Resolve section gets a **Block HTTPS/SVCB records** box: HTTPS/SVCB queries for the rule's domains get an empty answer, the browser sends the name in the clear and the rule matches. The box ticks itself when domains are filled in; it is unavailable without a domain condition; saved rules are not changed. A new preset of the same name (off by default) does it for every domain.
-  (RU: без FakeIP Chrome брал ключ ECH из HTTPS-записи DNS и прятал имя сайта за `cloudflare-ech.com` — правило по домену молча не срабатывало. В секции DNS & Resolve правила — галочка Block HTTPS/SVCB records: пустой ответ на HTTPS/SVCB-запросы доменов правила, браузер шлёт имя открыто. Ставится сама при заполнении доменов, без условия по домену недоступна, сохранённые правила не меняются. Новый одноимённый пресет (выключен по умолчанию) — то же для всех доменов.)
-- **An AI assistant can diagnose and manage the network ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** On Android 16+ the set of functions for system assistants grows from three to ten: an address check by stages (`checkUrl`), the external IP and country of a Direction's exit (`checkExit`), the list of a Direction's exits and switching between them, an app search, and a gateway to a part of the Debug API (`getApiHelp`, `callApi`) — rules, Directions, sources and connections. Reading and checks sit behind «AI assistant control»; changing settings needs the new «Let assistants change settings» switch (App Settings → Automation → AI assistants), off by default. Config, keys, subscription links, backups and logs stay closed. Guide: [AI assistants and your network](docs/AI_ASSISTANT.md).
-  (RU: ИИ-ассистент на Android 16+ получает десять функций вместо трёх: проверку адреса по стадиям, внешний IP и страну выхода Направления, список выходов и их смену, поиск приложения и шлюз к части Debug API — правила, Направления, источники, подключения. Чтения и проверки — под «AI assistant control»; изменения настроек — под новым тумблером «Let assistants change settings», выключенным по умолчанию. Конфиг, ключи, ссылки подписок, бэкапы и логи закрыты. Гайд: [ИИ-ассистент и ваша сеть](docs/AI_ASSISTANT.ru.md).)
-- **Debug API: `/assistant/*` ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** New routes for an agent on a computer: network overview with work connections and their state, a Direction's exits, the address check (URL Check), the exit check, an app search, which rule catches an app, switching the exit, turning a connection on or off.
-  (RU: Debug API — новые маршруты `/assistant/*` для агента на компьютере: обзор сети с рабочими подключениями и их состоянием, выходы Направления, проверка адреса (URL Check), проверка выхода, поиск приложения, правило для приложения, смена выхода, включение и выключение подключения.)
-
-### Changed
-
-- **DNS options of a rule work with port and protocol filters ([task 755](docs/spec/tasks/755-block-https-svcb-records.md)).** Dedicated server, Fixed IP, Force IPv4 and Block HTTPS were unavailable once a rule had a port, protocol or network filter. Ports of a custom rule now sit on the routing rule instead of its rule-set (the match is the same), and the DNS options apply to the rule's domains on any port and protocol. A Force IPv4 box that was ticked on such a rule and silently did nothing now takes effect.
-  (RU: DNS-опции правила (Dedicated server, Fixed IP, Force IPv4, Block HTTPS) работают и с фильтрами по портам, протоколам и сети — на домены правила на любом порту. Порты правила стоят на маршрутном правиле, а не в его наборе; смысл тот же. Отмеченная раньше, но молча не действовавшая Force IPv4 у такого правила теперь действует.)
-- **Two processes: the tunnel and the window ([task 747](docs/spec/tasks/747-two-processes-ui-bg.md)).** The VPN service with the core runs in the `:bg` process, the window with Flutter in `:ui`; the window does not load the core at all and talks to `:bg` over a provider call and an event pipe. Closing the window ends `:ui` (VPN on: about 240 → 110 MB on the emulator); VPN off and window closed — no process left; VPN off and window open — `:bg` restarts without the core. While the VPN is on a minimised window is kept alive by the service, so background Dart work is unchanged. Cold start of the window about 1.5 s on the emulator. Checked on Android 14 and 16 emulators, not on phones; one unreproduced lost start in about a hundred attempts — the start path now leaves a trace in the log.
-  (RU: сервис VPN с ядром работает в процессе `:bg`, окно с Flutter — в `:ui`; окно ядро не загружает и общается с `:bg` вызовами и каналом событий. Закрытие окна завершает `:ui` (VPN включён: примерно 240 → 110 МБ на эмуляторе); VPN выключен и окно закрыто — процессов нет; VPN выключен и окно открыто — `:bg` перезапускается без ядра. Пока VPN включён, свёрнутое окно удерживается сервисом, фоновая работа Dart не меняется. Холодный старт окна около 1,5 с на эмуляторе. Проверено на эмуляторах Android 14 и 16, на телефонах нет; один невоспроизведённый потерянный старт примерно на сто попыток — путь старта теперь пишет след в журнал.)
-- **Comments in a server's JSON are kept ([task 741](docs/spec/tasks/741-json-comments-kept-in-source.md), [#171](https://github.com/Leadaxe/LxBox/issues/171), contract 1.1.172).** A server pasted or edited as JSON keeps its `//`, `/* */` and `#` comments: the Source tab shows the text as typed after pasting, saving and restoring a backup, and the «Comments were removed.» message is gone. Comments are skipped only when the app reads the JSON; the same server with and without comments is still one server in a backup. A pasted whole config keeps only its nodes, and that text is rebuilt without comments, as before.
-  (RU: комментарии `//`, `/* */` и `#` в JSON сервера сохраняются: вкладка Source показывает текст как набран после вставки, сохранения и восстановления из бэкапа; сообщение «Comments were removed.» убрано.)
-- **A folder's server with an unavailable detour is marked in the list ([task 739](docs/spec/tasks/739-detour-unavailable-node-warning.md)).** Inside a folder, the server whose detour was removed at build now shows the ⚠ «Hop … unavailable: hop removed» line on its own row, not only on the folder and the server's card. Tap it to read what happened; it goes away after the next build once the target is back.
-  (RU: в списке серверов папки ⚠ «Hop … unavailable» теперь стоит у строки того сервера, у которого detour снят при сборке.)
-
-### Fixed
-
-- **The Detour server window offers replace groups ([task 756](docs/spec/tasks/756-detour-picker-replace-groups.md)).** A subscription or folder replaced with a group could not be picked as a detour for another server; the window now has a Replace groups section with such groups in every mode.
-  (RU: подписку или папку, свёрнутую в группу, нельзя было выбрать как detour для другого сервера; в окне Detour server появился раздел Replace groups с такими группами во всех режимах.)
-- **The «Errors (N)» row no longer hides under the navigation bar ([task 754](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** With three-button navigation the red row on the main screen was drawn under the system buttons and a tap hit the system button; the row now sits above the bar.
-  (RU: при трёхкнопочной навигации красная строка «Errors (N)» на главном рисовалась под системными кнопками, тап попадал в системную кнопку; теперь строка над панелью.)
-- **Assistant `checkUrl` / `checkExit` while the core is not up ([task 750](docs/spec/tasks/750-ai-assistant-network-control.md)).** They answer «The VPN core is not reachable yet», like `selectExit`, instead of a raw RPC error.
-  (RU: `checkUrl` и `checkExit` до того, как ядро стало доступно, отвечают «The VPN core is not reachable yet», как `selectExit`, а не сырой ошибкой RPC.)
-- **Imported backup shows up at once and is no longer lost ([task 748](docs/spec/tasks/748-backup-import-remounts-scene.md)).** After Settings → Backup → Transfer to desktop → Import, the imported servers did not appear until the app was restarted. Worse, changing anything in the server list before a restart, such as turning a server off, wrote the old list back and the imported servers were gone. The same happened after a regular restore if «Restart now» was not tapped, and after `POST /backup/import` in the Debug API. Now the app reloads its state right after the import and returns to the main screen: everything imported is visible at once and later changes keep it. The running VPN is not stopped; the config is rebuilt like after any settings change.
+- **Imported backup shows up at once and is no longer lost ([details](docs/spec/tasks/748-backup-import-remounts-scene.md)).** After Settings → Backup → Transfer to desktop → Import, the imported servers did not appear until the app was restarted. Worse, changing anything in the server list before a restart, such as turning a server off, wrote the old list back and the imported servers were gone. The same happened after a regular restore if «Restart now» was not tapped, and after `POST /backup/import` in the Debug API. Now the app reloads its state right after the import and returns to the main screen: everything imported is visible at once and later changes keep it. The running VPN is not stopped; the config is rebuilt like after any settings change.
   (RU: после импорта LX Backup импортированные серверы не появлялись до перезапуска, а любая правка списка серверов до перезапуска (например, выключить сервер) записывала старый список — импортированное пропадало. То же у обычного restore без «Restart now» и у `POST /backup/import` Debug API. Теперь приложение сразу перечитывает состояние после импорта и возвращается на главный экран: импортированное видно и сохраняется; VPN не останавливается, конфиг пересобирается как после любой смены настроек.)
-- **Format and highlighting for a server JSON that starts with a comment ([task 749](docs/spec/tasks/749-editor-json-leading-comment.md)).** A server pasted as JSON whose first line is a comment (`// …`, `/* … */` or `# …`) keeps that comment on the Source tab since task 741, but the editor did not recognise the text as JSON: no syntax highlighting and no Format item in the ⋮ menu. Leading comments are now skipped when the editor detects the language; WireGuard `.conf` files with `#` comments are still shown as INI.
-  (RU: сервер, вставленный JSON-ом с комментарием в первой строке (`// …`, `/* … */`, `# …`), на вкладке Source был без подсветки и без пункта Format в меню ⋮ — теперь редактор пропускает ведущие комментарии и узнаёт JSON; WireGuard `.conf` с `#`-комментариями по-прежнему INI.)
-- **TV remote leaves text fields ([task 746](docs/spec/tasks/746-tv-text-field-dpad-exit.md)).** On Android TV the remote got stuck in any text field of a form — a rule name, OpenConnect fields, a subscription URL: up and down only moved the cursor, so the buttons and switches below could not be reached. Now up and down leave a one-line field; in a multi-line field they leave from its first or last line. Left and right still move the cursor and leave the field at the start or end of the text. Typing, selection and keyboard shortcuts work as before.
-  (RU: на TV пульт застревал в любом текстовом поле формы — имя правила, поля OpenConnect, URL подписки: ↑/↓ двигали только каретку. Теперь ↑/↓ выводят из однострочного поля, из многострочного — с первой или последней строки; ←/→ двигают каретку и выводят из поля на краю текста.)
-- **TV remote no longer gets stuck in option lists ([task 744](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).** In lists of round options — theme and language in App Settings → Appearance, background mode, detour mode, rule type and others — the arrow keys used to pick the next option at once and loop inside the list, so on Android TV the theme changed while you just moved past it and there was no way out with the remote. Arrows now only move the focus and leave the list at its first and last option, like everywhere else; OK, Enter, Space or a tap picks an option. Switching a tab with the mouse or by touch also takes the focus off the hidden tab, so the keys no longer change settings you cannot see.
-  (RU: в списках-переключателях — тема и язык в App Settings → Appearance, фоновый режим, режим detour, тип правила и другие — стрелки сразу выбирали соседний пункт и крутились по кругу: на TV тема менялась при простом перемещении, а выйти из списка пультом было нельзя. Теперь стрелки только двигают фокус и выводят из списка на краях, выбор — OK/Enter/Space или тап. При переключении вкладки мышью или касанием фокус уходит со скрытой вкладки.)
-- **Dependent settings no longer look enabled when they are not in effect ([task 743](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).** In VPN Settings → Core → WireGuard, with «Suspend idle tunnels» off, «Lazy tunnel build» and «Built tunnels limit» are not passed to the core, but the greyed rows kept showing «on» and «12». A greyed row now shows a switch as off and a list as «Not in effect»; the saved value returns when the row becomes active again.
-  (RU: серая строка зависимой настройки больше не показывает сохранённое значение как действующее: переключатель рисуется выключенным, список — «Не действует».)
-- **The path preview no longer shows a detour that was removed ([task 752](docs/spec/tasks/752-detour-path-scheme-removed-hop.md)).** On the Settings tab of a server or folder member, the «Phone → … → Internet» line under **Detour server** kept drawing the path through the chosen detour even when the last build had removed it because the target was unavailable, right next to the ⚠ «Hop … unavailable: hop removed» warning. Now the path is struck through and a ⚠ line under it says the server goes directly. The detour on the Settings tab of a subscription or folder works the same way («nodes connect directly»). The chosen detour is kept, and the line returns to normal after the next build once the target is back.
+- **The Detour server window offers replace groups ([details](docs/spec/tasks/756-detour-picker-replace-groups.md)).** A subscription or folder replaced with a group could not be picked as a detour for another server; the window now has a Replace groups section with such groups in every mode.
+  (RU: подписку или папку, свёрнутую в группу, нельзя было выбрать как detour для другого сервера; в окне Detour server появился раздел Replace groups с такими группами во всех режимах.)
+- **The path preview no longer shows a detour that was removed ([details](docs/spec/tasks/752-detour-path-scheme-removed-hop.md)).** On the Settings tab of a server or folder member, the «Phone → … → Internet» line under **Detour server** kept drawing the path through the chosen detour even when the last build had removed it because the target was unavailable, right next to the ⚠ «Hop … unavailable: hop removed» warning. Now the path is struck through and a ⚠ line under it says the server goes directly. The detour on the Settings tab of a subscription or folder works the same way («nodes connect directly»). The chosen detour is kept, and the line returns to normal after the next build once the target is back.
   (RU: превью пути «Phone → … → Internet» под Detour server больше не рисует путь через detour, снятый последней сборкой (цель недоступна): путь перечёркнут, под ним строка с ⚠ «идёт напрямую»; так же — detour подписки и папки на их вкладке Settings. Выбор detour сохраняется, после пересборки с доступной целью строка возвращается к обычному виду.)
+- **The «Errors (N)» row no longer hides under the navigation bar ([details](docs/spec/tasks/754-errors-row-under-navigation-bar.md)).** With three-button navigation the red row on the main screen was drawn under the system buttons and a tap hit the system button; the row now sits above the bar.
+  (RU: при трёхкнопочной навигации красная строка «Errors (N)» на главном рисовалась под системными кнопками, тап попадал в системную кнопку; теперь строка над панелью.)
+- **Assistant `checkUrl` / `checkExit` while the core is not up ([details](docs/spec/tasks/750-ai-assistant-network-control.md)).** They answer «The VPN core is not reachable yet», like `selectExit`, instead of a raw RPC error.
+  (RU: `checkUrl` и `checkExit` до того, как ядро стало доступно, отвечают «The VPN core is not reachable yet», как `selectExit`, а не сырой ошибкой RPC.)
+- **Format and highlighting for a server JSON that starts with a comment ([details](docs/spec/tasks/749-editor-json-leading-comment.md)).** A server pasted as JSON whose first line is a comment (`// …`, `/* … */` or `# …`) keeps that comment on the Source tab, but the editor did not recognise the text as JSON: no syntax highlighting and no Format item in the ⋮ menu. Leading comments are now skipped when the editor detects the language; WireGuard `.conf` files with `#` comments are still shown as INI.
+  (RU: сервер, вставленный JSON-ом с комментарием в первой строке (`// …`, `/* … */`, `# …`), на вкладке Source был без подсветки и без пункта Format в меню ⋮ — теперь редактор пропускает ведущие комментарии и узнаёт JSON; WireGuard `.conf` с `#`-комментариями по-прежнему INI.)
+- **TV remote leaves text fields ([details](docs/spec/tasks/746-tv-text-field-dpad-exit.md)).** On Android TV the remote got stuck in any text field of a form — a rule name, OpenConnect fields, a subscription URL: up and down only moved the cursor, so the buttons and switches below could not be reached. Now up and down leave a one-line field; in a multi-line field they leave from its first or last line. Left and right still move the cursor and leave the field at the start or end of the text. While the on-screen keyboard is open it keeps the arrows for itself. Typing, selection and keyboard shortcuts work as before.
+  (RU: на TV пульт застревал в любом текстовом поле формы — имя правила, поля OpenConnect, URL подписки: ↑/↓ двигали только каретку. Теперь ↑/↓ выводят из однострочного поля, из многострочного — с первой или последней строки; ←/→ двигают каретку и выводят из поля на краю текста. Пока открыта экранная клавиатура, стрелки принадлежат ей.)
+- **TV remote no longer gets stuck in option lists ([details](docs/spec/tasks/744-tv-dpad-radio-groups.md), [#222](https://github.com/Leadaxe/LxBox/issues/222)).** In lists of round options — theme and language in App Settings → Appearance, background mode, detour mode, rule type and others — the arrow keys used to pick the next option at once and loop inside the list, so on Android TV the theme changed while you just moved past it and there was no way out with the remote. Arrows now only move the focus and leave the list at its first and last option, like everywhere else; OK, Enter, Space or a tap picks an option. Switching a tab with the mouse or by touch also takes the focus off the hidden tab, so the keys no longer change settings you cannot see.
+  (RU: в списках-переключателях — тема и язык в App Settings → Appearance, фоновый режим, режим detour, тип правила и другие — стрелки сразу выбирали соседний пункт и крутились по кругу: на TV тема менялась при простом перемещении, а выйти из списка пультом было нельзя. Теперь стрелки только двигают фокус и выводят из списка на краях, выбор — OK/Enter/Space или тап. При переключении вкладки мышью или касанием фокус уходит со скрытой вкладки.)
+- **Dependent settings no longer look enabled when they are not in effect ([details](docs/spec/tasks/743-disabled-vars-look-off.md), [#171](https://github.com/Leadaxe/LxBox/issues/171)).** In VPN Settings → Core → WireGuard, with «Suspend idle tunnels» off, «Lazy tunnel build» and «Built tunnels limit» are not passed to the core, but the greyed rows kept showing «on» and «12». A greyed row now shows a switch as off and a list as «Not in effect»; the saved value returns when the row becomes active again.
+  (RU: серая строка зависимой настройки больше не показывает сохранённое значение как действующее: переключатель рисуется выключенным, список — «Не действует».)
+
+### Internal
+
+- **Debug API controls the core's `impair` test outbound ([details](docs/spec/tasks/762-debug-api-impair.md)).**
+  `GET /impair/{tag}`, `POST /impair/{tag}/set` and `POST /impair/{tag}/schedule`
+  read and change the line of an `impair` outbound in the running core, for
+  scripted balancing and failure tests; the app has no UI for `impair`. An
+  `impair` node added as a server keeps its tag as written and shows
+  `☠ impair` as its protocol. `POST /subs` returns the final config tags;
+  `PATCH /nodes/{tag}` sets or clears a node's detour.
+  (RU: Debug API управляет тестовым outbound ядра `impair` — линия, расписание, статус на ходу, для тестов балансировки и сбоев; в интерфейсе `impair` нет. Узел `impair` сохраняет тег как передан, протокол в строке узла — `☠ impair`. `POST /subs` отдаёт итоговые теги, `PATCH /nodes/{tag}` ставит и снимает detour узла.)
+- **The boundary between the VPN service and the UI is drawn in the code ([details](docs/spec/tasks/740-architecture-revision-process-boundary.md)).** One owner of the tunnel state, separate core command clients for the service and for the UI; CI checks the architecture boundaries on every push. This is the ground for the two processes above.
+  (RU: граница между сервисом VPN и интерфейсом проведена в коде: один владелец состояния туннеля, отдельные командные клиенты ядра у сервиса и у интерфейса; CI проверяет архитектурные границы на каждом push. На этом стоят два процесса, описанные выше.)
+- Shared contract 1.1.171 → 1.1.184. Core `v1.14.4-lx.35` → `v1.14.4-lx.37`.
+  (RU: общий контракт 1.1.171 → 1.1.184. Ядро `v1.14.4-lx.35` → `v1.14.4-lx.37`.)
 
 ## [2.25.22] — 2026-11-16
 
