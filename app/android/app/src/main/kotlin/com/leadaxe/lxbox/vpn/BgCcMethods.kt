@@ -206,6 +206,8 @@ internal object BgCcMethods {
         "ccGetOutbounds" -> ensure()?.getOutbounds()
         "ccGetDnsGroups" -> ensure()?.getDnsGroups()
         "ccGetRunningConfig" -> ensure()?.getRunningConfig()
+        "ccGetEffectiveConfig" -> ensure()?.getEffectiveConfig()
+        "ccGetOutboundConfig" -> ensure()?.getOutboundConfig(a.str("tag"))
         "ccGetPool" -> ensure()?.getPool(a.str("tag"))
         "ccSelectOutbound" -> ensure()?.selectOutbound(a.str("group"), a.str("tag")) ?: false
         "ccSetEndpointEnabled" -> {
