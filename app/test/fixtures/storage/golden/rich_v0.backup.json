@@ -362,12 +362,6 @@
       "enabled": true,
       "body": {
         "type": "chain",
-        "idle_timeout": "5m",
-        "strip_evasion": false,
-        "strip": {
-          "tls.fragment": true,
-          "tls.utls": false
-        },
         "rewrite": {
           "vless": {
             "flow": null
