@@ -10,6 +10,17 @@
 
 ### Changed
 
+- **Hop chains for core `v1.14.4-lx.37-rc.2` ([task 761](docs/spec/tasks/761-core-rc2-chain-detour.md)).**
+  The core will route every node past the first chain position through the
+  chain itself, with no link copies. The config no longer carries the chain
+  keys `idle_timeout`, `strip_evasion` and `strip` (saved values stay in the
+  chain and the backup); the chain editor loses its Advanced block. The
+  `mtu_align` setting is written to `lx.detour.mtu_align`, old mixins are
+  rewritten. Nodes past the first position lose local ports and socket
+  options the core rejects there, with a build warning. Internal `chain-hop`
+  outbounds are hidden. The JSON tab of the node screen shows the node as the
+  core runs it, with the core's changes. Needs the rc2 core, not pinned yet.
+
 - **Core `v1.14.4-lx.37-rc.1`.** `round_robin` repairs itself on a failed
   connection instead of waiting for the next check: a retry through another
   slot, a dead node replaced from a reserve of live nodes, a node that fails

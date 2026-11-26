@@ -75,8 +75,11 @@ are hidden from node selection.
   is broken", "§254 — cycle through a selector: 1 culprit", "cap: show no
   more than … culprits". **Mutation:** break all edges of the ring.
 - **P7. A chain is a `type: chain` node in packet order.** Positions go out
-  verbatim in the `outbounds` key; `idle_timeout`, `strip_evasion`, `strip`,
-  `rewrite` are written only when set; the chain gets into the Direction
+  verbatim in the `outbounds` key; `rewrite` is written only when set;
+  `idle_timeout`, `strip_evasion`, `strip` stay in storage but are not written
+  (core `v1.14.4-lx.37-rc.2` rejects them, task 761); nodes past the first
+  position lose the local ports and socket options the core rejects there;
+  the chain gets into the Direction
   pool on a par with servers. **Witness:** units "hop order = PACKET order",
   "defaults are not written into the config", "a chain is a node: the
   Direction filter catches it". **Mutation:** sorting or deduplicating
@@ -155,12 +158,13 @@ are hidden from node selection.
 | Subscription / folder | Replace with a group: Manual · Auto · Both, Group name | — | not folded | `selector` / `urltest` |
 | Chain | Tag (`chain-N`), Enabled | — | first free, empty, on | `tag` |
 | Chain | Positions | ≥2, in packet order | — | `outbounds` |
-| Chain → Advanced | Idle timeout · Strip evasion tricks from links · Per-key overrides (three-state) | empty = core (5m) · on · untouched | — | `idle_timeout`, `strip_evasion`, `strip` |
 | Chain | rewrite | JSON merge-patch by node type, not editable in the form | `{}` | `rewrite` |
 
-The catalog of `strip` keys and their defaults is contract registry data,
-not application data. The minimum core version for chains is
-`1.14.0-lx.27-rc.5`.
+The minimum core version for chains is `1.14.0-lx.27-rc.5`. From
+`v1.14.4-lx.37-rc.2` the core rewrites the `detour` of the nodes on positions
+≥ 1 itself and adds internal `chain-hop` outbounds; the app hides them, and
+the node screen shows the node's JSON as the core runs it
+(task 761).
 
 ## Inputs / Outputs
 

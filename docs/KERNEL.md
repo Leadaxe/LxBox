@@ -1344,6 +1344,38 @@ v2.9.0 were prepared (MASQUE symbols were verified with `strings libbox.so`).
   and in CI.
 - ⚠ In production, use **only the official release AAR** (see gotcha 3).
 
+## The chain as a `detour` rewrite (`v1.14.4-lx.37-rc.2`, not pinned yet)
+
+Core SPEC 165. LxBox is ready in the branch of
+[task 761](spec/tasks/761-core-rc2-chain-detour.md); the pin stays
+`v1.14.4-lx.37-rc.1` until the rc2 AAR is out.
+
+- **No link copies.** At load time a chain sets `detour` of every node it reaches on
+  position ≥ 1 (the node itself or every leaf of a group there, picked or not,
+  except `direct`/`block`) to the hop below. The node has one instance and one path:
+  a direct route to it and a manual check go the chain's path too (LxBox#233).
+- **Load errors.** In the `chain` body: `idle_timeout`, `strip_evasion`, `strip`. The
+  root `lx.mtu_align` moved to `lx.detour.mtu_align`, `lx.mtu_align.except` to
+  `lx.detour.except_outbounds`. A node on position ≥ 1 with WireGuard `listen_port`,
+  Tailscale `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` or a
+  socket binding field (`bind_interface`, `routing_mark`, `tcp_fast_open` and the
+  rest of ALGORITHM K5). A node taken over by two chain positions, or on ≥ 1 in one
+  chain and on 0 in another.
+- **Default.** Without `lx.detour` the core filters `tls.fragment`, `tls.spoof`, kTLS
+  and the `apple` engine off any node whose connection has no kernel socket under
+  it, not only off chain links. `"detour": false` gives the upstream behaviour.
+- **Hops.** Outbounds of the internal type `chain-hop`, tags `<chain>#<i>`, appear
+  in `GetOutbounds`, the group tree and connections. LxBox hides them by type.
+- **libbox.** Removed: `GetChains`, `GetChainCloneConfig`. New:
+  `GetEffectiveConfig()` and `GetOutboundConfig(tag)` (both `RunningConfig` with
+  `content()`; the second is `{tag, original, effective, changes}`),
+  `GetChainStatus(tag)`. `SetChainPositionEnabled` returns only an error. LxBox
+  binds none of the removed calls.
+
+On the bump: the pin and `kCoreBuildTagsPin`, javap over `classes.jar`
+(`getOutboundConfig`, `getEffectiveConfig`, no `getChains`/`getChainCloneConfig`,
+the `type` string of a hop), the version history row below.
+
 ## AAR build tags
 
 They are baked in `cmd/internal/build_libbox/main.go` (`sharedTags`), NOT in the

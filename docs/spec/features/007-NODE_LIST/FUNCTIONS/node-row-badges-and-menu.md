@@ -75,7 +75,9 @@ ones.
 - Tapping a row only highlights it. The ▷ button on the right selects the
   node; for the active one it is ✓ and cannot be pressed.
 - `NETWORKS` has no Ping, Use this node or ▷ button.
-- Copy JSON / detour moved to View details.
+- Copy JSON / detour moved to View details. The JSON tab there shows the
+  node as the core runs it (effective / original and the core's changes); with
+  the tunnel down it shows no data (task 761).
 
 ## Boundaries
 

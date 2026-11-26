@@ -15,7 +15,7 @@
 
 Создание («New hop chain»: только Tag — тег и есть единственное имя цепочки) и правка цепочки
 на экране «Hop chain · <tag>»: список позиций с перетаскиванием,
-«Add position», блок Advanced, находки проверки прямо в форме. Из окна
+«Add position», находки проверки прямо в форме. Из окна
 узла-цепочки — живой путь и **послойная проба**: сколько стоит каждый хоп.
 
 ## Параметры
@@ -26,15 +26,13 @@
 | Enabled | «A disabled chain is not built and cannot be used as a position» |
 | Positions | подпись «In packet order: the first position is the hop closest to you, the last one is what the destination sees.»; у позиции — вид (node, group, direction, chain, built-in, loading…, not found) |
 | Add position | пикер: секции **Directions** (только с «Use as detour») и **Servers** (узлы собранного конфига по алфавиту, `TYPE · server:port`); уже занятые исключены; нечего добавить — «Nothing left to add…» |
-| Advanced | Idle timeout; «Strip evasion tricks from links»; «Per-key overrides» — трёхзначная галка на ключ каталога с итогом «stripped»/«kept» |
 | Удаление | «Delete hop chain?» с подтверждением; текст предупреждает, что цепочки с ней пересоберутся без неё |
 | Уход с несохранёнными правками | Save / Keep / Discard |
 
 ## Входы / Выходы
 
 **Входы:** последний собранный конфиг (теги окончательные: префиксы,
-уникализация), Направления, список цепочек с порядком, каталог `strip`
-из реестра.
+уникализация), Направления, список цепочек с порядком.
 **Выходы:** сохранённая цепочка; находки формы; для работающего туннеля —
 замеры слоёв.
 
@@ -55,8 +53,10 @@
 - Предупреждения и справки сохранению не мешают: пропавшие позиции (только
   когда снимок целей уже разобран), detour у первой позиции («the real
   path is longer than shown»), detour у звеньев («does not apply inside a
-  chain»), WireGuard за TCP-хопом, MASQUE с фиксированным h3 на звене,
-  ключ `strip`, который сборка сохранит ради звена.
+  chain»), WireGuard за TCP-хопом, MASQUE с фиксированным h3 на звене.
+- Блока Advanced нет (задача 761): ядро `v1.14.4-lx.37-rc.2` отвергает
+  `idle_timeout`, `strip_evasion`, `strip`; сохранённые раньше значения
+  остаются в записи и бэкапе.
 - Кандидаты пересобираются при каждом открытии пикера — флаг «Use as
   detour» мог смениться, пока форма открыта.
 - Группы, `direct-out`, цепочки в пикер не предлагаются, но уже стоящие
