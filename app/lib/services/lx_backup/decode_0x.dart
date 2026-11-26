@@ -671,8 +671,9 @@ SourceChain _chainFromCanon(Map<String, dynamic> j, String tag) {
       (j['chain'] as Map?)?.cast<String, dynamic>() ??
       const <String, dynamic>{};
   // Канон разбирается кодеком цепочки: второй разбор тех же полей разошёлся
-  // бы с ним на первой же правке (трёхзначный `strip_evasion`, порядок
-  // каталога `strip`, `null` внутри `rewrite`). Позиции 0.12 — строки.
+  // бы с ним на первой же правке (`null` внутри `rewrite`; §761 —
+  // `idle_timeout`, `strip_evasion`, `strip` он отбрасывает). Позиции 0.12 —
+  // строки.
   final enabled = j['enabled'];
   return chainFromRecord({
     'kind': kSourceKindChain,

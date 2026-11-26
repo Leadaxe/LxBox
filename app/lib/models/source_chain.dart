@@ -104,10 +104,7 @@ class SourceChain {
 
   /// Канон `source_chain.schema.json`: маршрут и его настройки, без полей
   /// записи источника (`tag`, `enabled`).
-  ///
-  /// Round-trip обязан быть точным: `strip_evasion` пишется, ТОЛЬКО когда
-  /// пользователь высказался (null = умолчание ядра), пустые каталоги ключа
-  /// не создают — иначе умолчание и явный выбор стали бы неотличимы.
+  /// Пустой `rewrite` ключа не создаёт.
   Map<String, dynamic> toCanonJson() => {
         'hops': [for (final h in hops) nodeLinkToRecord(h)],
         if (rewrite.isNotEmpty) 'rewrite': deepCloneJson(rewrite),

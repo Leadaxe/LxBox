@@ -416,8 +416,8 @@ POST   /chains[?rebuild=true]                    Create → 201. Body optional: 
                                                  with the machine reason: empty | reserved | duplicate |
                                                  auto_twin. A body without hops creates an EMPTY chain (same as
                                                  the UI: the record exists, the route is not filled in yet).
-PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,hops,idle_timeout,strip_evasion,
-                                                 strip,rewrite}. tag renames the chain in place (same slot in
+PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,hops,rewrite}.
+                                                 tag renames the chain in place (same slot in
                                                  the source list) and rewrites references to the old tag in the
                                                  same write: other chains' positions, rule outbounds and preset
                                                  outbound vars, route_final, detours, DNS detour / vars.outbound.
