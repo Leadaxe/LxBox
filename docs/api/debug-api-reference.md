@@ -1443,8 +1443,9 @@ curl -s -X PATCH -H "$HDR" "$BASE/nodes/$(jq -rn '"⚡ Alpha"|@uri')?rebuild=tru
 curl -s -X DELETE -H "$HDR" "$BASE/subs/<impId>?rebuild=true"
 ```
 
-Соединения по узлу (байты, закрытие) Debug API пока не отдаёт: есть только
-`traffic` в `/state` и `/profiler/live` (по приложениям, без outbound).
+Соединения по узлу — из `/profiler/live`: у каждого события `outbound_chain`
+(для `round_robin` — фактический узел), `up_bytes`, `down_bytes`, `duration_ms`,
+`issues`; отбор по узлу — в скрипте (пример выше). Профайлер включать до трафика.
 
 ---
 
