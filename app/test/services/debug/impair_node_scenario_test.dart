@@ -10,6 +10,7 @@ import 'package:lxbox/screens/home/node_list_presenter.dart' show protoLabel;
 import 'package:lxbox/services/debug/context.dart';
 import 'package:lxbox/services/debug/contract/errors.dart';
 import 'package:lxbox/services/debug/debug_registry.dart';
+import 'package:lxbox/services/debug/handlers/directions.dart';
 import 'package:lxbox/services/debug/handlers/folders.dart';
 import 'package:lxbox/services/debug/handlers/nodes.dart';
 import 'package:lxbox/services/debug/handlers/subs.dart';
@@ -169,6 +170,65 @@ void main() {
         throwsA(isA<NotFound>()));
     await expectLater(nodesHandler(req('GET', '/nodes/imp-test'), ctx()),
         throwsA(isA<NotFound>()));
+  });
+
+  Map<String, dynamic> outboundByTag(Map<String, dynamic> cfg, String tag) {
+    for (final k in ['outbounds', 'endpoints']) {
+      for (final o in (cfg[k] as List? ?? const [])) {
+        if (o is Map && o['tag'] == tag) return o.cast<String, dynamic>();
+      }
+    }
+    fail('no outbound "$tag" in config');
+  }
+
+  test('сборка: impair как есть, detour в обе стороны, фильтр Направления',
+      () async {
+    final alpha = ((await create(uriA))['tags'] as List).single as String;
+    // Ключ `detour` в теле impair разбор не принимает (ссылка на узел вне
+    // документа) — detour ставится записи: шаг 1 сценария.
+    final b = await create(jsonEncode({
+      'type': 'impair',
+      'tag': 'imp-test',
+      'seed': 1,
+      'link_params': {'delay': '30ms'},
+    }));
+    expect(b['tags'], ['imp-test']);
+    await nodesHandler(
+        req('PATCH', '/nodes/imp-test', body: {'detour': alpha}), ctx());
+    await directionsHandler(
+        req('POST', '/directions', body: {
+          // vpn-1: на него смотрит route.final шаблона (в пустом хранилище
+          // теста Направлений нет).
+          'tag': 'vpn-1',
+          'label': 'Impair lab',
+          'node_filter': '^imp-',
+          'auto': {'mode': 'round_robin', 'balancer': {'pool': 3}},
+        }),
+        ctx());
+    var cfg = jsonDecode((await controller.generateConfig())!)
+        as Map<String, dynamic>;
+    final imp = outboundByTag(cfg, 'imp-test');
+    expect(imp['type'], 'impair');
+    expect(imp['link_params'], {'delay': '30ms'});
+    expect(imp['seed'], 1);
+    expect(imp['detour'], alpha);
+    expect(controller.lastEmittedTagMap.containsKey('imp-test'), isTrue);
+    // Узел без адреса попадает в Направление по фильтру тега.
+    expect(outboundByTag(cfg, 'vpn-1')['outbounds'], contains('imp-test'));
+    expect(outboundByTag(cfg, 'vpn-1-auto')['outbounds'],
+        contains('imp-test'));
+
+    // impair под узлом: detour impair снят, detour Alpha → impair.
+    await nodesHandler(
+        req('PATCH', '/nodes/imp-test', body: {'detour': null}), ctx());
+    await nodesHandler(
+        req('PATCH', '/nodes/${Uri.encodeComponent(alpha)}',
+            body: {'detour': 'imp-test'}),
+        ctx());
+    cfg = jsonDecode((await controller.generateConfig())!)
+        as Map<String, dynamic>;
+    expect(outboundByTag(cfg, alpha)['detour'], 'imp-test');
+    expect(outboundByTag(cfg, 'imp-test').containsKey('detour'), isFalse);
   });
 
   test('подпись протокола impair в строке узла', () {

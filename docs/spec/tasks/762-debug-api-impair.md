@@ -102,8 +102,6 @@ e16014bb); конверт ошибки свой, `{"error":{"code","message"}}`.
   400; `failed_precondition`, `unavailable` → 409; `unimplemented` (ядро без
   ручки) → 501 `not_implemented` (новый класс `NotImplemented`); прочее → 502
   `upstream_error`. Текст ядра — в `error.message`.
-- Ассистент (§750): политика по умолчанию закрывает неизвестный префикс,
-  `/impair/*` ему недоступен; закреплено тестом политики.
 
 **Узел `impair` скриптом.**
 
@@ -151,12 +149,18 @@ e16014bb); конверт ошибки свой, `{"error":{"code","message"}}`.
 Полный скрипт с curl — `docs/api/debug-api-reference.md` → «Сценарий теста
 целиком». Шаги и ожидаемые ответы:
 
-1. `POST /subs?rebuild=true` `{"input": "{\"type\":\"impair\",\"tag\":\"imp-test\",
-   \"detour\":\"⚡ Alpha\",\"seed\":1,\"link_params\":{\"delay\":\"30ms\"}}"}` →
-   201 `{"id", "kind": "UserServer", "tags": ["imp-test"]}`. Impair над узлом
-   (`detour` у impair) видит домены и гасит одиночные сайты.
-2. Либо impair под узлом: `PATCH /nodes/⚡%20Alpha?rebuild=true`
-   `{"detour": "imp-test"}` → `{"ok": true, "detour": {"tag": "imp-test"}}`.
+1. `POST /subs` `{"input": "{\"type\":\"impair\",\"tag\":\"imp-test\",
+   \"seed\":1,\"link_params\":{\"delay\":\"30ms\"}}"}` → 201 `{"id", "kind":
+   "UserServer", "tags": ["imp-test"]}`; в конфиге outbound `imp-test` как
+   передан. Ключ `detour` в самом JSON разбор отвергает («No valid outbounds»:
+   ссылка на узел вне документа) — detour ставится отдельно:
+   `PATCH /nodes/imp-test?rebuild=true` `{"detour": "⚡ Alpha"}` →
+   `{"ok": true, "kind": "UserServer", "detour": {"tag": "⚡ Alpha"}}`; в
+   конфиге у `imp-test` `detour: "⚡ Alpha"`. Impair над узлом видит домены и
+   гасит одиночные сайты.
+2. Либо impair под узлом: `PATCH /nodes/imp-test` `{"detour": null}`, затем
+   `PATCH /nodes/⚡%20Alpha?rebuild=true` `{"detour": "imp-test"}` → в конфиге
+   у Alpha `detour: "imp-test"`.
 3. `POST /directions?rebuild=true` `{"tag": "imp-lab", "node_filter": "^imp-",
    "auto": {"mode": "round_robin", "balancer": {"pool": 3}}}` → 201;
    `POST /action/reload-vpn`; `GET /pool?tag=imp-lab-auto` → слоты.
@@ -218,6 +222,9 @@ e16014bb); конверт ошибки свой, `{"error":{"code","message"}}`.
   → тег `imp-test` в записи и в `tags`, обычный узел с эмодзи; `PATCH` и
   `DELETE /subs/{id}`; `PATCH /nodes/{tag}` у одиночного сервера (поставить,
   снять) и члена папки, 400 / 404; `protoLabel('impair')` = `☠ impair`.
+  Сборкой (`generateConfig`): outbound `imp-test` с `link_params` и `seed`
+  как переданы, detour impair → Alpha и Alpha → impair, impair без адреса
+  входит в Направление и его `-auto` по `node_filter: "^imp-"`.
 - `test/vpn/cc_impair_test.dart` — канал: аргументы, `null`, разбор JSON,
   `PlatformException` наружу.
 - `test/services/debug/help_json_test.dart` — пути `/help` смонтированы,

@@ -1401,13 +1401,18 @@ curl -s -H "$HDR" "$BASE/impair/$T" | jq '{link_params, counters, schedule}'
 удаляется только через Debug API. Нужно ядро rc3 (для `/impair/*`).
 
 ```bash
-# 1. Создать impair над узлом Alpha (impair видит домены, гасит одиночные сайты)
-curl -s -X POST -H "$HDR" "$BASE/subs?rebuild=true" -d "$(jq -n --arg i \
-  '{"type":"impair","tag":"imp-test","detour":"⚡ Alpha","seed":1,"link_params":{"delay":"30ms"}}' '{input:$i}')"
+# 1. Создать impair (тег остаётся как передан) и поставить его над узлом Alpha:
+#    detour impair → Alpha (impair видит домены, гасит одиночные сайты).
+#    Ключ "detour" в самом JSON разбор не принимает — detour ставится отдельно.
+curl -s -X POST -H "$HDR" "$BASE/subs" -d "$(jq -n --arg i \
+  '{"type":"impair","tag":"imp-test","seed":1,"link_params":{"delay":"30ms"}}' '{input:$i}')"
 # → 201 {"id":"<impId>","kind":"UserServer","tags":["imp-test"], ...}
-#    (вместо detour в теле: PATCH /subs/<impId> {"override_detour":"⚡ Alpha"})
+curl -s -X PATCH -H "$HDR" "$BASE/nodes/imp-test?rebuild=true" -d '{"detour":"⚡ Alpha"}'
+# → {"ok":true,"tag":"imp-test","kind":"UserServer","detour":{"tag":"⚡ Alpha"}, ...}
 
-# 1'. Или impair под узлом: detour узла Alpha → impair (impair видит только сервер узла)
+# 1'. Или impair под узлом: detour impair снять, detour узла Alpha → impair
+#     (impair видит только сервер узла)
+curl -s -X PATCH -H "$HDR" "$BASE/nodes/imp-test" -d '{"detour":null}'
 curl -s -X PATCH -H "$HDR" "$BASE/nodes/$(jq -rn '"⚡ Alpha"|@uri')?rebuild=true" -d '{"detour":"imp-test"}'
 # → {"ok":true,"tag":"⚡ Alpha","kind":"UserServer","detour":{"tag":"imp-test"}, ...}
 
@@ -2072,6 +2077,7 @@ curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
 | 404 | `not_found` | unknown endpoint, id не существует |
 | 409 | `conflict` | pre-condition (tunnel down, controller not ready, blocked var) |
 | 413 | `payload_too_large` | body > 1 MiB |
+| 501 | `not_implemented` | у ядра нет ручки (gRPC Unimplemented; §762 `/impair/*`) |
 | 502 | `upstream_error` | native plugin / CommandClient / saveConfig failed |
 | 504 | `timeout` | handler не уложился в 30s |
 | 500 | `internal` | unhandled — детали в AppLog, не в response |
