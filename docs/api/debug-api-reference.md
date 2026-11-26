@@ -1432,6 +1432,10 @@ curl -s -H "$HDR" "$BASE/impair/imp-test" | jq '{link_params, counters, schedule
 curl -s -H "$HDR" "$BASE/pool?tag=imp-lab-auto" | jq '.slots[] | {tag, delay, quarantined, confirmedFailures}'
 curl -s -X POST -H "$HDR" "$BASE/action/urltest?tag=imp-test"
 curl -s -H "$HDR" "$BASE/state" | jq '{delay_by_direction, last_delay, traffic}'
+# соединения через узел: включить профайлер до трафика, потом отобрать по outbound_chain
+curl -s -X POST -H "$HDR" "$BASE/profiler/live/start"
+curl -s -H "$HDR" "$BASE/profiler/live?seconds=300" \
+  | jq '[.events[] | select((.outbound_chain // []) | index("imp-test")) | {kind, domain, up_bytes, down_bytes, duration_ms, issues}]'
 
 # 5. Сброс линии, снять detour, удалить
 curl -s -X POST -H "$HDR" "$BASE/impair/imp-test/schedule" -d '{"entries":[]}'

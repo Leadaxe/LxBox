@@ -259,15 +259,16 @@ AVD `LxBox_a161`, CI build-fast `b897415d` (`libbox.so` — `1.14.4-lx.37-rc.3`)
 - Сброс: `schedule {"entries":[]}`, `set {"sublinks":false}` → 200; удаление
   правила, Направления и узлов, `rebuild-config` — конфиг как до теста.
 - Не сделано: снимок View pool в момент карантина (UI не входил в задачу);
-  выборка соединений по узлу в Debug API (в Unresolved).
+  соединения по узлу через `/profiler/live` в этом прогоне не снимались.
 
 ## Unresolved / follow-up
 
 - Бамп на rc3 и проверка на эмуляторе (шаги выше и сценарий).
-- Соединения по узлу (байты, ошибки, закрытие) Debug API не отдаёт: есть
-  `traffic` в `/state` (итог и число активных) и `/profiler/live` (по
-  приложениям, без outbound). Выборка соединений по outbound требует
-  подписки на поток соединений ядра (`CcChannel`) в Debug API — отдельная
-  работа; натив `ccCloseConnection` уже есть.
+- Соединения по узлу — профайлер: `POST /profiler/live/start`, затем
+  `GET /profiler/live?seconds=N` — события `tcpOpen`/`tcpClose`/`udp*` с
+  `outbound_chain` (фактический узел `round_robin` — задача 759), `up_bytes`,
+  `down_bytes`, `duration_ms`, `issues` (обрыв); отбор по узлу — на стороне
+  скрипта по `outbound_chain`. Серверного фильтра `?outbound=` нет — при
+  нужде добавить.
 - Личный detour узла подписки — модели нет (detour общий у подписки);
   обход — перенести узел в папку.
