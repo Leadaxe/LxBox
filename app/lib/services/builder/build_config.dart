@@ -33,6 +33,7 @@ import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
 import 'post_steps/chain_position_yields.dart' show applyChainPositionYields;
+import '../chains/chain_takeover.dart' show applyChainTakeover;
 import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
@@ -885,10 +886,6 @@ Future<BuildResult?> _buildConfig({
           .add(w);
     }
   }
-  // §761 — узлам, которые цепочка перехватывает на позиции ≥ 1, `detour`
-  // поставит ядро (v1.14.4-lx.37-rc.2): поля портов и привязки сокета ядро
-  // у них отвергает — снимаются здесь, по готовому конфигу.
-  emitWarnings.addAll(applyChainPositionYields(config));
   // §636 — уровни узла и источника поверх глобальных `vars`.
   applyTlsFragment(config, vars, byTag: ctx.tlsByTag);
   applyMixedCaseSni(config, vars, byTag: ctx.tlsByTag);
@@ -1027,6 +1024,13 @@ Future<BuildResult?> _buildConfig({
   // члены-призраки групп, `default` вне состава (L1 — иначе ядро отвергает
   // конфиг целиком) и кольца зависимостей — ДО валидатора, чей §254-fatal
   // остаётся последним рубежом на неразруленное.
+  // §761 — ядро v1.14.4-lx.37-rc.2 само ставит `detour` узлам позиций ≥ 1
+  // цепочек: одному узлу или группе нужен один путь. Кольца и конфликты
+  // разводятся копиями, неисправимая цепочка выпадает (ссылки на неё
+  // дочищает санитайзер ниже); затем у узлов позиций ≥ 1 снимаются
+  // фиксированные локальные порты.
+  emitWarnings.addAll(applyChainTakeover(config));
+  emitWarnings.addAll(applyChainPositionYields(config));
   final graphCodes = <RegistryWarning>[];
   final detourThroughGroup = <(String, String)>[];
   final detourUnavailable = <(String, String)>[...detourReport.unavailable];

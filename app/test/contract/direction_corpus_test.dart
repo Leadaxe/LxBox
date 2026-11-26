@@ -71,6 +71,15 @@ const Map<String, String> _skipChainRc2 = {
   'chain_strip_and_timeout':
       '§761: chain idle_timeout/strip_evasion/strip are not emitted for core '
           'lx.37-rc.2; waits for the launcher contract update',
+  // Один узел или группа — один путь: позиция-Направление собирается копией
+  // без узла, стоящего позицией (`[proxy-out, NL]`), вторая цепочка с теми же
+  // узлами — копиями. Ожидание корпуса держит оригинальные теги.
+  'chain_cycle_excluded_from_direction':
+      '§761: the chain position is a copy of the Direction without the exit '
+          'node; waits for the launcher contract update',
+  'chain_interrupt_connections':
+      '§761: the second chain over the same nodes uses copies; waits for the '
+          'launcher contract update',
 };
 
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.

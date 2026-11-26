@@ -3,9 +3,10 @@
 /// С ядра v1.14.4-lx.37-rc.2 (SPEC 165 форка) цепочка сама ставит `detour`
 /// каждому узлу, до которого доходит на позиции ≥ 1: узел позиции или любой
 /// лист группы там, на любой глубине, выбранный и нет, кроме `direct` и
-/// `block`. Такой узел с фиксированным локальным портом или с полями
-/// привязки сокета, которые под `detour` не действуют, ядро отвергает при
-/// загрузке — и с ним весь конфиг (ALGORITHM К5).
+/// `block`. Такой узел с фиксированным локальным портом ядро отвергает при
+/// загрузке — и с ним весь конфиг (ALGORITHM К5). Поля привязки сокета
+/// (`bind_interface`, `tcp_fast_open` и т. п.) ядро под `detour` принимает и
+/// показывает их недействующими (`GetOutboundConfig`) — они не трогаются.
 ///
 /// LxBox этим узлам `detour` не пишет, поэтому шаг `applyDetourYields`
 /// (контракт 1.1.65) их не видит. Шаг ниже снимает поля по готовому
@@ -18,26 +19,6 @@ const Map<String, List<String>> kChainHopLocalPortFields = {
   'tailscale': ['listen_port', 'relay_server_port'],
   'openconnect': ['dtls_local_port'],
 };
-
-/// Поля привязки сокета, которые апстрим под `detour` не применяет: сокет
-/// узла открывает хоп цепочки (ALGORITHM К5). `domain_resolver`,
-/// `fallback_delay`, `connect_timeout`, keepalive и `udp_fragment` сюда не
-/// входят — их ядро применяет и под `detour`.
-const List<String> kChainHopSocketFields = [
-  'bind_interface',
-  'inet4_bind_address',
-  'inet6_bind_address',
-  'bind_address_no_port',
-  'protect_path',
-  'routing_mark',
-  'reuse_addr',
-  'netns',
-  'tcp_fast_open',
-  'tcp_multi_path',
-  'network_strategy',
-  'network_type',
-  'fallback_network_type',
-];
 
 const _kGroupTypes = {'selector', 'urltest'};
 const _kNotTakenOver = {'direct', 'block', 'dns'};
@@ -96,12 +77,9 @@ void _leaves(String tag, Map<String, Map<String, dynamic>> byTag,
   out.add(tag);
 }
 
-/// Снять у узлов позиций ≥ 1 поля, с которыми ядро их не загрузит, и
-/// сообщить о конфликте перехвата. Возвращает строки для `emitWarnings`.
-///
-/// Конфликт (узел на позиции ≥ 1 двух цепочек или двух позиций, или на ≥ 1
-/// одной и на 0 другой) сборка не чинит: ядро не загрузит такой конфиг, а
-/// молча выбрать одну цепочку значило бы подменить маршрут.
+/// Снять у узлов позиций ≥ 1 фиксированные локальные порты, с которыми ядро
+/// их не загрузит. Возвращает строки для `emitWarnings`. Кольца и конфликты
+/// к этому шагу уже разведены (`applyChainTakeover`).
 List<String> applyChainPositionYields(Map<String, dynamic> config) {
   final reaches = chainReaches(config);
   if (reaches.isEmpty) return const [];
@@ -117,15 +95,7 @@ List<String> applyChainPositionYields(Map<String, dynamic> config) {
       if (at == null) continue;
       final takenOver = [for (final r in at) if (r.position >= 1) r];
       if (takenOver.isEmpty) continue;
-      if (at.length > 1) {
-        warnings.add('Node "$tag" is reached by more than one chain position '
-            '(${at.map(_where).join(', ')}) and taken over past the first '
-            'position: the core rejects such a config.');
-      }
-      final fields = [
-        ...?kChainHopLocalPortFields[e['type']],
-        ...kChainHopSocketFields,
-      ];
+      final fields = kChainHopLocalPortFields[e['type']] ?? const <String>[];
       final removed = [
         for (final f in fields)
           if (e.containsKey(f)) f,
@@ -136,7 +106,7 @@ List<String> applyChainPositionYields(Map<String, dynamic> config) {
       }
       warnings.add('Node "$tag" (${_where(takenOver.first)}): removed '
           '${removed.join(', ')} — a node the chain dials through the position '
-          'below cannot use them.');
+          'below cannot hold a fixed local port.');
     }
   }
   return warnings;
