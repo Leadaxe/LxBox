@@ -15,6 +15,7 @@ import io.nekohasekai.libbox.Connections
 import io.nekohasekai.libbox.DnsQuery
 import io.nekohasekai.libbox.GetURLResult
 import io.nekohasekai.libbox.HTTPHeaders
+import io.nekohasekai.libbox.ImpairStatus
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
@@ -1085,6 +1086,46 @@ class BoxCommandClient(private val logWarning: (String) -> Unit) {
             Log.w(TAG, "setEndpointEnabled($tag, $enabled) failed: $msg")
             mapOf("error" to endpointToggleErrorCode(msg), "message" to msg)
         }
+    }
+
+    // ═══════════════════════ §762 impair ═══════════════════════
+    // Тестовый outbound `impair` (ядро SPEC 164, libbox с rc3): управление
+    // линией на лету для Debug API. Блокирующий gRPC — звать с
+    // `Dispatchers.IO`. Ответ в три состояния: `null` — клиента нет (туннель не
+    // поднят / пауза); `{"content": <JSON статуса>}`; `{"error": <код>,
+    // "message": <текст ядра>}` — коды как у [setEndpointEnabled] плюс
+    // `unimplemented` (ядро без команд). Тела записей в лог не пишутся.
+
+    fun getImpairStatus(tag: String): Map<String, String>? =
+        impairCall("getImpairStatus", tag) { it.getImpairStatus(tag) }
+
+    fun setImpair(tag: String, entry: String): Map<String, String>? =
+        impairCall("setImpair", tag) { it.setImpair(tag, entry) }
+
+    fun scheduleImpair(tag: String, entries: String, start: String, repeat: String): Map<String, String>? =
+        impairCall("scheduleImpair", tag) { it.scheduleImpair(tag, entries, start, repeat) }
+
+    private inline fun impairCall(
+        name: String,
+        tag: String,
+        call: (CommandClient) -> ImpairStatus?,
+    ): Map<String, String>? {
+        val client = ensurePingClient() ?: run {
+            Log.w(TAG, "$name: no command client (paused/down)")
+            return null
+        }
+        return runCatching { mapOf("content" to (call(client)?.content ?: "")) }
+            .getOrElse {
+                val msg = it.message ?: it.toString()
+                Log.w(TAG, "$name($tag) failed: $msg")
+                val code = if (it is LinkageError ||
+                    Regex("""code = Unimplemented""").containsMatchIn(msg)) {
+                    "unimplemented"
+                } else {
+                    endpointToggleErrorCode(msg)
+                }
+                mapOf("error" to code, "message" to msg)
+            }
     }
 
     private fun endpointToggleErrorCode(message: String): String =

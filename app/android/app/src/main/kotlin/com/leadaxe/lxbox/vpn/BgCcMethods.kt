@@ -53,6 +53,12 @@ internal object BgCcMethods {
     private fun noClientError(): Map<String, String> =
         mapOf("error" to "error", "message" to NO_CLIENT)
 
+    private fun impairResult(r: Map<String, String>?): String? {
+        if (r == null) return null
+        r["error"]?.let { throw BgError(it, r["message"]) }
+        return r["content"] ?: ""
+    }
+
     fun handle(ctx: Context, method: String, a: BgArgs): Any? {
         // §747 G — проба и работа с конфигом держат ядро «в деле»: процесс не
         // перезапускается ради его сброса посреди серии замеров или правок.
@@ -210,6 +216,13 @@ internal object BgCcMethods {
         "ccGetOutboundConfig" -> ensure()?.getOutboundConfig(a.str("tag"))
         "ccGetPool" -> ensure()?.getPool(a.str("tag"))
         "ccSelectOutbound" -> ensure()?.selectOutbound(a.str("group"), a.str("tag")) ?: false
+        // §762 — impair: null = клиента нет (Dart → 409, не код `error`),
+        // отказ ядра — BgError с кодом, успех — JSON статуса строкой.
+        "ccGetImpairStatus" -> impairResult(ensure()?.getImpairStatus(a.str("tag")))
+        "ccSetImpair" -> impairResult(ensure()?.setImpair(a.str("tag"), a.str("entry")))
+        "ccScheduleImpair" -> impairResult(
+            ensure()?.scheduleImpair(a.str("tag"), a.str("entries"), a.str("start"), a.str("repeat")),
+        )
         "ccSetEndpointEnabled" -> {
             val r = ensure()?.setEndpointEnabled(a.str("tag"), a.bool("enabled", true)) ?: noClientError()
             val err = r["error"]
