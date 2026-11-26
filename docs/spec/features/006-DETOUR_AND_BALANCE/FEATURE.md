@@ -180,7 +180,11 @@ means for the user:
   chains is fine) are errors. The editor does not save such a chain and says
   what to do ("make a copy of X without A for this position", "make a copy of
   X (and its nodes; WireGuard copies need other keys) for one of them"); the
-  build drops it with the same hint, the rest is built. A nested chain past
+  build drops it with the same hint, the rest is built. A saved chain that
+  drops this way (one saved before, or turned into a ring by a subscription
+  update) also gets a banner on the home screen: the chain, why it is not
+  built, what to do and a button that opens it; Dismiss hides it until the
+  config changes. A nested chain past
   the first position and a taken hop tag — the same.
 
 ## Inputs / Outputs

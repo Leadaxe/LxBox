@@ -20,7 +20,9 @@
   also inside a Direction higher in the chain, or a detour back into the
   chain) or a conflict (a node or group on a later position used again in the
   chain or in another chain) is an error. The editor does not save such a
-  chain and says which copy to make; the build drops it with the same hint. Nodes
+  chain and says which copy to make; the build drops it with the same hint,
+  and the home screen shows a banner for such a saved chain with a button
+  that opens it (dismissed until the config changes). Nodes
   past the first position lose fixed local ports. Internal `chain-hop`
   outbounds are hidden. The JSON tab of the node screen shows the node as the
   core runs it, with the core's changes. Needs the rc2 core, not pinned yet.
