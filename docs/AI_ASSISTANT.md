@@ -258,7 +258,7 @@ Reference sections for the routes used above:
 
 | Routes | Section |
 |---|---|
-| `/assistant/*` — overview, exits, checks, app search, connections | [Assistant](api/debug-api-reference.md#assistant--assistant-750) |
+| `/assistant/*` — overview, exits, checks, app search, connections | [Assistant](api/debug-api-reference.md#assistant--assistant) |
 | `/rules/*` — routing rules and their conditions | [Rules CRUD](api/debug-api-reference.md#rules-crud--rules) |
 | `/directions/*` — Directions and their exit filter | [Directions CRUD](api/debug-api-reference.md#directions-crud--directions) |
 | `/subs/*`, `/folders/*` — sources | [Subscriptions CRUD](api/debug-api-reference.md#subscriptions-crud--subs), [Folders CRUD](api/debug-api-reference.md#folders-crud--folders) |
@@ -286,7 +286,7 @@ Functions an assistant on the device gets:
 | `callApi` | Call a route: overview, rules, Directions, sources, connections | yes |
 
 `callApi` reaches a part of the Debug API routes: the sections
-[Assistant](api/debug-api-reference.md#assistant--assistant-750), [Rules](api/debug-api-reference.md#rules-crud--rules),
+[Assistant](api/debug-api-reference.md#assistant--assistant), [Rules](api/debug-api-reference.md#rules-crud--rules),
 [Directions](api/debug-api-reference.md#directions-crud--directions), reading and switching sources,
 and the VPN actions. `getApiHelp` returns the exact list.
 

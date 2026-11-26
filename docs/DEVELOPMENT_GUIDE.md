@@ -55,7 +55,7 @@ Owner's decision, 2026-09-24.
   ([ARCHITECTURE §5](ARCHITECTURE.md#where-a-setting-lives)).
 - Index of features: [`docs/spec/features/README.md`](spec/features/README.md);
   legacy feature specs (pre Spec Kit): [`docs/spec/tasks/F-INDEX.md`](spec/tasks/F-INDEX.md).
-  Demoted/superseded specs live in `docs/spec/tasks/` (§054).
+  Demoted/superseded specs live in `docs/spec/tasks/`.
 
 ### 2. Commits and push
 
@@ -125,15 +125,15 @@ Operator's decision, 2026-07-24.
 
 - Subscriptions are cached on disk; the config is rebuilt from cache without network.
 - Network is needed only for fetching subscriptions, remote SRS and the speed test.
-- `buildConfig` never fetches subscriptions over HTTP — that is `AutoUpdater` (spec 027).
+- `buildConfig` never fetches subscriptions over HTTP — that is `AutoUpdater`.
 
 ### Config pipeline and detour
 
 - `buildConfig` stages, post-steps, validator — `ARCHITECTURE.md`.
-- Detour servers, `DetourPolicy` (register / use / override) — spec
-  [018](spec/tasks/018F-detour-server-management/spec.md),
+- Detour servers, `DetourPolicy` (register / use / override) — the
+  [detour spec](spec/tasks/018F-detour-server-management/spec.md),
   `app/lib/services/builder/server_list_build.dart`; `overrideDetour` is a
-  NodeLink since §439 — `STORAGE.md`.
+  NodeLink since storage form 1.0 — `STORAGE.md`.
 
 ### Interface language
 
@@ -141,10 +141,10 @@ Operator's decision, 2026-07-24.
   user-facing text — screens, menus, buttons, labels, hints, dialogs,
   snackbars, push notifications, error messages, empty states — is written in
   English, never in Russian or another language.
-- Other languages appear only as translations of the English source (§285), not
+- Other languages appear only as translations of the English source, not
   as source strings.
 - UI text goes through `getLocalText.s("English text")`; the English string is
-  the key (§285).
+  the key.
 - A hardcoded literal in a display position fails `hardcoded_check`.
 - Translations: `assets/l10n/<tag>/ui.json`; everything else — `l10n.md`.
 - This applies only to product text in the app. Docs are English; code
@@ -152,7 +152,7 @@ Operator's decision, 2026-07-24.
 
 ### Text fields with suggestions are comboboxes
 
-Owner's rule (29.10.2026, §691):
+Owner's rule (29.10.2026):
 
 - A string or multi-line value that comes with suggestions is a **combobox**:
   the input field plus the standard drop-down arrow at the end of the line
@@ -271,12 +271,12 @@ step of every bump.
   culprit. Any new path that emits an outbound, group or reference must be checked
   against [`GUARDS.md` → layer 4](GUARDS.md#layer-4--config-assembly).
   Test: disable every subscription → Start → no crash.
-- **No Clash API (§122).** `experimental.clash_api` in the config is a fatal start
+- **No Clash API.** `experimental.clash_api` in the config is a fatal start
   error; control and streams go through libbox CommandClient. Keep the three CC
   clients (status / screen / profiler) separate; push to an `EventSink` only from
   the main thread, one native sink per channel, fan-out via broadcast.
 - **VPN permission.** A refusal or revoke arrives as `onRevoke` — handle it.
-- **Two processes (§747).** The app runs as `com.leadaxe.lxbox:ui` (the window,
+- **Two processes.** The app runs as `com.leadaxe.lxbox:ui` (the window,
   Flutter) and `com.leadaxe.lxbox:bg` (the VPN service, the core, the tile, the
   receivers). There is no process named just `com.leadaxe.lxbox`.
   - `adb shell pidof com.leadaxe.lxbox:bg` / `…:ui`; `adb logcat --pid=$(adb shell

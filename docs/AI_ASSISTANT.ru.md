@@ -259,7 +259,7 @@ curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 | Маршруты | Раздел |
 |---|---|
-| `/assistant/*` — обзор, выходы, проверки, поиск приложения, подключения | [Assistant](api/debug-api-reference.md#assistant--assistant-750) |
+| `/assistant/*` — обзор, выходы, проверки, поиск приложения, подключения | [Assistant](api/debug-api-reference.md#assistant--assistant) |
 | `/rules/*` — правила маршрутизации и их условия | [Rules CRUD](api/debug-api-reference.md#rules-crud--rules) |
 | `/directions/*` — Направления и их фильтр выходов | [Directions CRUD](api/debug-api-reference.md#directions-crud--directions) |
 | `/subs/*`, `/folders/*` — источники | [Subscriptions CRUD](api/debug-api-reference.md#subscriptions-crud--subs), [Folders CRUD](api/debug-api-reference.md#folders-crud--folders) |
@@ -287,7 +287,7 @@ curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
 | `callApi` | Вызов маршрута: обзор, правила, Направления, источники, подключения | да |
 
 `callApi` достаёт часть маршрутов Debug API: разделы
-[Assistant](api/debug-api-reference.md#assistant--assistant-750), [Rules](api/debug-api-reference.md#rules-crud--rules),
+[Assistant](api/debug-api-reference.md#assistant--assistant), [Rules](api/debug-api-reference.md#rules-crud--rules),
 [Directions](api/debug-api-reference.md#directions-crud--directions), чтение и переключение
 источников и действия с VPN. Точный список возвращает `getApiHelp`.
 

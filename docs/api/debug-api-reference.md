@@ -5,7 +5,7 @@
 | Статус | Reference |
 | Дата | 2026-09-29 |
 | Версия API | совместим со [`spec 031`](../spec/tasks/031F-debug-api/spec.md) |
-| Clash API | удалён в §122 (переход на CommandClient); роутов `/clash/*` и `/state/clash` нет — `404 not_found` |
+| Clash API | удалён (переход на CommandClient); роутов `/clash/*` и `/state/clash` нет — `404 not_found` |
 
 Compact curl-ready reference для **Debug API** — HTTP-сервера L×Box на `127.0.0.1:9269`, который пробрасывается через `adb forward`. Полные объяснения полей/middleware/архитектуры — в [spec 031](../spec/tasks/031F-debug-api/spec.md); здесь — «что послать чтобы получить нужное».
 
@@ -76,9 +76,9 @@ auth), а не факт, что за границей всё открыто.
 - [Actions — триггеры](#actions--триггеры)
 - [Rules CRUD — `/rules/*`](#rules-crud--rules)
 - [Subscriptions CRUD — `/subs/*`](#subscriptions-crud--subs)
-  - [identity подписки (§289)](#346--identity-подписки-289)
-  - [Import rules CRUD — `/subs/{id}/rules`](#346--import-rules-crud--subsidrules)
-  - [`reveal` и `warnings` у одной записи (478)](#фича-478--reveal-и-warnings-у-одной-записи)
+  - [Identity подписки](#identity-подписки)
+  - [Import rules CRUD — `/subs/{id}/rules`](#import-rules-crud--subsidrules)
+  - [`reveal` и `warnings` у одной записи](#reveal-и-warnings-у-одной-записи)
 - [Nodes — `/nodes/*`](#nodes--nodes)
 - [Directions CRUD — `/directions/*`](#directions-crud--directions)
 - [Mixins CRUD — `/mixins/*`](#mixins-crud--mixins)
@@ -92,11 +92,11 @@ auth), а не факт, что за границей всё открыто.
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
 - [Backup — `/backup/*`](#backup--backup)
-- [Diagnostics — `/diag/*` (§038)](#diagnostics--diag-038)
+- [Diagnostics — `/diag/*`](#diagnostics--diag)
 - [Support feed — `/support/*`](#support-feed--support)
 - [Taildrop — `/taildrop/*`](#taildrop--taildrop)
 - [Profiler — `/profiler/*`](#profiler--profiler)
-- [Assistant — `/assistant/*` (§750)](#assistant--assistant-750)
+- [Assistant — `/assistant/*`](#assistant--assistant)
 - [Common errors](#common-errors)
 - [Синхронизация с `/help`](#синхронизация-с-help)
 
@@ -108,22 +108,22 @@ auth), а не факт, что за границей всё открыто.
 |---|---|
 | `GET /ping` | `{pong,server,uptime_seconds}` — **без auth** |
 | `GET /help` | `?format=text\|json` — самодокументируемая карта всей поверхности API. **Без auth** (второй no-auth endpoint). `json` — для auto-tooling, `text` (default) — human-readable cheatsheet. |
-| `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (§311: null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… **§250** — `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
+| `GET /state` | full HomeState: tunnel/busy/config_length/**running_config_length** (null = снапшота ядра нет; вместе с `config_length` показывает расхождение running↔saved)/active_in_group/selected_group/last_delay/ping_busy/traffic/… `last_start_error` + `last_start_error_at` (ISO-8601 / null): last VPN start/stop failure reason; cleared only by a successful start; in-memory (empty after process restart). В отличие от `last_error` не затирается UI-consume (`clearError`) — живёт до следующего успешного старта. |
 | `GET /state` (поле `group_selected`) | `тег группы → выбранный узел` для **каждой** selector/urltest-группы (Направления и их `-auto`-двойники) из дерева групп ядра; `active_in_group` — то же, но только для `selected_group`. Пустой объект — туннель down или дерево групп ещё не пришло; группа без выбора не попадает. |
-| `GET /state` (поле `tailscale`) | **§581** — узлы Tailscale: `тег → {backend_state, devices}` (состояние узла из `SubscribeTailscaleStatus` и число устройств сети). Имён устройств, адресов, имени сети, владельцев и ссылки входа нет (раздел 9 спеки 581). Пусто — VPN выключен или подписка не поднята (нет узла NETWORKS и не открыта вкладка Network). |
-| `GET /state` (поле `endpoint_states`) | **§535** (ядро SPEC 097) — карта `тег → состояние` WG/AWG-endpoint'ов: `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`. Снимается unary-pull'ом `GetOutbounds` на heartbeat-тике (5 с) — единственный путь, где ядро эти поля заполняет (поток `SubscribeOutbounds` и дерево групп их не несут). Пусто = туннель down, ядро не отдало, либо endpoint'ов в конфиге нет. |
-| `GET /state/subs` | массив подписок (без цепочек — §524, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
+| `GET /state` (поле `tailscale`) | узлы Tailscale: `тег → {backend_state, devices}` (состояние узла из `SubscribeTailscaleStatus` и число устройств сети). Имён устройств, адресов, имени сети, владельцев и ссылки входа нет (раздел 9 спеки 581). Пусто — VPN выключен или подписка не поднята (нет узла NETWORKS и не открыта вкладка Network). |
+| `GET /state` (поле `endpoint_states`) | карта `тег → состояние` WG/AWG-endpoint'ов: `never_built` / `building` / `up` / `asleep` / `torn_down` / `down`. Снимается unary-pull'ом `GetOutbounds` на heartbeat-тике (5 с) — единственный путь, где ядро эти поля заполняет (поток `SubscribeOutbounds` и дерево групп их не несут). Пусто = туннель down, ядро не отдало, либо endpoint'ов в конфиге нет. |
+| `GET /state/subs` | массив подписок (без цепочек, весь список у `GET /subs`), `?reveal=true` показывает clear URLs |
 | `GET /state/rules` | массив custom rules (форма — как у `GET /rules`); у `kind=srs` вложенный `srs:{cached,path,mtime}` |
-| `GET /state/storage` | весь `SettingsStorage._cache` в форме хранения 1.0 (§439: `storage_version`, `sources[]`, `rules[]`, `dns{}`) со scrubber'ом: `vars.debug_token` → `***`, `url` подписки — маской, `origin.raw` сервера → `origin.raw_bytes`, `nodes[]` папки → `nodes_count`. Ключей `server_lists` / `custom_rules` / `dns_options` / `chains` больше нет — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439) |
-| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. **§069** — `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
-| `GET /state/config_locked` | `{locked: bool}` — §037 текущее состояние auto-rebuild lock'а |
+| `GET /state/storage` | весь `SettingsStorage._cache` в форме хранения 1.0 (`storage_version`, `sources[]`, `rules[]`, `dns{}`) со scrubber'ом: `vars.debug_token` → `***`, `url` подписки — маской, `origin.raw` сервера → `origin.raw_bytes`, `nodes[]` папки → `nodes_count`. Ключей `server_lists` / `custom_rules` / `dns_options` / `chains` больше нет — [STORAGE.md](../STORAGE.md#storage-form-and-migration-439) |
+| `GET /state/vpn` | `{auto_start,keep_on_exit,allow_bypass,current_session_allow_bypass,background_mode,is_ignoring_battery_optimizations}`. `current_session_allow_bypass` это **runtime applied** значение (snapshot из последнего `VpnService.Builder.allowBypass()` в `establish()`); может отличаться от persisted `allow_bypass` если юзер поменял toggle без VPN reload. `false` пока VPN never started или после `stop`. |
+| `GET /state/config_locked` | `{locked: bool}` — текущее состояние auto-rebuild lock'а |
 | `GET /device` | `{android_version, sdk_int, manufacturer, model, device, abi, app_version, app_build, core_version, package_name, locale, timezone, is_ignoring_battery_optimizations, network_type, uptime_seconds}` |
 
 ```bash
 curl -s -H "$HDR" "$BASE/state" | jq '{tunnel,active_in_group,nodes_count,groups}'
 curl -s -H "$HDR" "$BASE/state/subs" | jq 'map({id,title,enabled,nodes_count})'
 curl -s -H "$HDR" "$BASE/state/storage" | jq '.vars | keys'   # маскирование всегда, `reveal` не поддерживается
-# Форма хранения и источники (§439/§509): цепочки в sources[] в порядке списка
+# Форма хранения и источники: цепочки в sources[] в порядке списка
 curl -s -H "$HDR" "$BASE/state/storage" | \
   jq '{v: .storage_version, sources: [.sources[] | {kind, id, name, tag}], rules: (.rules | length)}'
 ```
@@ -134,10 +134,10 @@ curl -s -H "$HDR" "$BASE/state/storage" | \
 
 | Endpoint | Метод | Назначение |
 |---|---|---|
-| `GET /config` | GET | raw JSON **сохранённого** конфига (as-is из памяти HomeController; §311 — при живом туннеле может опережать ядро) |
+| `GET /config` | GET | raw JSON **сохранённого** конфига (as-is из памяти HomeController; при живом туннеле может опережать ядро) |
 | `GET /config/pretty` | GET | тот же JSON с indent: 2 |
 | `GET /config/path` | GET | `{app_documents_dir,note}` — путь Flutter dir, не sing-box (см. note) |
-| `GET /config/running` | GET | §311 — снапшот конфига **работающего ядра** (kernel SPEC 036 `GetRunningConfig`). Re-marshal распарсенных options (post-override tun, omitempty) — diff с `/config` только семантический. `409 conflict` = туннель down / ядро < `lx.16-rc.3` / снапшот ещё не подтянут lazy-fetch'ем |
+| `GET /config/running` | GET | снапшот конфига **работающего ядра** (RPC ядра `GetRunningConfig`). Re-marshal распарсенных options (post-override tun, omitempty) — diff с `/config` только семантический. `409 conflict` = туннель down / ядро < `lx.16-rc.3` / снапшот ещё не подтянут lazy-fetch'ем |
 | `PUT /config` | PUT | **прямой override** — body = raw sing-box JSON объект. `HomeController.saveParsedConfig(raw)` минуя `buildConfig`. |
 
 ```bash
@@ -158,9 +158,9 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
 - Body до 1 MiB; валидация — только парсинг (`jsonDecode` must give object).
 - Если `tunnel_up` — TUN перезапустится под новый config автоматически (`saveParsedConfig` делает reload).
 - **Override временный по умолчанию.** Любой последующий `rebuild-config` (включая `?rebuild=true` на других CRUD) перегенерит из settings и сотрёт override.
-- **Чтобы pin'нуть постоянно (§037)** — перед `PUT /config` поставить `PUT /settings/config_locked {"locked": true}`. После этого `SubscriptionController.generateConfig()` возвращает null silently на любой rebuild trigger, custom config удерживается. Снять lock через `{"locked": false}` + `POST /action/rebuild-config` чтобы вернуться к обычному flow.
+- **Чтобы pin'нуть постоянно** — перед `PUT /config` поставить `PUT /settings/config_locked {"locked": true}`. После этого `SubscriptionController.generateConfig()` возвращает null silently на любой rebuild trigger, custom config удерживается. Снять lock через `{"locked": false}` + `POST /action/rebuild-config` чтобы вернуться к обычному flow.
 
-### Pin custom config flow (§037)
+### Pin custom config flow
 
 Use-case: тест экспериментальных sing-box features (Tailscale outbound, custom DNS shapes, и т.п.) которые наш parser/builder не понимает.
 
@@ -200,7 +200,7 @@ curl -s -H "$HDR" "$BASE/state/config_locked"
 
 ## Logs
 
-§043: per-source quotas в `AppLog` — `app=300`, `core=500` ring-buffer'ы независимы. K-way merge на read'е, direct lookup для filtered. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB на файл.
+Per-source quotas в `AppLog` — `app=300`, `core=500` ring-buffer'ы независимы. K-way merge на read'е, direct lookup для filtered. Persistent split: `applog.txt` + `corelog.txt`, по 200 lines / 64KB на файл.
 
 | Endpoint | Метод | Query |
 |---|---|---|
@@ -209,7 +209,7 @@ curl -s -H "$HDR" "$BASE/state/config_locked"
 | `GET /logs/core` | GET | Alias для `/logs?source=core`. Sing-box internal logs (router/dns/inbound/outbound/dial/...). **Требует `core_logs_enabled=true`** — иначе только наши broadcast'ы (`status=...`). |
 | `POST /logs/clear` | POST | `source=app\|core` (опц., без — clear всё) |
 
-**Sing-box logs (`source=core`)** — поток приходит через `PlatformInterface.writeDebugMessage` → EventChannel `lxbox/coreLog` → `ClashLogPump` → AppLog. Filter в Kotlin отсеивает TRACE/DEBUG (volume reduction). `parseLevel` определяет уровень regex'ом по форматам `INFO[NNNN]` (default formatter после strip ANSI) или `WARN<spaces>` (terminal mode). Включается через [`/settings/core_logs_enabled`](#settings--coresettings) — изменение применяется только после **полного рестарта процесса** (`Libbox.setup` one-shot per process; stop/start VPN не помогает — service пересоздаётся, но Application/libbox остаются).
+**Sing-box logs (`source=core`)** — поток приходит через `PlatformInterface.writeDebugMessage` → EventChannel `lxbox/coreLog` → `ClashLogPump` → AppLog. Filter в Kotlin отсеивает TRACE/DEBUG (volume reduction). `parseLevel` определяет уровень regex'ом по форматам `INFO[NNNN]` (default formatter после strip ANSI) или `WARN<spaces>` (terminal mode). Включается через [`/settings/core_logs_enabled`](#settings-writes--settings) — изменение применяется только после **полного рестарта процесса** (`Libbox.setup` one-shot per process; stop/start VPN не помогает — service пересоздаётся, но Application/libbox остаются).
 
 ```bash
 # Только core warn/error для post-mortem диагностики
@@ -233,21 +233,21 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 
 | Endpoint | Query | Что делает |
 |---|---|---|
-| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (§308: force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (параллельность `ping_options.concurrency`, §713); `cancel=1` — отмена in-flight mass-ping (§163, epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
-| `POST /action/urltest-all` | — | §625: групповой URLTest ядра (как `urltest?group=`, §308) для **каждой** urltest-группы текущего состояния, последовательно; fire-and-forget. Не mass-ping узлов (`urltest?all=true`), селекторы Направлений не трогает. Общий обработчик с Intent `URLTEST_ALL` и командой плагина `urltest-all`. 409 если tunnel down; нет urltest-групп — не ошибка (`groups:0`). → `{ok, action:"urltest-all", groups:N}` |
+| `POST /action/urltest` | `tag=<node>` \| `group=<tag>` \| `all=true` \| `cancel=1` | единый URLTest-диспатч (ровно один scope): `tag` — single-node; `group` — групповой URLTest ядра (force-тест ВСЕХ членов + переселект на живой узел; fire-and-forget — `ok` значит «команда принята», результат смотреть через `GET /state` → `active_in_group`; URL — из конфига группы, не из ping settings; 409 если tunnel down); `all` — mass-ping всех нод активной группы (параллельность `ping_options.concurrency`); `cancel=1` — отмена in-flight mass-ping (epoch-bump; уже запущенные групповые прогоны в ядре не отменяет). → `{ok,action,scope,...}` |
+| `POST /action/urltest-all` | — | групповой URLTest ядра (как `urltest?group=`) для **каждой** urltest-группы текущего состояния, последовательно; fire-and-forget. Не mass-ping узлов (`urltest?all=true`), селекторы Направлений не трогает. Общий обработчик с Intent `URLTEST_ALL` и командой плагина `urltest-all`. 409 если tunnel down; нет urltest-групп — не ошибка (`groups:0`). → `{ok, action:"urltest-all", groups:N}` |
 | `POST /action/switch-node` | `tag=<tag>` | selector switch на node. 409 если не выбрана группа |
 | `POST /action/set-group` | `group=<tag>` | смена активной группы |
-| `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API (§047) этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
-| `POST /action/start-vpn-headless` | `guard=true` | §165 — старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. **Фича 478**, `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
-| `POST /action/check-config` | `timeout_ms=<N>` | **Фича 478** — `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает PARSING_PRINCIPLES §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
-| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра). Идущий прогон страховки (фича 478) гасится, как `POST /core_reject/cancel`: исход `stopped_by_user`, финального старта нет. Так же действуют кнопка Stop, плитка QS, Intent API и Locale |
-| `POST /action/reconnect` | — | §163 — Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
-| `POST /action/reload-vpn` | — | §163 — in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
+| `POST /action/start-vpn` | — | `runCoreRejectGuard(guard=false)` → прежний `home.start()` через Activity (может показать consent-диалог), **без** цикла страховки. Публичный Intent API этот путь не зовёт — native `LxBoxIntentReceiver` идёт в `BoxVpnService.start` напрямую |
+| `POST /action/start-vpn-headless` | `guard=true` | старт VPN **без** Activity/consent, прямо через `BoxVpnService.start()`. Работает только если VPN-разрешение уже выдано (`VpnService.prepare()==null`). Для self-test/automation. → `{"ok":true,"action":"start-vpn-headless","started":<bool>,"needs_consent":<bool>}`. `guard=true` — старт **через страховку** асинхронно: тот же автомат, что на кнопке Start, но реальные старты — headless (`startVpnHeadless`, не Activity) → `{guard:true, started:true, async:true}` сразу; фазу/исход читать через `GET /core_reject` (409 если прогон уже идёт). Диалога предела на экране нет — `POST /core_reject/prompt?answer=keep` можно заранее или пока висит вопрос. Без флага — прежний путь |
+| `POST /action/check-config` | `timeout_ms=<N>` | `Libbox.checkConfig`: с телом запроса проверяет **этот** JSON; без тела — **текущий собранный** конфиг на диске (не пересобранный на лету). Та же проверка, которой страховка крутит тихий цикл, но одним выстрелом и без туннеля. → `{config_ok:<bool>, error, ms, bytes}`, где `error` — **сырой** текст ядра (его и разбирает PARSING_PRINCIPLES §9). Сервер однопоточный, поэтому ждём с потолком: `timeout_ms` по умолчанию 10000, не больше таймаута запроса; не успели — 409 |
+| `POST /action/stop-vpn` | — | `BoxVpnService.stop()` (кооперативный, ждёт Stopped от ядра). Идущий прогон страховки гасится, как `POST /core_reject/cancel`: исход `stopped_by_user`, финального старта нет. Так же действуют кнопка Stop, плитка QS, Intent API и Locale |
+| `POST /action/reconnect` | — | Stop→Start одной командой под общим busy-wrap. Если туннель down — делегирует в `start()`. → `{"ok":true,"action":"reconnect"}` |
+| `POST /action/reload-vpn` | — | in-place reload sing-box runtime **без** убийства Android-сервиса (cooldown-gated через `canReload`; туннель дропается ~3с). `applied:false` если reload недоступен (не connected / в cooldown). → `{"ok":true,"action":"reload-vpn","applied":<bool>}` |
 | `POST /action/clear-error` | — | сброс `lastError`-баннера программно (после того как automation обработала/спровоцировала ошибку). → `{"ok":true,"action":"clear-error"}` |
 | `POST /action/force-stop-vpn` | — | жёсткий teardown → `stopSelf` (не кооперативный). Освобождает порт CommandServer при зависшем `stop-vpn`. → `{"ok":true,"action":"force-stop-vpn","native_ok":<bool>}` |
-| `POST /action/set-transient-timeout` | `connecting=<ms>` \| `stopping=<ms>` | §140 — override порогов transient-timeout (connecting/stopping). Оба параметра опциональны, но минимум один обязателен; значения — положительные ms. → `{"ok":true,"action":"set-transient-timeout","connecting_ms":N,"stopping_ms":N}` |
+| `POST /action/set-transient-timeout` | `connecting=<ms>` \| `stopping=<ms>` | override порогов transient-timeout (connecting/stopping). Оба параметра опциональны, но минимум один обязателен; значения — положительные ms. → `{"ok":true,"action":"set-transient-timeout","connecting_ms":N,"stopping_ms":N}` |
 | `POST /action/emulate-error` | `kind=<k>` | демо `humanizeError` в `/logs`. `kind`: `socket\|timeout\|http-401\|http-404\|http-410\|http-429\|http-503\|format\|fs\|plain\|all` |
-| `POST /action/reset-network` | — | §031 light recovery: closeAllConnections + DNS cache flush + dialer rebind. БЕЗ recreate'а box/Service/TUN. Требует tunnel up (409 если down). → `{"ok":true,"action":"reset-network","native_ok":<bool>}` |
+| `POST /action/reset-network` | — | light recovery: closeAllConnections + DNS cache flush + dialer rebind. БЕЗ recreate'а box/Service/TUN. Требует tunnel up (409 если down). → `{"ok":true,"action":"reset-network","native_ok":<bool>}` |
 | `POST /action/rebuild-config` | — | `SubscriptionController.generateConfig()` + save |
 | `POST /action/refresh-subs` | `force=true\|false` | триггер AutoUpdater |
 | `POST /action/download-srs` | `ruleId=<id>` | скачать .srs для custom rule |
@@ -255,8 +255,8 @@ curl -X POST -H "$HDR" "$BASE/logs/clear?source=core"
 | `POST /action/toast` | `msg=<str>&duration=short\|long` | Toast на устройстве (до 200 chars) |
 | `POST /action/check-updates` | — | force update check (обход 24h cap + `auto_check_updates`). → `{ok, action, kind, tag, name, html_url, published_at, dismissed, local_version, message}` (поля tag..dismissed — только при `kind=update-available`; зеркалит UI «Check now»). Primary `api.github.com` → fallback `raw.githubusercontent.com/.../docs/latest.json`. |
 | `POST /action/preview-empty-state` | `on=true\|false` | UI-only override: HomeScreen рендерит empty-state как при чистой инсталляции, реальные данные не трогаются. Полезно для скриншотов / regression UX. |
-| `POST /action/pathmtu` | `target=<host\|ip>` (по умолчанию `8.8.8.8`) | §725 — замер Path MTU мимо туннеля (ICMP-эхо с DF на физической сети, бинарный поиск до MTU интерфейса), без ядра, при любом состоянии VPN. Синхронно, до ~25 с. → `{ok, action, target, ip, iface, transport, iface_mtu, vpn_running, path_mtu, status: ok\|unreachable\|no_network\|below_floor\|cancelled\|error, recommend: {wireguard, masque}\|null, probes: [{size, status: ok\|timeout\|too_big\|error, rtt_ms}]}`. `path_mtu` — размер IP-пакета целиком; `recommend` только при `status: ok`: WireGuard/AWG = `path_mtu − 60` (IPv4-цель) / `− 80` (IPv6), MASQUE = `path_mtu − 51`. |
-| `POST /action/quic-knobs` | `gso=on\|off` и/или `ecn=on\|off` (минимум один) | §341 — env-ручки quic-go для полевой A/B-диагностики offload-гипотез (hysteria2/tuic/masque-h3 мертвы на вендорском ядре — SPEC 044). `off` = принудительно выключить (env `QUIC_GO_DISABLE_GSO/ECN=true`), `on` = вернуть авто-детект (env снят; именно unset, не `false` — честнее в `/state`-археологии). Действует только на **НОВЫЕ** QUIC-сокеты — после переключения нужен `reload-vpn`/`reset-network`. Работает и без поднятого туннеля (static `Libbox.setQuic*Disabled`, Go-side `os.Setenv`). `native_ok:false` по ручке = AAR старее SPEC 044 (нет экспорта). → `{ok, action:"quic-knobs", gso?:{disabled,native_ok}, ecn?:{disabled,native_ok}}` |
+| `POST /action/pathmtu` | `target=<host\|ip>` (по умолчанию `8.8.8.8`) | замер Path MTU мимо туннеля (ICMP-эхо с DF на физической сети, бинарный поиск до MTU интерфейса), без ядра, при любом состоянии VPN. Синхронно, до ~25 с. → `{ok, action, target, ip, iface, transport, iface_mtu, vpn_running, path_mtu, status: ok\|unreachable\|no_network\|below_floor\|cancelled\|error, recommend: {wireguard, masque}\|null, probes: [{size, status: ok\|timeout\|too_big\|error, rtt_ms}]}`. `path_mtu` — размер IP-пакета целиком; `recommend` только при `status: ok`: WireGuard/AWG = `path_mtu − 60` (IPv4-цель) / `− 80` (IPv6), MASQUE = `path_mtu − 51`. |
+| `POST /action/quic-knobs` | `gso=on\|off` и/или `ecn=on\|off` (минимум один) | env-ручки quic-go для полевой A/B-диагностики offload-гипотез (hysteria2/tuic/masque-h3 мертвы на вендорском ядре). `off` = принудительно выключить (env `QUIC_GO_DISABLE_GSO/ECN=true`), `on` = вернуть авто-детект (env снят; именно unset, не `false` — честнее в `/state`-археологии). Действует только на **НОВЫЕ** QUIC-сокеты — после переключения нужен `reload-vpn`/`reset-network`. Работает и без поднятого туннеля (static `Libbox.setQuic*Disabled`, Go-side `os.Setenv`). `native_ok:false` по ручке = AAR без этих ручек (нет экспорта). → `{ok, action:"quic-knobs", gso?:{disabled,native_ok}, ecn?:{disabled,native_ok}}` |
 
 ```bash
 # Типичный flow диагностики
@@ -268,7 +268,7 @@ curl -s -H "$HDR" "$BASE/state" | jq '{active:.active_in_group,err:.last_error}'
 # Sanity что трогаешь правильный девайс
 curl -X POST -H "$HDR" "$BASE/action/toast?msg=hello%20from%20debug%20API"
 
-# §725 Path MTU мимо туннеля (до ~25 с): итог и рекомендация MTU узлам
+# Path MTU мимо туннеля (до ~25 с): итог и рекомендация MTU узлам
 curl -s -X POST -H "$HDR" "$BASE/action/pathmtu?target=1.1.1.1" | jq '{status,iface,iface_mtu,path_mtu,recommend}'
 ```
 
@@ -276,7 +276,7 @@ curl -s -X POST -H "$HDR" "$BASE/action/pathmtu?target=1.1.1.1" | jq '{status,if
 
 ## Rules CRUD — `/rules/*`
 
-Custom routing rules (§030). `id` = UUID v4, генерится сервером при create. Wire-level shape см. в `/state/rules` или ниже.
+Custom routing rules. `id` = UUID v4, генерится сервером при create. Wire-level shape см. в `/state/rules` или ниже.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -286,7 +286,7 @@ Custom routing rules (§030). `id` = UUID v4, генерится серверо�
 | `/rules/{id}` | PATCH | любой subset полей (strict type check) |
 | `/rules/{id}` | DELETE | — |
 | `/rules/reorder` | POST | `{"order":[id1,id2,...]}` — должен содержать все текущие ID |
-| `/rules/move` | POST | `{"id":"<uuid>","after":"<uuid>"\|null}` — §370, зеркало drag'n'drop в UI |
+| `/rules/move` | POST | `{"id":"<uuid>","after":"<uuid>"\|null}` — зеркало drag'n'drop в UI |
 
 `/rules/move` отличается от `reorder` тем, что не требует полного списка:
 правило встаёт на `target.num + 1`, соседи сдвигаются только если это число
@@ -330,19 +330,19 @@ Storage order = sing-box `route.rules[]` order (за вычетом 3 system rul
 `resolve` / `sniff` / `dns hijack` которые builder всегда вставляет первыми).
 Rules матчатся **first-wins** сверху вниз, так что reorder напрямую влияет
 на приоритет. Order соблюдается **между kind'ами** (`preset` / `inline` /
-`srs`) — раньше builder делал 2 прохода и cross-kind ordering терялся, в
-[§062](../spec/tasks/062-custom-rules-unified-order.md) починено.
+`srs`) — раньше builder делал 2 прохода и cross-kind ordering терялся, теперь
+порядок единый ([спека](../spec/tasks/062-custom-rules-unified-order.md)).
 
 **Shape CustomRule body** (все optional кроме `name`):
 ```json
 {
   "name": "string",                 // required, non-empty
   "enabled": true,
-  "kind": "inline|srs|preset|json", // default inline; json — сырое тело route.rule в поле "json" (§225)
-  "num": 42,                        // только в ответе (§370, ось порядка; null — ещё не размечено); двигать — /rules/move
+  "kind": "inline|srs|preset|json", // default inline; json — сырое тело route.rule в поле "json"
+  "num": 42,                        // только в ответе (ось порядка; null — ещё не размечено); двигать — /rules/move
   "preset_id": "<id>",              // required при kind=preset
   "vars_values": {"var":"val"},     // preset-only: overrides шаблонных vars
-  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "block_https": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + Block HTTPS/SVCB records (§755; действует при условии по домену) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
+  "dns": {"enabled": true, "server_tag": "<tag>", "force_ipv4": false, "block_https": false, "fixed_ips": ["192.168.1.10"]}, // inline/srs DNS-опция: dedicated server + Force IPv4 (drop AAAA) + Block HTTPS/SVCB records (действует при условии по домену) + ответ фиксированным IP (непустой fixed_ips, приоритетнее enabled; отдельного флага нет); поля независимы, server_tag обязателен лишь при enabled=true
   "domains": ["exact.domain"],
   "domain_suffixes": [".ru","xn--p1ai"],
   "domain_keywords": ["tracker"],
@@ -356,13 +356,13 @@ Rules матчатся **first-wins** сверху вниз, так что reord
   "source_ip_cidrs": ["192.168.1.0/24"], // inline/srs: source-ось
   "source_ip_is_private": false,
   "inbounds": ["tun-in"],           // inline/srs: матч по inbound
-  "wifi_ssids": ["HomeWiFi"],       // inline/srs (§051), нужны location-permissions
+  "wifi_ssids": ["HomeWiFi"],       // inline/srs, нужны location-permissions
   "wifi_bssids": ["aa:bb:cc:dd:ee:ff"], // формат валидируется, нормализуется в lower-case
-  "network_type": ["cellular"],     // inline/srs (§694): wifi | cellular | ethernet | other, разрешений не нужно
-  "network_is_expensive": true,     // inline/srs (§694): только лимитная сеть
+  "network_type": ["cellular"],     // inline/srs: wifi | cellular | ethernet | other, разрешений не нужно
+  "network_is_expensive": true,     // inline/srs: только лимитная сеть
   "srs_url": "https://...rule-set.srs", // srs: первый набор
   "srs_urls": ["https://a.srs","https://b.srs"], // srs: все наборы по порядку; главнее srs_url
-  "resolve": {"only": false, "strategy": "ipv4_only", "server_tag": "<tag>", "timeout": "5s"}, // inline/srs (§247); null — снять
+  "resolve": {"only": false, "strategy": "ipv4_only", "server_tag": "<tag>", "timeout": "5s"}, // inline/srs; null — снять
   "outbound": "vpn-1|direct-out|reject" // inline/srs; default direct-out
 }
 ```
@@ -380,10 +380,10 @@ Rules матчатся **first-wins** сверху вниз, так что reord
 
 ## Subscriptions CRUD — `/subs/*`
 
-Подписки + inline user-servers. §575 — поля `sections` в ответе нет: секции
+Подписки + inline user-servers. Поля `sections` в ответе нет: секции
 узла упразднены.
 
-§578/§656 — у `UserServer` и у члена папки (`GET /folders/{id}`) есть поля
+У `UserServer` и у члена папки (`GET /folders/{id}`) есть поля
 записи (bool, read-only, PATCH их не принимает):
 
 - `skip_tailscale_presets` (до контракта 1.1.126 — `skip_presets`): `true` —
@@ -399,7 +399,7 @@ curl -s -H "$HDR" "$BASE/subs" \
   | jq '.[] | select(.kind=="UserServer") | {id, skip_tailscale_presets}'
 ```
 
-§636 — у каждой записи `/subs` (подписка, папка, одиночный сервер) и у члена
+У каждой записи `/subs` (подписка, папка, одиночный сервер) и у члена
 папки есть поле `tls` — переопределение ручек раздела TLS Fragmentation:
 `{fragment, record_fragment, fallback_delay, mixed_case_sni}`, не заданное
 поле — `null`, запись без политики — `{}`. У подписки и папки это уровень
@@ -418,9 +418,9 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
   -d '{"tls":{"fragment":false,"record_fragment":false}}' | jq '.member.tls'
 ```
 
-**§524 — `GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
+**`GET /subs` отдаёт ВЕСЬ список источников** в порядке `sources[]`, тот
 же, что видит пользователь на экране Servers: подписки, серверы, папки **и
-цепочки** одним массивом. До §524 ответ нёс только контейнеры, а цепочки жили в
+цепочки** одним массивом. Раньше ответ нёс только контейнеры, а цепочки жили в
 отдельном `/chains` — смешанный порядок диска этим API нельзя было ни прочитать,
 ни выразить.
 
@@ -430,11 +430,11 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
 | `kind` | Что это | Поля |
 |---|---|---|
 | `SubscriptionServers` / `UserServer` / `FolderServers` | контейнер узлов | полный shape записи (как `/state/subs`) |
-| `SourceChain` | цепочка (§524 — такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
-| `Unreadable` | запись, которую кодек не читает (§141 P1.8c) | `record_kind` — её `kind` с диска, `enabled: false` |
+| `SourceChain` | цепочка (такая же запись списка) | `id` = тег, `title`, `enabled`, `nodes_count` = `hops_count` = число позиций |
+| `Unreadable` | запись, которую кодек не читает | `record_kind` — её `kind` с диска, `enabled: false` |
 
 У `SubscriptionServers` в записи есть `announce` — описание подписки из
-заголовка `announce` (§648), расшифрованное и нормализованное; нет — `""`.
+заголовка `announce`, расшифрованное и нормализованное; нет — `""`.
 
 Маршрут цепочки (позиции, `strip`, `rewrite`) здесь НЕ разворачивается: его
 читает и правит `/chains/{tag}` — `/subs` отвечает за состав и порядок списка.
@@ -447,19 +447,19 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
 | `/subs` | GET | `?reveal=true` — clear URLs |
 | `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` → 201 `{id, kind, tags}` (одна запись) или `{ids, count, tags}`; `tags` — итоговые теги узлов в конфиге (с эмодзи и префиксом); `impair` сохраняет тег как передан |
 | `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
-| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity + **§636**: `tls` (частичная правка, `null` — наследовать). **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
+| `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + on_update_action/import_rules_enabled/identity + `tls` (частичная правка, `null` — наследовать). `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
 | `/subs/{id}/refresh` | POST | trigger fetch. 409 для UserServer |
-| `/subs/reorder` | POST | **§524** `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (форма до §524). Одна запись на диск |
+| `/subs/reorder` | POST | `{"order":[source_key,...]}` — ключи ЛЮБОГО рода (`id:<uuid>` / `chain:<tag>`), состав обязан совпасть с текущим списком. Голый uuid тоже принимается (прежняя форма). Одна запись на диск |
 
-### Фича 478 — `reveal` и `warnings` у одной записи
+### `reveal` и `warnings` у одной записи
 
 **`?reveal=true`** теперь отдаёт `raw` и у одиночного `UserServer` — текст
 узла, как он сохранён. Раньше сырое тело показывал только член папки, и
 сличить разбор с источником у одиночной записи было нечем. Несёт
 credentials, поэтому симметрично папке: только под `reveal`.
 
-**`?warnings=true`** добавляет `origin_kind`, `source_kind` (§455/§480) и ключ
+**`?warnings=true`** добавляет `origin_kind`, `source_kind` и ключ
 `warnings` — предупреждения разбора **по узлам**:
 
 ```jsonc
@@ -486,15 +486,15 @@ credentials, поэтому симметрично папке: только по
 
 **Ключ — сырой тег узла в контейнере** (`containerRawTags`, NODE_LINK §2.2) — тот же
 адрес, по которому узел виден в `nodes[]`, `GET /nodes/link?tag=` и
-`POST /action/switch-node?tag=`. У тёзок провайдера (§310 — все узлы зовутся
+`POST /action/switch-node?tag=`. У тёзок провайдера (все узлы зовутся
 `proxy`; дубль `vpn://`↔`amneziawg://` под одним именем) ключи различаются
 так же, как в списке узлов: `X`, `X-2`, `X-3`.
 
-§520 — раньше карта ключевалась СЫРЫМ `NodeSpec.tag` и у тёзок теряла
+Раньше карта ключевалась СЫРЫМ `NodeSpec.tag` и у тёзок теряла
 записи last-write-wins: у 12 узлов ответ отдавал 8 ключей, а `nodes_count`
 оставался верен — счётчик расходился со списком. Форма ответа не менялась
 (тот же объект «тег → список»), и у записи без тёзок ключи дословно те же,
-что и до §520. Инвариант: **`warnings.length == nodes_count`**.
+что и раньше. Инвариант: **`warnings.length == nodes_count`**.
 
 У члена папки адрес — тег как есть (NODE_LINK §2.2, у ссылки побеждает
 первый), поэтому тёзки-члены получают суффикс с **индексом узла** (`X#3`), а
@@ -511,9 +511,9 @@ credentials, поэтому симметрично папке: только по
 перевода классов на `RegistryWarning` форма ответа не меняется — у кода
 просто появляются `path`/`value`.
 
-§577 — `applied` (bool) есть у каждой записи: `false` — правило реестра не
+`applied` (bool) есть у каждой записи: `false` — правило реестра не
 применено, потому что тело узла авторское (свой сервер или член папки с
-голым sing-box JSON, §576) и правило мягкое; тело ушло в ядро как написано.
+голым sing-box JSON) и правило мягкое; тело ушло в ядро как написано.
 У классов приложения и у применённых кодов — `true`. В отчёте сборки
 (`emitWarnings`) такая строка кончается пометкой `(not applied)`.
 
@@ -527,7 +527,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 # → {"ok":true,"action":"subs-add","id":"<new>","kind":"SubscriptionServers"}
 ```
 
-**Отказ `addFromInput` (§500)** — запись не создаётся, `400 bad_request`.
+**Отказ `addFromInput`** — запись не создаётся, `400 bad_request`.
 В теле, кроме `error.message` (базовая фраза без деталей), массив `dropped`
 с причинами отбраковки (код реестра; `value` у секретных полей — `***`):
 
@@ -594,7 +594,7 @@ curl -s -H "$HDR" "$BASE/state/subs" | jq '.[] | select(.id=="<id>") | {title, n
 
 **Reorder:** то же что у rules.
 
-### §439 — `override_detour` ссылкой на узел (NodeLink)
+### `override_detour` ссылкой на узел (NodeLink)
 
 С 2.23.3 detour источника — не финальный тег конфига, а ссылка
 `{folder_id?, tag}` (D-112, [STORAGE.md → Node references](../STORAGE.md#node-references--nodelink-439-d-112)). Та же форма в ответах
@@ -632,14 +632,14 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"override_detour":null}' "$BASE/subs/<id>"
 ```
 
-### §346 — identity подписки (§289)
+### Identity подписки
 
 `identity` — **тристейт**, поэтому не `null`-как-обычно:
 
 | body | результат |
 |---|---|
 | ключ отсутствует | не трогаем |
-| `"identity": null` | Custom → Default (глобальная идентичность §118) |
+| `"identity": null` | Custom → Default (глобальная идентичность) |
 | `"identity": {...}` | Custom + наложение переданных полей **поверх слепка** |
 
 Объект — патч, а не полная замена: при переходе в Custom слепок сначала
@@ -650,7 +650,7 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 ```bash
 # Включить x-hwid ТОЛЬКО этой подписке (глобальные subscription_* не трогаются).
 # Типовой кейс: Remnawave-панель с HWID-гейтом отдаёт заглушку
-# `vless://0000…#App not supported` (§310), пока не увидит x-hwid.
+# `vless://0000…#App not supported`, пока не увидит x-hwid.
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"identity":{"send_hwid":true,"hwid":"'$(uuidgen | tr A-Z a-z)'"}}' \
   "$BASE/subs/<id>"
@@ -662,13 +662,13 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"identity":null}' "$BASE/subs/<id>"
 ```
 
-`on_update_action` (§323) — `rebuild|reload|none`; в отличие от толерантного
+`on_update_action` — `rebuild|reload|none`; в отличие от толерантного
 парса storage, мусор здесь → 400 (иначе опечатка молча дала бы дефолт).
 
-### §346 — Import rules CRUD — `/subs/{id}/rules`
+### Import rules CRUD — `/subs/{id}/rules`
 
-Правила обработки узлов на импорте (§302/§307/§332). Упорядоченная коллекция
-без id → адресация **позиционным индексом**, как у членов папки в §238: после
+Правила обработки узлов на импорте. Упорядоченная коллекция
+без id → адресация **позиционным индексом**, как у членов папки: после
 `DELETE`/`reorder` индексы съезжают, следующий вызов строить по снапшоту
 `rules` из ответа (его возвращает каждый write). Не-подписка (UserServer /
 папка) → 409.
@@ -707,7 +707,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 ```
 
 **Порядок значим:** правила применяются последовательно, последнее сработавшее
-`enable`/`disable` побеждает (§332) — «выключить всё» первым правилом + точечные
+`enable`/`disable` побеждает — «выключить всё» первым правилом + точечные
 `enable` дальше = whitelist.
 
 `"usable": false` — правило распарсилось, но на импорте будет пропущено
@@ -715,14 +715,14 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 легально и в UI-редакторе.
 
 **Когда применятся:** на **следующем** refresh — существующие ноды на месте не
-переразбираются (поведение §302). Поэтому `?rebuild=true` на rules-write'ах
+переразбираются. Поэтому `?rebuild=true` на rules-write'ах
 почти бесполезен (конфиг соберётся из старых нод), хотя и принимается для
 единообразия. Порядок: правки правил → `POST /subs/{id}/refresh` → wait →
 `POST /action/rebuild-config`.
 
 **Quirks:**
 - `PATCH /subs/{id}` с `url` на UserServer молча игнорируется (у inline-серверов нет URL).
-- `replace_detour_chain` (§073) — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
+- `replace_detour_chain` — bool detour-флаг, ранее пропущенный в PATCH-маппинге (асимметрия с соседними `register_detour_*`); теперь маппится. Config-significant → `?rebuild=true` чтобы применить.
 - `POST /subs/{id}/refresh` на UserServer → 409 `conflict` (нечего фетчить).
 - `POST /subs` с `?rebuild=true` **не ждёт fetch'а** — fetch асинхронный, rebuild'ит с текущими nodes (которых ещё нет → config без этих outbound'ов). Делай последовательно: `POST /subs` → `POST /subs/{id}/refresh` → wait → `POST /action/rebuild-config`.
 
@@ -730,7 +730,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 ## Nodes — `/nodes/*`
 
-Фича 478. Узел глазами **эмиттера**, а не хранения. В `/subs/{id}` узел виден
+Узел глазами **эмиттера**, а не хранения. В `/subs/{id}` узел виден
 так, как лежит (`raw`, секции, поля записи); здесь — тем, что приложение
 отдаст наружу. Между двумя сторонами стоит эмиттер, и расхождение заметно
 только когда обе читаются рядом.
@@ -748,13 +748,13 @@ curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
 ```
 
 - `tag` принимается и «как в конфиге» (с префиксом подписки), и голым: экран
-  адресует узлы первым, хранение — вторым. Звенья цепочки (§404) тоже ищутся.
+  адресует узлы первым, хранение — вторым. Звенья цепочки тоже ищутся.
 - `uri` несёт credentials → только с `?reveal=true` (симметрично `/subs/{id}` и
   `raw` члена папки). Без флага → `{error:"reveal required"}`.
 - `private_key: true` — ссылка несёт приватный ключ владельца. На экране это
-  поднимает диалог (§466); здесь предупреждение не теряется, а становится
+  поднимает диалог; здесь предупреждение не теряется, а становится
   данными.
-- Узел найден, но ссылкой не выражается (группы §208 и прочие узлы,
+- Узел найден, но ссылкой не выражается (группы round_robin и прочие узлы,
   собранные приложением без текста) → `{tag, protocol, error:"node has no
   link form"}`, а **не** 404: узел есть, ответ обязан отличать «нет узла» от
   «нет ссылки».
@@ -764,24 +764,24 @@ curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7" | jq
 
 ## Directions CRUD — `/directions/*`
 
-§238 — Направления роутинга §125/§393 (`directions[]` в storage). Обёртка над
+Направления роутинга (`directions[]` в storage). Обёртка над
 `SettingsStorage.getDirections / addDirection / updateDirection /
 deleteDirection` — семантика идентична UI: `vpn-1` неудаляем и всегда enabled,
 удаление/выключение Направления деградирует rules-ссылки (route_final /
-custom-rule outbound) на `vpn-1` (§202, необратимо), detour-ссылки
+custom-rule outbound) на `vpn-1` (необратимо), detour-ссылки
 (корневые `{tag}` на Направление в `override_detour` источника и `detour` члена
-папки) снимаются (None, §248). Shape ресурса —
+папки) снимаются (None). Shape ресурса —
 storage-JSON Направления (`Direction.toJson()`, snake_case), включая поле
-`detour` (§248 — Направление как detour-прослойка).
+`detour` (Направление как detour-прослойка).
 
-> **§393 — путь переименован.** До v2.21.0 эти же ресурсы жили под
+> **Путь переименован.** До v2.21.0 эти же ресурсы жили под
 > `/channels/*` («каналы роутинга»). Путь сменился на `/directions/*` **без
 > алиаса**: старый `/channels` отдаёт 404, а не редирект. Скрипты правятся
 > заменой сегмента пути — тела запросов и ответов те же, только имя сущности
 > в тексте другое. Данные мигрируют сами (ключ storage `channels` →
 > `directions`, one-shot).
 
-**Теги произвольные, потолка нет** (§393): `vpn-N` — обычные теги, а не
+**Теги произвольные, потолка нет**: `vpn-N` — обычные теги, а не
 фиксированный словарь; лимит в 10 Направлений снят. POST без `tag` выдаёт
 первый свободный `vpn-N`, присланный `tag` принимается как есть. Отвергнутый
 тег → 409 с машинной причиной в сообщении: `empty` | `reserved`
@@ -810,7 +810,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   "$BASE/directions?rebuild=true"
 # → 201 {"tag":"vpn-2","label":"Germany",...,"rebuilt":true,...}
 
-# Создать Направление с произвольным тегом (§393 — потолка в 10 нет)
+# Создать Направление с произвольным тегом (потолка в 10 нет)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   -d '{"tag":"ru-exit","label":"RU exit","node_filter":"RU"}' \
   "$BASE/directions?rebuild=true"
@@ -824,12 +824,12 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"auto":null}' "$BASE/directions/vpn-2"
 
-# Состав: предложить внутри vpn-2 опциями другие Направления (§393)
+# Состав: предложить внутри vpn-2 опциями другие Направления
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"include":["ru-exit"],"include_direct":true}' \
   "$BASE/directions/vpn-2?rebuild=true"
 
-# Разрешить Направление как detour-мишень (§248/§274): появляется в пикерах
+# Разрешить Направление как detour-мишень: появляется в пикерах
 # detour; целью правил остаётся, существующие ссылки правил не трогаются
 curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   -d '{"detour":true}' "$BASE/directions/vpn-2?rebuild=true"
@@ -841,9 +841,9 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   `url`, остальные urltest-опции (и вложенный `balancer{}`) сохраняются.
   Полный reset — прислать все поля явно. `"auto": null` — снять галку.
 - `tag` immutable (системный id) → передан в PATCH → 400. Юзер-имя — `label`.
-- `include` (§393) — теги **других** Направлений, предлагаемых опциями внутри
+- `include` — теги **других** Направлений, предлагаемых опциями внутри
   этого (и группы свёрток источников). Законны только Направления **выше** по
-  списку — UX-правило, порядок исключает циклы (§673). `include` в
+  списку — UX-правило, порядок исключает циклы. `include` в
   POST/PATCH, называющий Направление не выше, само Направление или
   неизвестный тег, → 409 `conflict`; `/directions/reorder`, ставящий
   существующую ссылку вниз, → 409 `conflict`; хранилище не меняется. Тело
@@ -853,11 +853,11 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   `not_above`). Ссылка вниз из старого бэкапа reorder не блокирует, сборка
   снимает её с предупреждением.
 - `PATCH vpn-1 {"enabled":false}` и `DELETE /directions/vpn-1` → 409 `conflict`.
-- `detour` (§248/§274): `PATCH vpn-1 {"detour":true}` → 409 `conflict`
+- `detour`: `PATCH vpn-1 {"detour":true}` → 409 `conflict`
   (vpn-1 — главное Направление и heal-резерв, продуктовое решение).
-  `include_block` с `detour` совместим (§274 снял 409 и тихую нормализацию):
+  `include_block` с `detour` совместим (409 и тихая нормализация сняты):
   оба поля принимаются и сохраняются в любой комбинации.
-- **Переименование при смене `detour`** (§274): префикс `⚙ ` в `label`
+- **Переименование при смене `detour`**: префикс `⚙ ` в `label`
   зарезервирован как маркер detour-Направления (как ⚙-метка в тегах
   detour-серверов). `detour:true` дописывает его в сохранённый `label`,
   `detour:false` срезает; присланный `label` нормализуется так же (маркер у
@@ -869,9 +869,9 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   счётчики вылеченных ссылок (API-аналог
   UI-SnackBar'а): `rules` — route_final / custom-rule outbound (у пресета —
   переменные типа `outbound`) → `vpn-1`
-  (disable, delete; §274: detour flag-set НЕ heal-триггер — Направление
+  (disable, delete; detour flag-set НЕ heal-триггер — Направление
   остаётся целью правил, `rules` при `{"detour":true}` всегда 0);
-  `dns_servers` (§441) — DNS-серверы, которые называли Направление, →
+  `dns_servers` — DNS-серверы, которые называли Направление, →
   `vpn-1` (disable, delete): переменная типа `outbound` у template (значение,
   равное умолчанию шаблона, снимается), `body.detour` у user — в корневом
   списке и в секциях узлов; `detours` —
@@ -884,8 +884,7 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
   **выключение — нет**: `include` переживает disable, билдер просто
   деградирует эмитируемую группу.
 - Выключение Направления (enabled:false) деградирует ссылки сразу и
-  **необратимо** — повторное включение старую ссылку не воскрешает (§202,
-  Решение B).
+  **необратимо** — повторное включение старую ссылку не воскрешает.
 - `node_filter`/`default_filter` валидируются как regex → битый паттерн 400
   (иначе уронил бы сборку конфига).
 - POST с PATCH-полями применяет их **после** создания: конфликтный body
@@ -897,7 +896,7 @@ curl -X PATCH -H "$HDR" -H "Content-Type: application/json" \
 
 ## Mixins CRUD — `/mixins/*`
 
-§704 — миксины: хранимые операции над итоговым конфигом ядра (`mixins[]` в
+Миксины: хранимые операции над итоговым конфигом ядра (`mixins[]` в
 storage, `docs/STORAGE.md`). Применяются по порядку списка последним шагом
 сборки — после санитайзера графа, до валидатора. Ресурс — `Mixin.toJson()`:
 `{id, name, enabled, target, op, value}`.
@@ -955,8 +954,8 @@ be one of append|prepend|before|after|set|merge|remove`); у `remove` значе
 
 ## Chains CRUD — `/chains/*`
 
-§393 C / SPEC 110 — **цепочки хопов**, третий вид источника рядом с
-подписками и серверами (§439/§509: записи `kind: chain` в `sources[]` в
+**Цепочки хопов**, третий вид источника рядом с
+подписками и серверами (записи `kind: chain` в `sources[]` в
 storage, отдельного ключа и поля `order` нет). Цепочка — это явный маршрут
 `вы → хоп 1 → хоп 2 → цель`, который эмитится одним outbound'ом
 `type: "chain"`. Не путать с detour: **цепочка — это источник (маршрут)**, а
@@ -967,7 +966,7 @@ detour — свойство отдельного узла. Позиция цеп
 объявленные **выше** неё, — так исключаются циклы. `hops` — позиции в
 **порядке пакета**: `hops[0]` — первый хоп от клиента.
 
-**§439 — позиция — ссылка `{folder_id?, tag}`**, как `override_detour` у `/subs`:
+**позиция — ссылка `{folder_id?, tag}`**, как `override_detour` у `/subs`:
 член папки, узел или группа подписки — `{folder_id: <id папки или подписки>,
 tag: <сырой тег, до префикса>}`; одиночный сервер, Направление, `direct-out`,
 другая цепочка — `{tag}`. Строка читается как `{tag}`. Сборка резолвит ссылки в
@@ -976,7 +975,7 @@ tag: <сырой тег, до префикса>}`; одиночный серве
 Ответ `GET /chains`, `GET /chains/{tag}` и мутаций: `tag`, `enabled` +
 канон `source_chain.schema.json` (`idle_timeout`, `strip_evasion`, `strip`,
 `rewrite`, `hops` ссылками). Поля `order` нет: место цепочки — её индекс в
-списке. Поля `label` нет (§594): имя цепочки — её тег; `label` в теле
+списке. Поля `label` нет: имя цепочки — её тег; `label` в теле
 POST/PATCH не читается, как любое неизвестное поле.
 
 | Endpoint | Метод | Body |
@@ -1009,9 +1008,8 @@ Write'ы проходят **тот же гейт, что и форма реда�
 Предупреждения и справки формы write **не** блокируют (та же граница, что у
 кнопки «сохранить»): `detourAtEntry`, `detourIgnoredOnLink`, `missingHops`,
 `masqueFixedH3OnLink`, `wgBehindTcpHop`. Сняты: блокирующий
-`realityUtlsStripped` (задача 556), `stripKeptForHop` и `tunnelOnLink`
-(задачи 761 и 760: ядро v1.14.4-lx.37-rc.2 не принимает `strip` цепочки и не
-копирует узлы на позициях).
+`realityUtlsStripped`, а также `stripKeptForHop` и `tunnelOnLink` (ядро
+v1.14.4-lx.37-rc.2 не принимает `strip` цепочки и не копирует узлы на позициях).
 
 Этот класс ошибок `sing-box check` **пропускает**, а `run` роняет, — поэтому
 гейт стоит на записи, а не на сборке.
@@ -1067,7 +1065,7 @@ curl -s -H "$HDR" "$BASE/chains/chain-1/probe" | jq '.layers'
   (`chain_hop_missing`); ответ перечисляет их в `"dangling_refs"`.
 - Удаление узла или источника (`DELETE /subs/{id}`, `DELETE
   /folders/{id}/members/{idx}`) снимает позиции-ссылки на его узлы из всех
-  цепочек; переименование узла правкой тела и перенос переписывают их (§439).
+  цепочек; переименование узла правкой тела и перенос переписывают их.
 - Требование к ядру: `type: chain` есть с **sing-box-lx v1.14.0-lx.27**
   (в v2.21.0 пин — `v1.14.0-lx.28-rc.1`). На более старом ядре цепочки не
   собираются.
@@ -1081,14 +1079,14 @@ curl -s -H "$HDR" "$BASE/chains/chain-1/probe" | jq '.layers'
 
 ## Folders CRUD — `/folders/*`
 
-§238 — папки серверов §234 (§439: запись `kind: folder` в `sources[]`, члены —
+Папки серверов (запись `kind: folder` в `sources[]`, члены —
 `nodes[]`) поверх публичных методов `SubscriptionController`. Папка — это entry
 общего списка `/subs` (kind=`FolderServers`): **meta папки
 (name/enabled/tag_prefix/detour_policy, общий detour — `override_detour`)
 правится через `PATCH /subs/{id}`**, `/folders/*` добавляет только
 папко-специфичные операции.
 
-**§439 — `detour` члена — ссылка `{folder_id?, tag}`** (форма та же, что у
+**`detour` члена — ссылка `{folder_id?, tag}`** (форма та же, что у
 `override_detour`, см. `/subs`): сосед по папке — `{"folder_id":"<id этой
 папки>","tag":"<сырой тег соседа>"}`, Направление или одиночный сервер —
 `{"tag":"..."}`, `null` снимает. Строка читается как сырой тег соседа, если такой
@@ -1108,13 +1106,13 @@ credentials (URI/ключи) → по умолчанию скрыт, `?reveal=tr
 | `/folders/{id}` | GET | — |
 | `/folders/{id}` | DELETE | `?keep_servers=true` — вынести членов одиночными серверами (default false — удалить совсем) |
 | `/folders/{id}/members` | POST | ровно одно из: `{"input":"<uri\|WG-ini\|JSON>","name_fallback"?}` (paste) или `{"url":"..."}` (одноразовый снапшот: URL не хранится, авто-обновления нет) |
-| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (§636: `tls` — узловая политика, правила как у `PATCH /subs/{id}`) — §578/§656: `skip_tailscale_presets` и `allow_*` в GET read-only, PATCH не принимает |
+| `/folders/{id}/members/{idx}` | PATCH | subset `{raw,enabled,detour,tls}` (`tls` — узловая политика, правила как у `PATCH /subs/{id}`); `skip_tailscale_presets` и `allow_*` в GET read-only, PATCH не принимает |
 | `/folders/{id}/members/{idx}` | DELETE | — |
 | `/folders/{id}/members/reorder` | POST | `{"order":[старые индексы в новом порядке]}` — полная перестановка |
 | `/folders/{id}/members/{idx}/ungroup` | POST | член → одиночный сервер сразу после папки |
 | `/folders/{id}/members/{idx}/move` | POST | `{"to":"<folder id>"}` — в другую папку |
 | `/folders/{id}/move-server` | POST | `{"server_id":"<subs entry id>"}` — одиночный сервер въезжает в папку |
-| `/folders/{id}/probe` | POST | опц. `{"url":"...","timeout_ms":N}` — headless «Test servers» §236 |
+| `/folders/{id}/probe` | POST | опц. `{"url":"...","timeout_ms":N}` — headless «Test servers» |
 
 Все write'ы принимают `?rebuild=true`.
 
@@ -1127,14 +1125,14 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   "$BASE/folders/$FID/members?rebuild=true"
 # → 201 {"ok":true,"action":"folder-members-add","added":2,"folder":{...}}
 
-# Личный detour члена 1 (Beta) через члена 0 (Alpha), §237 — ссылка парой (§439)
+# Личный detour члена 1 (Beta) через члена 0 (Alpha) — ссылка парой
 curl -X PATCH -H "$HDR" -d "{\"detour\":{\"folder_id\":\"$FID\",\"tag\":\"Alpha\"}}" "$BASE/folders/$FID/members/1"
 # → {..., "folder":{..., "members":[..., {"index":1,"detour":{"folder_id":"<FID>","tag":"Alpha"},...}]}}
 # Снять личный detour, выключить члена 1
 curl -X PATCH -H "$HDR" -d '{"detour":null}' "$BASE/folders/$FID/members/1"
 curl -X PATCH -H "$HDR" -d '{"enabled":false}' "$BASE/folders/$FID/members/1"
 
-# Прогнать Test servers (§236) — результаты сразу в ответе
+# Прогнать Test servers — результаты сразу в ответе
 curl -s -X POST -H "$HDR" -d '{"timeout_ms":2000}' "$BASE/folders/$FID/probe" | \
   jq '{summary, results: [.results[] | {index,tag,status,delay_ms}]}'
 # → {"summary":{"ok":1,"failed":1},"results":[{"index":0,"tag":"Alpha","status":"ok","delay_ms":184},...]}
@@ -1143,14 +1141,14 @@ curl -s -X POST -H "$HDR" -d '{"timeout_ms":2000}' "$BASE/folders/$FID/probe" | 
 curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 ```
 
-**Probe (§236):**
+**Probe:**
 - Статусы: `ok` (+`delay_ms`), `failed` (+`message`), `broken` (raw не
   парсится), `invalid` (нода не собирается в конфиг), `not_in_config`,
   `pending` (тест не дошёл/отменён).
 - При **остановленном** VPN поднимается отдельная headless probe-сессия —
   тестируются ВСЕ члены (включая выключенных). При **запущенном** VPN тест
   идёт через боевое ядро — выключенные члены не в конфиге → `not_in_config`.
-- §730 — detour папки и личные detour членов применяются так же, как у
+- Detour папки и личные detour членов применяются так же, как у
   кнопки в UI. У члена с detour в результате поле `detour`: `applied`
   (+`detour_via` — тег узла-цели, через который шла проба) или `unapplied`
   (Направление, `-auto`, цепочка, группа, выключенная цель, цель со своим
@@ -1174,7 +1172,7 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 
 ## Core-rejected nodes — `/core_reject/*`
 
-Фича 478 — страховка «узел, который не приняло ядро, выключается сам». Ядро
+Страховка «узел, который не приняло ядро, выключается сам». Ядро
 отказало, назвав узел → приложение выключает этот узел, кладёт рядом причину
 и тихо перепроверяет конфиг, пока он не станет чистым.
 
@@ -1226,7 +1224,7 @@ curl -X DELETE -H "$HDR" "$BASE/folders/$FID?keep_servers=true&rebuild=true"
 
 **Плашка** поднимается только на `outcome=started_with_disabled`: VPN поднят,
 но не тем составом, который задавал человек. Уходит при × (`dismiss`), Stop/
-Disconnected, следующем Start или перезапуске процесса (§498); вердикты на
+Disconnected, следующем Start или перезапуске процесса; вердикты на
 узлах при этом не снимаются. После Stop `GET /core_reject/banner` отдаёт
 `visible: false`. `dismiss` закрывает сообщение, а не отменяет решение.
 
@@ -1284,7 +1282,7 @@ curl -X POST -H "$HDR" "$BASE/core_reject/banner/dismiss"
 
 ## WARP — `/warp`
 
-§147 — регистрация Cloudflare WARP-ноды (тот же путь, что кнопка **Get WARP** в UI). Приватный ключ X25519 генерится на устройстве, регистрация уходит в Cloudflare, готовая нода добавляется в подписки автоматически.
+Регистрация Cloudflare WARP-ноды (тот же путь, что кнопка **Get WARP** в UI). Приватный ключ X25519 генерится на устройстве, регистрация уходит в Cloudflare, готовая нода добавляется в подписки автоматически.
 
 | Endpoint | Метод | Body |
 |---|---|---|
@@ -1318,7 +1316,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 ## Pool — `/pool`
 
-§208 (SPEC 019 V2) — read-only снапшот пула round_robin-балансировщика. Зеркалит UI «View pool» (`HomeController.getPool` → `CcChannel.getPool` → ядро GetPool RPC). Для отладки балансировщика без UI-попапа.
+Read-only снапшот пула round_robin-балансировщика. Зеркалит UI «View pool» (`HomeController.getPool` → `CcChannel.getPool` → ядро GetPool RPC). Для отладки балансировщика без UI-попапа.
 
 | Endpoint | Метод | Query |
 |---|---|---|
@@ -1326,9 +1324,9 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 - `tag` — auto-двойник round_robin-Направления (напр. `vpn-1-auto`).
 - `delay==0` → нода мёртвая / не измерена.
-- §759 (ядро SPEC 138) — самовосстановление: у слота `quarantined` (узел выведен из ротации; `delay` при этом не нулевой), `connections` / `confirmedFailures` (счётчики слота); у группы `shiftedKeys` (сдвинутые ключи закрепления), `markedKeys` (ключи с пометкой «проблема в адресе»), `frozen` и `frozenSeconds` (остаток заморозки; `0` при `frozen: true` — до конца прогона после смены сети). Вне round_robin и на ядре без `GetPoolState` — нули.
+- Самовосстановление пула (ядро): у слота `quarantined` (узел выведен из ротации; `delay` при этом не нулевой), `connections` / `confirmedFailures` (счётчики слота); у группы `shiftedKeys` (сдвинутые ключи закрепления), `markedKeys` (ключи с пометкой «проблема в адресе»), `frozen` и `frozenSeconds` (остаток заморозки; `0` при `frozen: true` — до конца прогона после смены сети). Вне round_robin и на ядре без `GetPoolState` — нули.
 - Не-round_robin группа / пул не готов → `slots: []` (не ошибка).
-- CC-клиент недоступен (туннель down) → **409** `conflict` (§209 — раньше тихо отдавал `count:0`, что путало диагностику).
+- CC-клиент недоступен (туннель down) → **409** `conflict` (раньше тихо отдавал `count:0`, что путало диагностику).
 
 ```bash
 curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
@@ -1430,34 +1428,34 @@ Scoped writes на `SettingsStorage`. Generic `PUT /state/storage?key=X` **на�
 | `/settings/route_final` | PUT | `{"outbound":"<tag>"}` (пустая строка = дефолт) |
 | `/settings/node_sort` | GET | →`{"ok":true,"mode":"<str>","order":["tag",...]}` — режим сортировки списка нод + ручной порядок. |
 | `/settings/node_sort` | PUT | `{"mode": "<str>", "order"?: ["tag",...]}`. `mode` = `""`/`latency`/`manual`; `order` опц. (для manual). UI-only (не config-significant). → `{ok, action:"settings-node-sort", mode, order_count}`. |
-| `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. **§125 legacy** — см. PUT-примечание. |
-| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **§125 legacy: фактически no-op** — после миграции на `directions[]` (§393; ключ storage переименован из `channels`) билдер читает `enabledGroups` только когда `directions` пуст, иначе `directions[]` перекрывает эту запись. Для управления Направлениями используйте UI (App Settings → Directions) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
+| `/settings/enabled_groups` | GET | →`{"ok":true,"groups":["tag",...]}` — членство preset-групп в selector'е. **Legacy** — см. PUT-примечание. |
+| `/settings/enabled_groups` | PUT | `{"groups": ["tag",...]}`. **Legacy: фактически no-op** — после миграции на `directions[]` (ключ storage переименован из `channels`) билдер читает `enabledGroups` только когда `directions` пуст, иначе `directions[]` перекрывает эту запись. Для управления Направлениями используйте UI (App Settings → Directions) / backup. `?rebuild=true` пересоберёт конфиг, но результат не изменится. → `{ok, action:"settings-enabled-groups", count, ...rebuild-extras}`. |
 | `/settings/vpn_mode` | GET | →`{"ok":true,"vpn_mode":{...}}` — текущий `VpnModeConfig`. |
-| `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. **Валидация (§292):** `proxy_listen` — IPv4, `proxy_port` — 1024..65535, `proxy_protocol` — `mixed`\|`http`\|`socks`; невалидное → 400. **§293:** запись идёт через `VpnSettingsFacade` (единый путь с UI) — на смену режима зеркалит native `has_tun` (гейтит `VpnService.prepare`), при auth+пустом пароле генерит его. **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
-| `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (§279: `app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |
+| `/settings/vpn_mode` | PUT | частичное обновление (copyWith поверх текущего): `mode`/`proxy_protocol`/`proxy_port`/`proxy_listen`/`proxy_auth`/`proxy_user`/`proxy_pass`. **Валидация:** `proxy_listen` — IPv4, `proxy_port` — 1024..65535, `proxy_protocol` — `mixed`\|`http`\|`socks`; невалидное → 400. запись идёт через `VpnSettingsFacade` (единый путь с UI) — на смену режима зеркалит native `has_tun` (гейтит `VpnService.prepare`), при auth+пустом пароле генерит его. **Config-significant** (меняет inbounds) → `?rebuild=true`. → `{ok, action:"settings-vpn-mode", vpn_mode, ...rebuild-extras}`. |
+| `/settings/vars/{key}` | PUT | `{"value":"<str>"}`. Для ключей с side-effect-hook (`app_language`) запись идёт через владеющий сервис, не через голый `setVar` — см. «Side-effect vars» ниже. |
 | `/settings/vars/{key}` | DELETE | — (удаляет ключ; не пишет пустую строку). Для hook-ключей = сброс к дефолту через тот же сервис. |
-| `/settings/dns_options/servers` | PUT | **§439:** `{"servers":[<запись dns.servers[]>]}` — только записи формы 1.0, как их отдаёт `GET /state/storage` → `dns.servers`: `{kind:"user", tag, enabled, body, description?}` (`body` — partial sing-box без `tag`), `{kind:"preset", ref:"<preset_id>:<tag>", enabled}` (`<tag>` — тег внутри пресета; вся строка — тег сервера в конфиге, например `ru-direct:dns_ru`; повтор пространства `ru-direct:ru-direct:…` ранних сборок 2.23.3 читается как одно), `{kind:"template", tag, enabled, vars?}`. Список заменяется целиком. Форма 2.23.2 (`kind: inline`, `varValues`, снимок без `kind`) → 400 с образцом записи, хранение не трогается. → `{ok, action:"settings-dns-servers", count}`. Путь URL прежний: это адрес API, не ключ файла. |
-| `/settings/dns_options/rules` | PUT | **§439:** `{"rules":[<запись dns.rules[]>]}` — только записи формы 1.0: `{kind:"user", name, enabled, body}` (`body` — правило sing-box с `server`), `{kind:"preset", ref:"<preset_id>", enabled}`, `{kind:"srs", name, id, …}`, `{kind:"template", name, enabled}`. Форма 2.23.2 (`kind: inline` с `rule`, `presetId`) и строка JSON (`rules_json`) → 400 с образцом записи. → `{ok, action:"settings-dns-rules", count}`. |
-| `/settings/config_locked` | PUT | `{"locked": true\|false}` — §037 toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
-| `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — §043 текущее состояние forwarding'а sing-box логов в `/logs/core`. |
-| `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — §043 включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
-| `/settings/core_logs_verbose` | GET | →`{"enabled": bool}` — §345 состояние live-снятия TRACE/DEBUG-фильтра ядра. |
-| `/settings/core_logs_verbose` | PUT | `{"enabled": true\|false}` — §345 пропускать TRACE/DEBUG-строки ядра в `/logs/core`. В отличие от `core_logs_enabled` **применяется мгновенно** (volatile в BoxService, без рестарта); бессилен при выключенном `core_logs_enabled` (ядро не форвардит вообще). Буфер core (500 строк) на живом трафике в verbose живёт секунды — включать точечно, снимать лог сразу. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_verbose`). |
+| `/settings/dns_options/servers` | PUT | `{"servers":[<запись dns.servers[]>]}` — только записи формы 1.0, как их отдаёт `GET /state/storage` → `dns.servers`: `{kind:"user", tag, enabled, body, description?}` (`body` — partial sing-box без `tag`), `{kind:"preset", ref:"<preset_id>:<tag>", enabled}` (`<tag>` — тег внутри пресета; вся строка — тег сервера в конфиге, например `ru-direct:dns_ru`; повтор пространства `ru-direct:ru-direct:…` ранних сборок 2.23.3 читается как одно), `{kind:"template", tag, enabled, vars?}`. Список заменяется целиком. Форма 2.23.2 (`kind: inline`, `varValues`, снимок без `kind`) → 400 с образцом записи, хранение не трогается. → `{ok, action:"settings-dns-servers", count}`. Путь URL прежний: это адрес API, не ключ файла. |
+| `/settings/dns_options/rules` | PUT | `{"rules":[<запись dns.rules[]>]}` — только записи формы 1.0: `{kind:"user", name, enabled, body}` (`body` — правило sing-box с `server`), `{kind:"preset", ref:"<preset_id>", enabled}`, `{kind:"srs", name, id, …}`, `{kind:"template", name, enabled}`. Форма 2.23.2 (`kind: inline` с `rule`, `presetId`) и строка JSON (`rules_json`) → 400 с образцом записи. → `{ok, action:"settings-dns-rules", count}`. |
+| `/settings/config_locked` | PUT | `{"locked": true\|false}` — toggle auto-rebuild lock. true → `generateConfig` возвращает null silently, custom config через `PUT /config` не перетирается UI. |
+| `/settings/core_logs_enabled` | GET | →`{"enabled": bool}` — текущее состояние forwarding'а sing-box логов в `/logs/core`. |
+| `/settings/core_logs_enabled` | PUT | `{"enabled": true\|false}` — включить/выключить forward. **Требует полного рестарта процесса** (`am force-stop` + relaunch, либо UI Quit & reopen) — `Libbox.setup` one-shot per process, stop/start VPN **не** перечитывает флаг. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_enabled`), не в `lxbox_settings.json`. |
+| `/settings/core_logs_verbose` | GET | →`{"enabled": bool}` — состояние live-снятия TRACE/DEBUG-фильтра ядра. |
+| `/settings/core_logs_verbose` | PUT | `{"enabled": true\|false}` — пропускать TRACE/DEBUG-строки ядра в `/logs/core`. В отличие от `core_logs_enabled` **применяется мгновенно** (volatile в BoxService, без рестарта); бессилен при выключенном `core_logs_enabled` (ядро не форвардит вообще). Буфер core (500 строк) на живом трафике в verbose живёт секунды — включать точечно, снимать лог сразу. Default false. Storage в SharedPreferences (`boxvpn_boot.core_logs_verbose`). |
 | `/settings/ping_options` | GET | →URLTest defaults `{url?, timeout_ms?, concurrency?, groups?}` (пустой map если не set'нуто — caller fall-through на template default). |
-| `/settings/ping_options` | PUT | body `{url?, timeout_ms?, concurrency?, groups?}` — **overwrite целиком** (не merge). Unknown-подключи strip'аются (allowlist `url/timeout_ms/presets/groups/concurrency`). `concurrency` (§713) — number, читатель приводит к 1..100. `url` — string, `timeout_ms` — number, `groups` — object (иначе 400). → `{ok, action:"settings-ping-options", url, timeout_ms, groups_count}`. |
-| `/settings/node_budget` | GET | →`{ok, value, default, min}` — бюджет узлов приложения (§714): `value` — действующее значение (нет ключа = `default` 1000), `min` = 1, верхнего потолка нет. |
+| `/settings/ping_options` | PUT | body `{url?, timeout_ms?, concurrency?, groups?}` — **overwrite целиком** (не merge). Unknown-подключи strip'аются (allowlist `url/timeout_ms/presets/groups/concurrency`). `concurrency` — number, читатель приводит к 1..100. `url` — string, `timeout_ms` — number, `groups` — object (иначе 400). → `{ok, action:"settings-ping-options", url, timeout_ms, groups_count}`. |
+| `/settings/node_budget` | GET | →`{ok, value, default, min}` — бюджет узлов приложения: `value` — действующее значение (нет ключа = `default` 1000), `min` = 1, верхнего потолка нет. |
 | `/settings/node_budget` | PUT | body `{"value": <number>\|null}` — `null` снимает ключ (= 1000), число меньше 1 → 1, не число → 400. Контроллер подписок пересчитывает доли и перерезает подписки из кэша тела (без сети). → `{ok, action:"settings-node-budget", value}`. |
 | `/settings/ping_options/groups/{tag}` | GET | override этой группы или **404** если override нет. |
 | `/settings/ping_options/groups/{tag}` | PUT | body `{url?, timeout_ms?}` — минимум одно поле (read-modify-write). → `{ok, action:"settings-ping-options-group-put", group, ...}`. |
 | `/settings/ping_options/groups/{tag}` | DELETE | снять override группы. → `{ok, action:"settings-ping-options-group-delete", group}`. |
-| `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — §046 OS-level split-tunneling. |
-| `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — §046. Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. **§293:** `mode` вне `off\|allow\|deny` → 400 (валидатор `TunAppsConfig.isValidMode`); невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
-| `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` — §052/§049 F15. |
-| `/settings/vpn/allow_bypass` | PUT | `{"enabled": true\|false}` — §052/§049 F15. Native (`VpnService.Builder.allowBypass()`). Применяется при следующем `establish()` (start или reload VPN). Default false (strict tunnel). |
-| `/settings/vpn/keep_on_exit` | GET | →`{"enabled": bool}` — §052. VPN остаётся активным когда app закрывается. |
-| `/settings/vpn/keep_on_exit` | PUT | `{"enabled": true\|false}` — §052. Effect at app exit; live-reload не нужен. |
-| `/settings/vpn/background_mode` | GET | →`{"mode": "never"\|"lazy"\|"always"}` — §052. Foreground-service режим. |
-| `/settings/vpn/background_mode` | PUT | `{"mode": "never"\|"lazy"\|"always"}` — §052. `never` — туннель всегда активен (default); `lazy` — pause только в deep Doze; `always` — pause при выключении экрана. **§293:** `mode` вне набора → 400 (валидатор `BackgroundMode.isValid`; в отличие от чтения, где мусор молча fallback'ит в `never`). Применяется при следующем VPN connect. |
+| `/settings/tun_apps` | GET | →`{"mode":"off\|allow\|deny", "packages":[...]}` — OS-level split-tunneling. |
+| `/settings/tun_apps` | PUT | `{"mode":"off\|allow\|deny", "packages":["pkg1","pkg2",...]}` — Replace целиком. Дубликаты в `packages` schлопываются (idempotent). Пустые строки skip'аются. `mode` вне `off\|allow\|deny` → 400 (валидатор `TunAppsConfig.isValidMode`); невалидный package-name → 400. Response: `{ok, action, mode, count, rebuild_needed: true, ...rebuild-extras}`. **Требует full VPN restart** для apply (Android tun creates только на `establish()`). |
+| `/settings/vpn/allow_bypass` | GET | →`{"enabled": bool}` |
+| `/settings/vpn/allow_bypass` | PUT | `{"enabled": true\|false}` — Native (`VpnService.Builder.allowBypass()`). Применяется при следующем `establish()` (start или reload VPN). Default false (strict tunnel). |
+| `/settings/vpn/keep_on_exit` | GET | →`{"enabled": bool}` — VPN остаётся активным когда app закрывается. |
+| `/settings/vpn/keep_on_exit` | PUT | `{"enabled": true\|false}` — Effect at app exit; live-reload не нужен. |
+| `/settings/vpn/background_mode` | GET | →`{"mode": "never"\|"lazy"\|"always"}` — Foreground-service режим. |
+| `/settings/vpn/background_mode` | PUT | `{"mode": "never"\|"lazy"\|"always"}` — `never` — туннель всегда активен (default); `lazy` — pause только в deep Doze; `always` — pause при выключении экрана. `mode` вне набора → 400 (валидатор `BackgroundMode.isValid`; в отличие от чтения, где мусор молча fallback'ит в `never`). Применяется при следующем VPN connect. |
 | `/settings/rebuild-config` | POST | — (alias для `/action/rebuild-config`) |
 
 **Route final:**
@@ -1480,9 +1478,9 @@ curl -s -H "$HDR" "$BASE/state/storage" | jq '.vars'
 curl -X DELETE -H "$HDR" "$BASE/settings/vars/route-strategy"
 ```
 
-**Side-effect vars (§279):** часть ключей нельзя писать голым `setVar` —
+**Side-effect vars:** часть ключей нельзя писать голым `setVar` —
 сторадж разошёлся бы с живым состоянием до следующего полного старта. Для них
-в vars-handler'е стоит per-key registry (прецедент §275 — мутации только через
+в vars-handler'е стоит per-key registry (мутации только через
 владеющий сервис); generic-путь для остальных ключей не меняется.
 
 - `app_language` (`system` | `en` | `ru`) — язык приложения (см.
@@ -1520,7 +1518,7 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" -d '{"value":"evil"}' 
 # → 409 {"error":{"code":"conflict","message":"var \"debug_token\" is managed via App Settings UI only"}}
 ```
 
-**DNS servers** (§439 — записи `dns.servers[]`; PUT заменяет список целиком, поэтому
+**DNS servers** (записи `dns.servers[]`; PUT заменяет список целиком, поэтому
 удобнее взять текущий из `/state/storage` и дописать):
 ```bash
 curl -s -H "$HDR" "$BASE/state/storage" | \
@@ -1538,7 +1536,7 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
 # → 400 {"error":{"code":"bad_request","message":"dns server \"dns-local\": unknown kind \"inline\"; expected a record like {\"kind\":\"user\",...} (kind user|preset|template)"}}
 ```
 
-**DNS rules** (§439 — записи `dns.rules[]`):
+**DNS rules** (записи `dns.rules[]`):
 ```bash
 curl -s -H "$HDR" "$BASE/state/storage" | \
   jq '{rules: (.dns.rules + [
@@ -1548,7 +1546,7 @@ curl -s -H "$HDR" "$BASE/state/storage" | \
     --data-binary @- "$BASE/settings/dns_options/rules?rebuild=true"
 ```
 
-**Core logs forwarding** (§043) — диагностика sing-box internals:
+**Core logs forwarding** — диагностика sing-box internals:
 ```bash
 # Текущее состояние
 curl -s -H "$HDR" "$BASE/settings/core_logs_enabled" | jq
@@ -1571,7 +1569,7 @@ adb shell am force-stop com.leadaxe.lxbox
 curl -s -H "$HDR" "$BASE/logs/core?level=warning,error&q=dial" | jq
 ```
 
-**VPN System toggles** (§052) — то же что VPN Settings → System в UI:
+**VPN System toggles** — то же что VPN Settings → System в UI:
 ```bash
 # Snapshot всех VPN-system флагов одним запросом
 curl -s -H "$HDR" "$BASE/state/vpn" | jq
@@ -1579,7 +1577,7 @@ curl -s -H "$HDR" "$BASE/state/vpn" | jq
 #  "allow_bypass":false,"current_session_allow_bypass":false,
 #  "background_mode":"never","is_ignoring_battery_optimizations":true}
 #
-# §069: mismatch allow_bypass != current_session_allow_bypass значит юзер
+# mismatch allow_bypass != current_session_allow_bypass значит юзер
 # поменял toggle, но VPN не reload'ил — runtime всё ещё со старым значением.
 # Например `allow_bypass=false, current_session_allow_bypass=true` →
 # `setAllowBypass(false)` записал в SharedPreferences, но `establish()` от
@@ -1603,7 +1601,7 @@ curl -X PUT -H "$HDR" -H "Content-Type: application/json" \
 
 ## Wi-Fi history — `/wifi_history`
 
-§051 Phase 3 — список «известных» сетей `[{ssid, bssid, last_seen}]` для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Naturally заполняется через native `WifiNetworkObserver` (`NetworkCallback` listener, 5-min stickiness debounce) когда `auto_record_wifi_history` toggle ON в App Settings → Diagnostics. Через API можно injectить / удалять записи без UI flow — например для тестов или восстановления после wipe'а.
+Список «известных» сетей `[{ssid, bssid, last_seen}]` для editor'а custom rules (`Pick saved` picker когда пишешь правило с условием `wifi_ssid` / `wifi_bssid`). Naturally заполняется через native `WifiNetworkObserver` (`NetworkCallback` listener, 5-min stickiness debounce) когда `auto_record_wifi_history` toggle ON в App Settings → Diagnostics. Через API можно injectить / удалять записи без UI flow — например для тестов или восстановления после wipe'а.
 
 Storage: var `wifi_history` в `lxbox_settings.json` (JSON-encoded array). Cap **50 записей**, LRU evict by `last_seen`. BSSID нормализуется к lower-case при upsert. Composite key `(ssid, bssid)` — две сети с одинаковым ssid и разными bssid считаются разными.
 
@@ -1650,8 +1648,8 @@ Read-only file access.
 | `GET /files/srs/list` | — |
 | `GET /files/local` | `name=<name>` (whitelist: `cache.db`, `CrashReport-lxbox.log`, `CrashReport-lxbox.log.old`, legacy `stderr.log` — ядро после libbox 1.14 его не пишет) |
 | `GET /files/external` | legacy alias for `/files/local`, ради обратной совместимости |
-| `GET /files/crash/list` | §316 — архив краш-репортов ядра: `[{name, size, mtime, core_version?, kind?}]`, новые первыми; `kind:"dir"` — репорт-каталог `<таймстамп>/{go.log,metadata.json,configuration.json}` (`size` — размер `go.log`); `[]` если крашей не было |
-| `GET /files/crash` | §316 — `name=<repo>` → тело архивного репорта; у каталога — `&file=go.log\|metadata.json\|configuration.json` (default `go.log`, только basename) |
+| `GET /files/crash/list` | архив краш-репортов ядра: `[{name, size, mtime, core_version?, kind?}]`, новые первыми; `kind:"dir"` — репорт-каталог `<таймстамп>/{go.log,metadata.json,configuration.json}` (`size` — размер `go.log`); `[]` если крашей не было |
+| `GET /files/crash` | `name=<repo>` → тело архивного репорта; у каталога — `&file=go.log\|metadata.json\|configuration.json` (default `go.log`, только basename) |
 | `GET /files/oom/list` | OOM-снапшоты ядра: `[{name, size, mtime, memory_usage, ...}]`, новые первыми |
 | `GET /files/oom` | `name=<snapshot>` → файл снапшота; по умолчанию `metadata.json`, иначе `&file=heap.pb\|allocs.pb\|goroutine.pb\|go.log\|configuration.json\|connections.json` (клиент передаёт только basename) |
 
@@ -1671,12 +1669,12 @@ curl -s -H "$HDR" "$BASE/files/oom?name=<snapshot>&file=heap.pb" > /tmp/heap.pb
 
 ## Backup — `/backup/*`
 
-Symmetric с UI `BackupScreen` (см. [§040 spec](../spec/tasks/040F-backup-restore-ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version` (§439). Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
+Symmetric с UI `BackupScreen` (см. [спеку бэкапа](../spec/tasks/040F-backup-restore-ui/spec.md)). Wire-format — single, без `version` поля в конверте; форму блока `storage` задаёт его `storage_version`. Legacy `{vars, server_lists}` на корне конверта не поддерживается. Это внутренний бэкап LxBox, не LX Backup 1.0 для лаунчера.
 
 | Endpoint | Что отдаёт / принимает |
 |---|---|
-| `GET /backup/export?include=storage,vpn_settings[&from=v0_bak]` | Snapshot. `include` опц., default — обе части. **§439** `from=v0_bak` — блок `storage` из `lxbox_settings.json.v0.bak` (форма 2.23.2 на момент миграции) вместо живого хранения; копии нет → 404; другое значение `from` → 400 |
-| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}`. **§439** блок `storage` без `storage_version` (форма 2.23.2) сначала мигрирует; ссылки на узлы — тем же словарём, что при старте (тела подписок из `sub_cache`); ответ `applied.migrated` + `applied.migration` |
+| `GET /backup/export?include=storage,vpn_settings[&from=v0_bak]` | Snapshot. `include` опц., default — обе части. `from=v0_bak` — блок `storage` из `lxbox_settings.json.v0.bak` (форма 2.23.2 на момент миграции) вместо живого хранения; копии нет → 404; другое значение `from` → 400 |
+| `POST /backup/import?merge=&rebuild=` | Восстановление. Body `{storage?, vpn_settings?}`. блок `storage` без `storage_version` (форма 2.23.2) сначала мигрирует; ссылки на узлы — тем же словарём, что при старте (тела подписок из `sub_cache`); ответ `applied.migrated` + `applied.migration` |
 
 **Format**:
 ```json
@@ -1712,13 +1710,13 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?rebuild=true"
 
-# Merge mode — слияние §633: добавляется то, чего нет; своё остаётся (счётчики — applied.merge)
+# Merge mode — слияние: добавляется то, чего нет; своё остаётся (счётчики — applied.merge)
 curl -X POST -H "$HDR" -H "Content-Type: application/json" \
   --data-binary @/tmp/lxbox-backup.json \
   "$BASE/backup/import?merge=true"
 ```
 
-**§439 — форма 2.23.2 и откат.** Блок `storage` без `storage_version` (снятый на
+**форма 2.23.2 и откат.** Блок `storage` без `storage_version` (снятый на
 2.23.2 и раньше) принимается и мигрирует до allowlist'а:
 
 ```bash
@@ -1742,13 +1740,13 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 # 404 — устройство не мигрировало с формы 2.23.2 (чистая установка 2.23.3)
 ```
 
-⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к §439 не относится.
+⚠ Источники в памяти приложения (экран Servers) после `POST /backup/import` не перечитываются до холодного рестарта. Так и в 2.23.2, к переходу на форму 1.0 не относится.
 
-`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям §599 — только у UI-импорта); `merge=true` — слияние §633, то же, что Merge в UI: списки по идентичности записи (источники по `id`, цепочки / Направления / DNS-серверы по тегу, правила по `ref` пресета, `id` или содержимому; новые — в конец, правила — в конец пользовательской зоны `num`), Tunnel apps — объединение пакетов, режим получателя, если не `off`; скаляры, `vars` и `vpn_settings` — значение получателя, отсутствующий ключ — из файла. Ответ: `applied.merge` = `{sources, rules, directions, dns_servers, dns_rules, tun_apps, keys}` по `{added, kept}`, `applied.vpn_settings_kept`. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
+`merge=false` (default) — replace всего документа (категорий у запроса нет; замена по категориям — только у UI-импорта); `merge=true` — слияние, то же, что Merge в UI: списки по идентичности записи (источники по `id`, цепочки / Направления / DNS-серверы по тегу, правила по `ref` пресета, `id` или содержимому; новые — в конец, правила — в конец пользовательской зоны `num`), Tunnel apps — объединение пакетов, режим получателя, если не `off`; скаляры, `vars` и `vpn_settings` — значение получателя, отсутствующий ключ — из файла. Ответ: `applied.merge` = `{sources, rules, directions, dns_servers, dns_rules, tun_apps, keys}` по `{added, kept}`, `applied.vpn_settings_kept`. Кеши (cache.db, stderr.log, SRS-blob, runtime node-tags) в backup не входят — restore их пересоздаёт.
 
 ---
 
-## Diagnostics — `/diag/*` (§038)
+## Diagnostics — `/diag/*`
 
 | Endpoint | Что отдаёт |
 |---|---|
@@ -1757,7 +1755,7 @@ curl -s -H "$HDR" "$BASE/backup/export?include=storage&from=v0_bak" > /tmp/lxbox
 | `GET /diag/logcat?count=N&level=L` | Logcat tail нашего процесса (N=50..5000, level=V/D/I/W/E/F, default E) |
 | `GET /diag/stderr` | Текущий краш-репорт ядра `filesDir/CrashReport-lxbox.log` (Go panic stacktrace, через `StderrReader`); пустое тело — паник в текущей сессии не было. Архив прошлых — `/files/crash/list` |
 | `GET /diag/applog?prev=true\|false\|all` | AppLog entries с фильтром по `fromPreviousSession` |
-| `GET /diag/pprof?profile=P&query=Q` | §207 — pprof-снапшот через libbox PProfServer (туннель должен быть up). `P` = `goroutine\|profile\|heap\|allocs\|block\|mutex\|threadcreate` (default `goroutine`); `query` — сырой pprof-query без `?` (напр. `gc=1`/`debug=2`/`seconds=10`), дефолт зависит от профиля (`goroutine→debug=2`, `profile→seconds=10`, `heap→gc=1`). `goroutine?debug=*` отдаёт `text/plain`, остальное — `.pb` для `go tool pprof`. |
+| `GET /diag/pprof?profile=P&query=Q` | pprof-снапшот через libbox PProfServer (туннель должен быть up). `P` = `goroutine\|profile\|heap\|allocs\|block\|mutex\|threadcreate` (default `goroutine`); `query` — сырой pprof-query без `?` (напр. `gc=1`/`debug=2`/`seconds=10`), дефолт зависит от профиля (`goroutine→debug=2`, `profile→seconds=10`, `heap→gc=1`). `goroutine?debug=*` отдаёт `text/plain`, остальное — `.pb` для `go tool pprof`. |
 
 ```bash
 # Полный диагностический pack
@@ -1777,7 +1775,7 @@ curl -s -H "$HDR" "$BASE/diag/applog?prev=true" | jq
 
 ## Support feed — `/support/*`
 
-Лента поддержки (§356/§357): показ сообщений из `support.json` по очереди, с
+Лента поддержки: показ сообщений из `support.json` по очереди, с
 гейтами по версии, времени активности и отложенному показу.
 
 | Endpoint | Метод | Что |
@@ -1812,7 +1810,7 @@ curl -X POST -H "$HDR" "$BASE/support/reset"
 
 ## Taildrop — `/taildrop/*`
 
-§707 итер. 5 — Taildrop узлов Tailscale без тапов по экрану. Маршруты зовут те
+Taildrop узлов Tailscale без тапов по экрану. Маршруты зовут те
 же нативные пути, что вкладка Network узла, «Send file…» и кнопки уведомлений
 приёма (уведомления при этом показываются как обычно). Работают и при
 свёрнутом приложении.
@@ -1823,7 +1821,7 @@ curl -X POST -H "$HDR" "$BASE/support/reset"
 
 | Endpoint | Метод | Что делает |
 |---|---|---|
-| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null`. На верхнем уровне — окно «Send clipboard» (§707 итер. 7): `clip_target` (`tag`, `peer_id`; `name` — с `reveal`; `null` — получатель не выбирался) и `clip_feeds[]` (`tag`, `peer_id`, `messages` — число сообщений ленты; текст не отдаётся) |
+| `/taildrop` | GET | по каждому узлу `tailscale` конфига: `tag`, `allow` (галка «Allow Taildrop» по хранимому телу; `null` — тело не найдено), `disable_taildrop` (собранный конфиг), `backend_state`, `can_share_files` (ядро), `autosave`, `autosave_supported`, `inbox_files`, `receiving`, `self_id`. VPN выключен — узлы есть, поля ядра `null`. На верхнем уровне — окно «Send clipboard»: `clip_target` (`tag`, `peer_id`; `name` — с `reveal`; `null` — получатель не выбирался) и `clip_feeds[]` (`tag`, `peer_id`, `messages` — число сообщений ленты; текст не отдаётся) |
 | `/taildrop/peers?tag=` | GET | устройства узла: `id` (stable), `os`, `online`, `can_receive_files`, `sharee`, `permissions{clipboard,open_url}`; `name` — с `reveal` |
 | `/taildrop/inbox?tag=` | GET | `files[]`: `index`, `size`, `sha256` (файл на диске), `age_s`, `sender_id`; `receiving[]`: `index`, `size`, `received_bytes`, `progress`, `sender_id`; `name`/`sender_name` — с `reveal` |
 | `/taildrop/send` | POST | `{tag, peer, name, content_base64}` \| `{tag, peer, text}` (заметка `note-…txt`) \| `{tag, peer, commands:[…]}` (служебный файл); ждёт итог до 60 с |
@@ -1872,7 +1870,7 @@ curl -s -H "$HDR" "$BASE/taildrop/service-files?reveal=true" | jq
 `<name_prefix><UTC YYYYMMDDTHHMMSSZ>-<метка name_label_length [a-z0-9]><name_suffix>`,
 тело `{"lx": <старшая из versions>, "commands": […]}`, константы — реестр
 `service_files.json`; собирает натив — тот же сборщик, что окно «Send
-clipboard» (§707 итер. 7); команды не проверяются (можно слать битые — проверять
+clipboard»; команды не проверяются (можно слать битые — проверять
 разбор получателя), тело больше `max_bytes` → 400. Передача идёт тем же путём,
 что «Send file…» (уведомление с процентом и Cancel); ответ ждёт итог до 60 с
 (у маршрута свой предел запроса 65 с вместо общих 30): `200 status:"sent"`,
@@ -1901,7 +1899,7 @@ from …»), `skipped_no_permission`, `expired` (файлов старше `ttl_
 нечем открыть), `last` — последняя выполненная команда `{kind, at, sha256}`,
 `value` (текст или ссылка) — с `reveal`.
 
-**Окно «Send clipboard»** (§707 итер. 7). Ленты — только в памяти, пока
+**Окно «Send clipboard»**. Ленты — только в памяти, пока
 работает VPN: остановка VPN их стирает, `clip_feeds` тогда пуст. Отправка
 из окна в `executed`/`last` не попадает (это счётчики приёма); команды,
 выполненные приёмом, дописываются в ленту устройства-отправителя.
@@ -1914,25 +1912,25 @@ from …»), `skipped_no_permission`, `expired` (файлов старше `ttl_
 
 ## Profiler — `/profiler/*`
 
-Traffic profiler — **system-wide** rolling buffer (§048, вкладка Profiler в Statistics). Источник событий (§168): parser sing-box core logs + connections-push от libbox **CommandClient** (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`). Clash `/connections` polling выпилен (§122 — Clash API dropped).
+Traffic profiler — **system-wide** rolling buffer (вкладка Profiler в Statistics). Источник событий: parser sing-box core logs + connections-push от libbox **CommandClient** (`CcChannel.connections` через фоновый `profilerClient`, `connectProfiler()`). Clash `/connections` polling выпилен (Clash API dropped).
 
-> **Per-app session удалена (§288).** Роуты `/profiler/{start,stop,active,
+> **Per-app session удалена.** Роуты `/profiler/{start,stop,active,
 > sessions,session/<id>,stream,secondary-packages}` сняты вместе с
 > session-слоем и вкладкой `Statistics → App`; запрос на любой из них вернёт
 > `404`. Живые роуты профайлера — только `/profiler/live*` (ниже). Разбор
 > трафика конкретного приложения делается фильтром по приложениям на вкладке
-> Profiler. Историческая справка по атрибуции §168/§180 —
+> Profiler. Историческая справка по атрибуции —
 > [`../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md`](../spec/tasks/044F-per-app-traffic-profiler/per-app-trace.md).
 
-**Confidence levels** в каждом event: `verified` (sing-box назвал package владельца) / `unattributed` (нет owner). `inferred` — dormant (§219: больше не присваивается, значение оставлено для десериализации старых JSON). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
+**Confidence levels** в каждом event: `verified` (sing-box назвал package владельца) / `unattributed` (нет owner). `inferred` — dormant (больше не присваивается, значение оставлено для десериализации старых JSON). UI показывает легенду; для post-mortem analysis фильтровать по `confidence`.
 
-### System-wide (§048 Profiler tab)
+### System-wide (Profiler tab)
 
 Idempotent toggle для recording. **Idle profiler ничего не делает** — recording on только при явном start.
 
 | Endpoint | Метод | Что |
 |---|---|---|
-| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + subscribe на CommandClient connections-push (§168) |
+| `/profiler/live/start` | POST | `startGlobalRecording` — attach AppLog listener + subscribe на CommandClient connections-push |
 | `/profiler/live/stop` | POST | `stopGlobalRecording` — detach |
 | `/profiler/live/state` | GET | `{recording, started_at, buffer_count, unattributed_count, banner_active}` |
 | `/profiler/live` | GET | `{window_seconds, count, events}` — global rolling buffer snapshot, `?seconds=60` (default) |
@@ -1961,13 +1959,13 @@ curl -X POST -H "$HDR" "$BASE/profiler/live/stop"
 
 ---
 
-## Clash API proxy — `/clash/*` (removed in §122)
+## Clash API proxy — `/clash/*` (removed)
 
-Удалено в §122: `/clash/*` и `GET /state/clash` → `404 not_found`. Замена — libbox CommandClient: `/action/urltest` / `/action/switch-node` / `/action/set-group` и [Profiler](#profiler--profiler) (`/profiler/live*`).
+Удалено: `/clash/*` и `GET /state/clash` → `404 not_found`. Замена — libbox CommandClient: `/action/urltest` / `/action/switch-node` / `/action/set-group` и [Profiler](#profiler--profiler) (`/profiler/live*`).
 
 ---
 
-## Assistant — `/assistant/*` (§750)
+## Assistant — `/assistant/*`
 
 Тот же набор, что у функций ИИ-ассистента Android (AppFunctions), — для агента на компьютере. Спека: [`750`](../spec/tasks/750-ai-assistant-network-control.md). Чтения и проверки выполняет натив по работающему ядру; ответ пробрасывается как есть. Подписи Направлений, подключения и правила приложений Dart собирает в момент запроса и передаёт нативу аргументом — заранее ничего не считается и не хранится. `direction` везде — тег Направления. Имена выходов, подписи Направлений и подключений — текст поставщика подписки или пользователя.
 
@@ -2065,8 +2063,7 @@ Shape ошибки:
 ```
 
 Поля `details` в конверте нет. Единственное дополнение — необязательный
-верхнеуровневый массив `dropped` рядом с `error` у отказа `POST /subs` (400,
-§500): причины отбраковки `{code, path, value, title_en}`, см.
+верхнеуровневый массив `dropped` рядом с `error` у отказа `POST /subs` (400): причины отбраковки `{code, path, value, title_en}`, см.
 [Subscriptions CRUD](#subscriptions-crud--subs).
 
 ### Structured tunnel alerts — `state.last_error`
@@ -2075,7 +2072,7 @@ Shape ошибки:
 
 | Prefix | Когда | Detail |
 |---|---|---|
-| `alert:permission_location:<comma-list>` | §050 — config содержит `wifi_ssid`/`wifi_bssid` правила, но не выданы required permissions | Comma-separated Android permission names. На API 30+: `ACCESS_BACKGROUND_LOCATION` (только Settings). На API 33+ в дополнение: `NEARBY_WIFI_DEVICES` (можно runtime prompt'ом). Без NEARBY на targetSdk≥33 `WifiInfo.ssid` = `"<unknown ssid>"`, rules silently не матчатся. |
+| `alert:permission_location:<comma-list>` | config содержит `wifi_ssid`/`wifi_bssid` правила, но не выданы required permissions | Comma-separated Android permission names. На API 30+: `ACCESS_BACKGROUND_LOCATION` (только Settings). На API 33+ в дополнение: `NEARBY_WIFI_DEVICES` (можно runtime prompt'ом). Без NEARBY на targetSdk≥33 `WifiInfo.ssid` = `"<unknown ssid>"`, rules silently не матчатся. |
 
 ```bash
 curl -s -H "$HDR" "$BASE/state" | jq '.last_error'
@@ -2151,5 +2148,5 @@ curl -s -H "$HDR" "$BASE/config" > /tmp/config.backup.json
 карта путей и параметров. Источник примеров и семантики — этот документ; при
 расхождении смотреть код (`handlers/*.dart`, `serializers/*.dart`).
 Известные расхождения `/help` с кодом и тест паритета «каждый `path` из
-`/help?format=json` есть здесь» — задача
-[592](../spec/tasks/592-debug-api-help-parity.md).
+`/help?format=json` есть здесь» — в
+[спеке паритета](../spec/tasks/592-debug-api-help-parity.md).
