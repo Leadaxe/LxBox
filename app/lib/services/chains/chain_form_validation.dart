@@ -16,8 +16,6 @@ import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../builder/node_link_pool.dart';
 import '../builder/node_link_resolve.dart';
-import '../contract/chain_strip.dart';
-import '../contract/registry_warning.dart';
 import '../l10n/locale_controller.dart';
 import 'chain_hop_candidate.dart';
 
@@ -78,11 +76,6 @@ enum ChainIssueCode {
 
   /// Позиция — цепочка, объявленная НИЖЕ по списку (ссылка вперёд).
   forwardChainReference,
-
-  /// Цепочка снимает ключ каталога strip, а звено этот путь требует
-  /// (`on_hop_required` реестра, §57): сборка снимет ключ с патча, цепочка
-  /// соберётся. Текст — код реестра (`chain_strip_utls_on_reality` и т.п.).
-  stripKeptForHop,
 
   /// Позиция 0 со своим detour: реальный путь ДЛИННЕЕ показанного.
   detourAtEntry,
@@ -282,24 +275,6 @@ List<ChainFormIssue> validateChainForm(
       message: getLocalText.s("Chains %s are declared below this one — a chain may only reference "
         "chains above it. Move them up, or this chain will not build.", _list(forward)),
       hops: forward,
-    ));
-  }
-
-  // §57 — звено требует снимаемый путь (`on_hop_required`): решает движок
-  // реестра, форма только показывает. Не блокирует — сборка снимет ключ с
-  // патча и цепочку соберёт.
-  final unstrips = chainHopUnstrips(
-    stripEvasion: state.stripEvasion,
-    patch: state.strip,
-    hops: [for (final h in hops) (h, ctx.candidates[h]?.body)],
-  );
-  final lang = registryLangForTag(LocaleController.I.effectiveTag);
-  for (final u in unstrips) {
-    soft.add(ChainFormIssue(
-      code: ChainIssueCode.stripKeptForHop,
-      level: ChainIssueLevel.warning,
-      message: registryText(u.code, lang, params: {'target': u.target}),
-      hops: [u.target],
     ));
   }
 

@@ -64,6 +64,15 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 /// как у Направления (§570).
 const Map<String, String> _skipFold = {};
 
+/// §761 — ядро v1.14.4-lx.37-rc.2 отвергает `idle_timeout`, `strip_evasion`,
+/// `strip` цепочки (SPEC 165 форка); сборка LxBox их больше не пишет, а
+/// ожидание корпуса — пишет. Снять скип, когда лаунчер обновит кейс.
+const Map<String, String> _skipChainRc2 = {
+  'chain_strip_and_timeout':
+      '§761: chain idle_timeout/strip_evasion/strip are not emitted for core '
+          'lx.37-rc.2; waits for the launcher contract update',
+};
+
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.
 ///
 /// Реестр (`registry/warnings.json`) — нормативный словарь кодов, и там, где
@@ -164,7 +173,7 @@ void main() {
       final name = base.substring(root.path.length + 1);
       // §393 C — `chain_*` больше не скипаются: цепочки реализованы
       // (C1–C5). `fold_*` идут с фазой B фичи 565, кроме [_skipFold].
-      final skip = _skipFold[name];
+      final skip = _skipFold[name] ?? _skipChainRc2[name];
 
       test(name, () async {
         final input = jsonDecode(File('$base.direction.json').readAsStringSync())

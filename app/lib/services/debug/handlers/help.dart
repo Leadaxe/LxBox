@@ -412,12 +412,9 @@ PATCH  /chains/{tag}[?rebuild=true]              Partial update: {tag,enabled,ho
                                                  or another chain is {tag} with no folder_id. A plain string is
                                                  read as {tag}. The build resolves links to final tags; a
                                                  position that does not resolve drops the whole chain.
-                                                 idle_timeout: "" = core default (5m), "0s" = live until stop.
-                                                 strip_evasion is a TRISTATE: omit = keep, null = core default
-                                                 (true, key not written), bool = explicit choice.
-                                                 strip = per-key patch over strip_evasion, REPLACES the map;
-                                                 keys only from tls.fragment | multiplex.padding |
-                                                 xhttp.padding | tls.utls (unknown key → 400).
+                                                 idle_timeout, strip_evasion, strip: stored as before, NOT
+                                                 written into the config (core >= 1.14.4-lx.37-rc.2 rejects
+                                                 them; links are gone, the filters are lx.detour.strip).
                                                  rewrite = JSON merge-patch (RFC 7396) per outbound type, kept
                                                  verbatim (a null inside DELETES a key — no "empty cleanup").
 DELETE /chains/{tag}[?rebuild=true]              Remove. Positions of OTHER chains pointing at the removed tag
@@ -459,8 +456,7 @@ tooFewHops (<2 positions) | emptyHop | duplicateHop | selfReference |
 nestedNotFirst (a nested chain is only legal at position 0) |
 forwardChainReference (referencing a chain declared below) |
 tagEmpty | tagTaken. Non-blocking findings (a position that is no longer
-among the targets, a first hop with its own detour, a strip key kept because
-a hop needs it — stripKeptForHop) do NOT block the write — same line the
+among the targets, a first hop with its own detour) do NOT block the write — same line the
 form draws.
 
 === Folders CRUD (server folders) ===

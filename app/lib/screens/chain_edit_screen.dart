@@ -30,8 +30,6 @@ import '../models/server_list.dart';
 import '../models/source_chain.dart';
 import '../services/builder/node_link_pool.dart';
 import '../services/builder/node_link_resolve.dart';
-import '../services/contract/chain_strip.dart';
-import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
 import '../widgets/ui_helpers.dart';
 import '../widgets/emoji_picker_button.dart';
@@ -112,8 +110,6 @@ class ChainEditScreen extends StatefulWidget {
 }
 
 class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
-  late final TextEditingController _idleCtrl;
-
   /// §609 — тег редактируется, как у узла; ссылки на старый тег переписывает
   /// storage при сохранении (`SettingsStorage.renameChain`).
   late final TextEditingController _tagCtrl;
@@ -122,12 +118,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   /// ([_shown]).
   late List<NodeLink> _hops;
   late bool _enabled;
-  late bool? _stripEvasion;
-  late Map<String, bool> _strip;
-
-  /// Раскрыт ли Advanced. Свёрнут по умолчанию: цепочка из двух позиций —
-  /// подавляющее большинство, и настройки звеньев ей не нужны.
-  bool _advancedOpen = false;
 
   late List<ChainHopCandidate> _cands;
   late Map<String, ChainHopCandidate> _lookup;
@@ -136,13 +126,9 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   void initState() {
     super.initState();
     final c = widget.initial;
-    _idleCtrl = TextEditingController(text: c.idleTimeout)
-      ..addListener(_onChange);
     _tagCtrl = TextEditingController(text: c.tag)..addListener(_onChange);
     _hops = [...c.hops];
     _enabled = c.enabled;
-    _stripEvasion = c.stripEvasion;
-    _strip = {...c.strip};
     _cands = collectChainHopTargets(
       config: widget.config,
       directions: widget.directions,
@@ -159,7 +145,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
 
   @override
   void dispose() {
-    _idleCtrl.dispose();
     _tagCtrl.dispose();
     super.dispose();
   }
@@ -184,10 +169,9 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
         tag: _tagCtrl.text.trim(),
         enabled: _enabled,
         hops: _hops,
-        idleTimeout: _idleCtrl.text.trim(),
-        stripEvasion: _stripEvasion,
-        clearStripEvasion: _stripEvasion == null,
-        strip: _strip,
+        // §761 — `idle_timeout`, `strip_evasion`, `strip` в форме нет: ядро
+        // с v1.14.4-lx.37-rc.2 их не принимает, сборка их не пишет. Сохранённые
+        // значения едут из [widget.initial] как есть.
       );
 
   bool _isDirty() {
@@ -195,24 +179,13 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
     final i = widget.initial;
     return s.tag != i.tag ||
         s.enabled != i.enabled ||
-        s.idleTimeout != i.idleTimeout ||
-        s.stripEvasion != i.stripEvasion ||
-        !_sameHops(s.hops, i.hops) ||
-        !_sameStrip(s.strip, i.strip);
+        !_sameHops(s.hops, i.hops);
   }
 
   static bool _sameHops(List<NodeLink> a, List<NodeLink> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  static bool _sameStrip(Map<String, bool> a, Map<String, bool> b) {
-    if (a.length != b.length) return false;
-    for (final e in a.entries) {
-      if (b[e.key] != e.value) return false;
     }
     return true;
   }
@@ -442,9 +415,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
                 label: Text(getLocalText.s("Add position")),
               ),
             ),
-
-            const SizedBox(height: 8),
-            _advancedSection(cs),
           ],
         ),
       ),
@@ -566,113 +536,6 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       ),
     );
   }
-
-  Widget _advancedSection(ColorScheme cs) {
-    // §57 — ключи, которые сборка снимет с патча ради звена: считает движок
-    // реестра по тем же телам, что и валидация формы.
-    final state = ChainFormState.of(_snapshot(),
-        pool: widget.pool, lists: widget.lists);
-    final keptByHop = {
-      for (final u in chainHopUnstrips(
-        stripEvasion: state.stripEvasion,
-        patch: state.strip,
-        hops: [for (final h in state.hops) (h, _lookup[h]?.body)],
-      ))
-        u.key,
-    };
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        initiallyExpanded: _advancedOpen,
-        onExpansionChanged: (v) => _advancedOpen = v,
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        title: Text(getLocalText.s("Advanced"),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-        children: [
-          TextField(
-            controller: _idleCtrl,
-            decoration: InputDecoration(
-              labelText: getLocalText.s("Idle timeout"),
-              hintText: getLocalText.s("empty = core default (5m); 0s = keep until stop"),
-              helperMaxLines: 2,
-              border: const OutlineInputBorder(),
-              isDense: true,
-            ),
-            style: const TextStyle(fontSize: 14),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            title: Text(getLocalText.s("Strip evasion tricks from links"),
-                style: const TextStyle(fontSize: 14)),
-            subtitle: Text(
-                getLocalText.s(
-                    "One-way DPI tricks make no sense on a link that dials through the previous hop."),
-                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-            // Трёхзначность модели наружу не течёт: пользователю показываем
-            // действующее значение (умолчание ядра = включено), а `null`
-            // остаётся только пока он к тумблеру не притронулся.
-            value: _snapshot().stripEvasionEnabled,
-            onChanged: (v) => setState(() => _stripEvasion = v),
-          ),
-          const SizedBox(height: 4),
-          Text(getLocalText.s("Per-key overrides"),
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          for (final key in chainStripCatalog())
-            _stripTile(key, cs, kept: keptByHop),
-        ],
-      ),
-    );
-  }
-
-  /// Строка каталога strip. Трёхзначная, как и данные: галка не тронута →
-  /// значение берётся из `strip_evasion` и умолчания каталога ядра; тронута →
-  /// уезжает в `strip` явным ключом. Двузначная галка не отличила бы «как
-  /// сейчас у ядра» от «я так решил» и молча меняла бы смысл при смене
-  /// умолчания ядра.
-  ///
-  /// Каталог, умолчания и описания — из реестра (`chain.json`). [kept] —
-  /// ключи, которые сборка снимет с патча ради звена (`on_hop_required`):
-  /// у них действующее значение «kept», что бы ни стояло в галке.
-  Widget _stripTile(ChainStripKey entry, ColorScheme cs,
-      {Set<String> kept = const {}}) {
-    final key = entry.key;
-    final explicit = _strip[key];
-    final effective = !kept.contains(key) &&
-        chainStripsKey(entry, stripEvasion: _stripEvasion, patch: _strip);
-    return CheckboxListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      controlAffinity: ListTileControlAffinity.leading,
-      visualDensity: VisualDensity.compact,
-      tristate: true,
-      title: Text(key,
-          style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
-      subtitle: Text(
-          entry.description(
-              registryLangForTag(LocaleController.I.effectiveTag)),
-          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-      // null = «не тронуто»: действующее значение показано подписью справа.
-      value: explicit,
-      onChanged: (v) => setState(() {
-        final next = {..._strip};
-        if (v == null) {
-          next.remove(key);
-        } else {
-          next[key] = v;
-        }
-        _strip = next;
-      }),
-      secondary: Text(
-          effective
-              ? getLocalText.s("stripped")
-              : getLocalText.s("kept"),
-          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-    );
-  }
-
 }
 
 /// Пикер позиции: список существующих целей с видом. Уже занятые исключены —

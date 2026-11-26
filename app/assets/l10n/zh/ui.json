@@ -3574,9 +3574,6 @@
   "One-way": {
     "value": "单向"
   },
-  "One-way DPI tricks make no sense on a link that dials through the previous hop.": {
-    "value": "对经由上一跳拨号的链路，单向 DPI 绕过手段没有意义。"
-  },
   "One-way traffic": {
     "value": "单向流量"
   },
@@ -3705,9 +3702,6 @@
   },
   "Pay": {
     "value": "支付"
-  },
-  "Per-key overrides": {
-    "value": "逐项覆盖"
   },
   "Phone → %1$s → %2$s → Internet": {
     "value": "手机 → %1$s → %2$s → 互联网"
@@ -4661,9 +4655,6 @@
   "Strict tunnel — all traffic goes through tun.": {
     "value": "严格隧道——所有流量都经 tun。"
   },
-  "Strip evasion tricks from links": {
-    "value": "去除链接中的规避手段"
-  },
   "Subscription": {
     "value": "订阅",
     "special": {
@@ -5420,9 +5411,6 @@
   "empty = core default": {
     "value": "留空 = 内核默认值"
   },
-  "empty = core default (5m); 0s = keep until stop": {
-    "value": "留空 = 内核默认（5m）；0s = 保持到停止"
-  },
   "empty = no prefix": {
     "value": "留空 = 不加前缀"
   },
@@ -5470,9 +5458,6 @@
   },
   "keep the fastest server until it fails": {
     "value": "保持最快的服务器，直到它失效"
-  },
-  "kept": {
-    "value": "保留"
   },
   "latency-tested twin of this direction": {
     "value": "该方向的延迟测速副本"
@@ -5583,9 +5568,6 @@
   },
   "storage shape (lxbox_settings.json)": {
     "value": "存储格式（lxbox_settings.json）"
-  },
-  "stripped": {
-    "value": "已去除"
   },
   "taken from member names; empty = no badges. Display only — not sent to the core": {
     "value": "取自成员名称；留空 = 不显示标记。仅供显示——不会发送给内核"
@@ -6651,8 +6633,8 @@
   "Core: lx.wg.connected_socket. The tunnel socket is connected to the server; a failed send or a route change disconnects it, and it hears a server that moved to a new address only after the next handshake retry.": {
     "value": "内核：lx.wg.connected_socket。隧道套接字连接到服务器；发送失败或路由变化会断开连接，更换了地址的服务器要到下一次握手重试后才能被听到。"
   },
-  "Core: lx.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
-    "value": "内核：lx.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
+  "Core: lx.detour.mtu_align. A node over a tunnel gets a packet size that fits into it: mtu for WireGuard and MASQUE, the initial packet size for Hysteria2 and TUIC. Values are never raised.": {
+    "value": "内核：lx.detour.mtu_align。隧道之上的节点获得能放入隧道的包大小：WireGuard 和 MASQUE 为 mtu，Hysteria2 和 TUIC 为初始包大小。数值只降不升。"
   },
   "Core: lx.masque.idle_timeout. The idle window for MASQUE nodes that have no idle_timeout of their own.": {
     "value": "内核：lx.masque.idle_timeout。没有自身 idle_timeout 的 MASQUE 节点的空闲窗口。"

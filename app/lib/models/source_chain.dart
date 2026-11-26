@@ -19,7 +19,7 @@
 import 'package:collection/collection.dart';
 
 import '../services/contract/chain_strip.dart'
-    show chainStripKeyKnown, chainStripKeys, orderedChainStrip;
+    show orderedChainStrip;
 import '../services/json_clone.dart' show deepCloneJson;
 import 'codec/node_link_record.dart' show nodeLinkToRecord;
 import 'node_link.dart';
@@ -280,12 +280,7 @@ String chainEmitError(SourceChain c) {
   for (final typeName in c.rewrite.keys) {
     if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
   }
-  for (final key in c.strip.keys) {
-    if (!chainStripKeyKnown(key)) {
-      return 'strip: unknown key "$key" '
-          '(allowed: ${chainStripKeys().join(', ')})';
-    }
-  }
+  // §761 — `strip` в конфиг не пишется, его ключи цепочку не валят.
   return '';
 }
 
@@ -303,12 +298,9 @@ Map<String, dynamic> chainOutboundObject(SourceChain c, List<String> hopTags) =>
       'tag': c.tag,
       'type': kChainOutboundType,
       'outbounds': [...hopTags],
-      if (c.idleTimeout.trim().isNotEmpty) 'idle_timeout': c.idleTimeout.trim(),
-      if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
-      if (c.strip.isNotEmpty)
-        // По каталогу, а не по порядку ключей Map: для ядра он не важен,
-        // а для читаемости конфига и сверки с лаунчером — важен.
-        'strip': orderedChainStrip(c.strip),
+      // §761 — `idle_timeout`, `strip_evasion`, `strip` ядро с
+      // v1.14.4-lx.37-rc.2 отвергает (звеньев нет, фильтры — `lx.detour.strip`):
+      // в конфиг не пишутся, в записи хранилища остаются как есть.
       if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
     };
 

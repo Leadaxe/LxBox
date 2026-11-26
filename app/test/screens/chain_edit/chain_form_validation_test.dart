@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../contract_paths.dart';
 import 'package:lxbox/services/chains/chain_form_validation.dart';
 import 'package:lxbox/services/chains/chain_hop_candidate.dart';
 
@@ -178,60 +177,20 @@ void main() {
     });
   });
 
-  // §57 (контракт 1.1.61) — REALITY × снятый uTLS больше не ошибка формы:
-  // `on_hop_required` реестра снимает ключ с патча, цепочка собирается,
-  // находка — предупреждение с кодом реестра.
-  group('reality + strip tls.utls — on_hop_required реестра', () {
-    setUpAll(loadTestRegistry);
-
-    test('снятый utls на reality-ЗВЕНЕ — предупреждение, сохранять можно', () {
-      final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home', 'de-reality'],
-          strip: {'tls.utls': true},
-        ),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
-      );
-      final kept = _find(issues, ChainIssueCode.stripKeptForHop);
-      expect(kept, isNotNull);
-      expect(kept!.level, ChainIssueLevel.warning);
-      expect(kept.hops, ['de-reality']);
-      expect(chainFormCanSave(issues), isTrue);
-    });
-
-    test('reality на позиции 0 не судится: strip применяется к звеньям', () {
-      final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home-reality', 'de-exit'],
-          strip: {'tls.utls': true},
-        ),
-        _ctx([_node('home-reality', reality: true), _node('de-exit')]),
-      );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
-    });
-
-    test('utls по умолчанию каталога не снимается — находки нет', () {
-      final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: ['home', 'de-reality']),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
-      );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.stripKeptForHop)));
-    });
-
-    test('явная галка перевешивает выключенный strip_evasion', () {
-      final issues = validateChainForm(
-        const ChainFormState(
-          tag: 'via-de',
-          hops: ['home', 'de-reality'],
-          stripEvasion: false,
-          strip: {'tls.utls': true},
-        ),
-        _ctx([_node('home'), _node('de-reality', reality: true)]),
-      );
-      expect(_codes(issues), contains(ChainIssueCode.stripKeptForHop));
-    });
+  // §761 — ключа `strip` у цепочки в конфиге нет (ядро lx.37-rc.2): находки
+  // `on_hop_required` форма не выдаёт, сохранённый патч сохранять не мешает.
+  test('сохранённый strip tls.utls на reality-звене — находок нет', () {
+    final issues = validateChainForm(
+      const ChainFormState(
+        tag: 'via-de',
+        hops: ['home', 'de-reality'],
+        stripEvasion: false,
+        strip: {'tls.utls': true},
+      ),
+      _ctx([_node('home'), _node('de-reality', reality: true)]),
+    );
+    expect(issues, isEmpty);
+    expect(chainFormCanSave(issues), isTrue);
   });
 
   group('detour (T7) — зависит от позиции', () {

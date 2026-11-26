@@ -233,11 +233,14 @@ void main() {
     });
   });
 
-  test('mtu_align fill/off строкой, masque_idle_timeout во вложенный masque', () {
+  test('mtu_align fill/off в lx.detour (§761), masque_idle_timeout во вложенный masque', () {
     final r = lx({'mtu_align': 'fill', 'masque_idle_timeout': '5m'}) as Map;
-    expect(r['mtu_align'], 'fill');
+    expect(r['detour'], {'mtu_align': 'fill'});
+    expect(r.containsKey('mtu_align'), isFalse);
     expect(r['masque'], {'idle_timeout': '5m'});
-    expect((lx({'mtu_align': 'off'}) as Map)['mtu_align'], 'off');
+    final off = lx({'mtu_align': 'off'}) as Map;
+    expect(off['detour'], {'mtu_align': 'off'});
+    expect(off.containsKey('mtu_align'), isFalse);
   });
 
   test('#enable объявлений: reachable/lazy от сна, build_max ещё и от lazy', () {

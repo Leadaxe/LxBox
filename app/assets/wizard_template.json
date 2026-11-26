@@ -575,7 +575,7 @@
         }
       }],
       "#if mtu_align": [{"#not": {"@mtu_align": "clamp"}}, {
-        "mtu_align": "@mtu_align"
+        "detour": {"mtu_align": "@mtu_align"}
       }],
       "#if sniff_guard": [
         {"#or": [{"#not": {"@sniff_guard_tls": "off"}}, {"#not": {"@sniff_guard_quic": "off"}}]},

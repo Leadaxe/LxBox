@@ -62,7 +62,7 @@ void main() {
       expect(tags.indexOf('ch'), lessThan(tags.indexOf('vpn-1')));
     });
 
-    test('strip / strip_evasion / idle_timeout / rewrite доезжают в raw-объект',
+    test('§761: idle_timeout / strip_evasion / strip не пишутся, rewrite доезжает',
         () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
@@ -80,9 +80,11 @@ void main() {
         ],
       );
       final chain = _byTag(r, 'tuned')!;
-      expect(chain['idle_timeout'], '10m');
-      expect(chain['strip_evasion'], isFalse);
-      expect(chain['strip'], {'tls.fragment': false, 'tls.utls': true});
+      // Ядро v1.14.4-lx.37-rc.2 отвергает эти ключи цепочки при загрузке.
+      expect(chain.containsKey('idle_timeout'), isFalse);
+      expect(chain.containsKey('strip_evasion'), isFalse);
+      expect(chain.containsKey('strip'), isFalse);
+      expect(chain.keys.toSet(), {'tag', 'type', 'outbounds', 'rewrite'});
       expect(chain['rewrite'], {
         'vless': {'packet_encoding': 'xudp'},
       });
@@ -112,57 +114,30 @@ void main() {
     });
   });
 
-  // §57 (контракт 1.1.61) — `on_hop_required` каталога strip: REALITY-звено
-  // требует `tls.utls`, ключ снимается с патча цепочки, цепочка собирается,
-  // код реестра — предупреждением. Прежде форма запирала такую цепочку.
-  group('§57 — REALITY × strip tls.utls на звене', () {
-    test('цепочка собирается, tls.utls снят с патча, код в отчёте', () async {
-      final r = await _build(
-        nodeTags: ['DE'],
-        extraUris: [
-          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
-              '?security=reality&sni=example.com&fp=chrome'
-              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
-              '&sid=0123abcd#NL',
-        ],
-        chains: [
-          const SourceChain(
-            tag: 'via-nl',
-            hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
-            strip: {'tls.utls': true, 'tls.fragment': false},
-          ),
-        ],
-      );
-      final chain = _byTag(r, 'via-nl');
-      expect(chain, isNotNull, reason: 'цепочка обязана собраться');
-      expect(chain!['strip'], {'tls.fragment': false, 'tls.utls': false});
-      expect(
-          r.emitWarnings.where((w) =>
-              w.contains('[chain_strip_utls_on_reality]') && w.contains('NL')),
-          hasLength(1));
-    });
-
-    test('REALITY на позиции 0 не судится — патч как есть', () async {
-      final r = await _build(
-        nodeTags: ['DE'],
-        extraUris: [
-          'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
-              '?security=reality&sni=example.com&fp=chrome'
-              '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
-              '&sid=0123abcd#NL',
-        ],
-        chains: [
-          const SourceChain(
-            tag: 'from-nl',
-            hops: [NodeLink(tag: 'NL'), NodeLink(tag: 'DE')],
-            strip: {'tls.utls': true},
-          ),
-        ],
-      );
-      expect(_byTag(r, 'from-nl')!['strip'], {'tls.utls': true});
-      expect(r.emitWarnings.where((w) => w.contains('chain_strip_utls')),
-          isEmpty);
-    });
+  // §761 — шаг `on_hop_required` (§57) снят: ключа `strip` в конфиге нет.
+  test('REALITY-звено с сохранённым strip tls.utls: цепочка без strip, без кода',
+      () async {
+    final r = await _build(
+      nodeTags: ['DE'],
+      extraUris: [
+        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
+            '?security=reality&sni=example.com&fp=chrome'
+            '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
+            '&sid=0123abcd#NL',
+      ],
+      chains: [
+        const SourceChain(
+          tag: 'via-nl',
+          hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
+          strip: {'tls.utls': true, 'tls.fragment': false},
+        ),
+      ],
+    );
+    final chain = _byTag(r, 'via-nl');
+    expect(chain, isNotNull, reason: 'цепочка обязана собраться');
+    expect(chain!.containsKey('strip'), isFalse);
+    expect(r.emitWarnings.where((w) => w.contains('chain_strip_utls')),
+        isEmpty);
   });
 
   group('§393 C3 — порядок объявления и ссылка вперёд', () {
