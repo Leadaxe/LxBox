@@ -259,8 +259,8 @@ core's test outbound `impair` (core SPEC 164), driven by a script through the
 Debug API only — it has no UI in LxBox and must not get one. The scenario,
 with the traps met on the emulator, is in
 [`api/debug-api-reference.md`](api/debug-api-reference.md) → «Сценарий теста
-целиком (§762)». Run it on every core bump that touches groups or chains
-(see [`KERNEL.md`](KERNEL.md) → gotcha 7).
+целиком (§762)». It is a tool for when a failure needs reproducing, not a
+step of every bump.
 
 ---
 

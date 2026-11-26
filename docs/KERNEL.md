@@ -1506,15 +1506,6 @@ coefficients) is deliberately **not** mirrored here: a copy would drift at the
 first bump and start rejecting working nodes. Anything finer than the shape is
 caught by the core itself.
 
-### 7. Group and chain behaviour is checked with `impair`, not by eye
-
-A bump that touches `urltest` (`round_robin` self-heal, failover) or chains
-gets the `impair` scenario on the emulator before it lands: nodes made of
-`impair`, a `round_robin` direction, failures switched on at runtime, `/pool`
-and `/profiler/live` read back. The script and its traps are in
-`docs/api/debug-api-reference.md` → «Сценарий теста целиком (§762)»; results
-of the rc.3 run are in `docs/spec/tasks/762-debug-api-impair.md`.
-
 ## Client versus core: which side to fix a config bug on
 
 Sometimes a “this node kills the config” bug is fixed from both sides
