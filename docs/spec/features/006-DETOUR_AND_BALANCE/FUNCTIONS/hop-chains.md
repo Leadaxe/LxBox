@@ -54,11 +54,12 @@ Direction groups; the chain tag in Direction pools; warnings with codes
      a chain lower in the list (cycles between chains are excluded by
      order);
   5. a nested chain not in the first position.
-- One path per node or group (task 761): a position's group is a copy without
-  the nodes standing as positions or lower; a node or group used by an earlier
-  chain is a copy under its own tag; a session node (WireGuard/AWG, Tailscale,
-  any endpoint) used twice, a ring through a node's `detour`, an emptied group,
-  a taken hop tag `<chain>#<i>` — the chain is dropped with a warning.
+- One path per node or group (task 761), no copies: a ring (reached at the
+  entry and higher in the same chain, or an entry node's `detour` into a higher
+  position), a conflict (needed on position ≥ 1 and met on another position
+  ≥ 1 or in another chain; a shared entry is fine), a taken hop tag
+  `<chain>#<i>` — the chain is dropped with a warning that says which copy to
+  make. Of two conflicting chains the lower one in the list drops.
 - Nodes past the first position lose WireGuard `listen_port`, Tailscale
   `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` with a build
   warning; socket options stay (the core accepts them under `detour`).

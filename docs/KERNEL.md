@@ -1364,7 +1364,8 @@ Core SPEC 165. LxBox is ready in the branch of
   dependency` with hop tags; a node or group in two chains (any positions) or on two
   positions ≥ 1 is "`<tag>` is needed on chain X position i and on chain Y position
   j: one node or group has one path"; a repeated tag is "duplicate outbound …". LxBox
-  resolves these with copies or drops the chain before the core sees them.
+  makes no copies: the editor refuses such a chain with a hint, the build drops it
+  before the core sees it.
 - **Default.** Without `lx.detour` the core filters `tls.fragment`, `tls.spoof`, kTLS
   and the `apple` engine off any node whose connection has no kernel socket under
   it, not only off chain links. `"detour": false` gives the upstream behaviour.

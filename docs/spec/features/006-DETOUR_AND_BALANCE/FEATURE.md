@@ -172,14 +172,16 @@ means for the user:
   not, goes through the position below;
 - `direct` picked by a group on position ≥ 1 goes through the position below,
   not around the chain;
-- one node or group has one path. A group on a position is built from a copy
-  without the nodes that stand as positions themselves or lower in the chain
-  (`[A, Direction{A, X}]` uses a copy of the Direction without A); a node or
-  group used by an earlier chain is taken as a copy under its own tag. A node
-  with its own session (WireGuard/AWG, Tailscale and other endpoints) cannot
-  be copied: the editor blocks such a chain and the build drops it with a
-  warning. A ring through a node's own `detour`, a nested chain past the
-  first position, a group left empty — the same.
+- one node or group has one path; the app makes no copies. A ring (a node or
+  group reached at the entry and higher in the same chain, e.g.
+  `[A, Direction{A, X}]`, or an entry node's own `detour` into a higher
+  position) and a conflict (a node or group needed on position ≥ 1 and met
+  again on another position ≥ 1 or in another chain; a shared entry of two
+  chains is fine) are errors. The editor does not save such a chain and says
+  what to do ("make a copy of X without A for this position", "make a copy of
+  X (and its nodes; WireGuard copies need other keys) for one of them"); the
+  build drops it with the same hint, the rest is built. A nested chain past
+  the first position and a taken hop tag — the same.
 
 ## Inputs / Outputs
 

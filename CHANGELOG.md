@@ -16,11 +16,11 @@
   keys `idle_timeout`, `strip_evasion` and `strip` (saved values stay in the
   chain and the backup); the chain editor loses its Advanced block. The
   `mtu_align` setting is written to `lx.detour.mtu_align`, old mixins are
-  rewritten. One node or group has one path: a group on a chain position is
-  built from a copy without the nodes standing lower or as positions, a node
-  or group used by another chain is a copy; a WireGuard/AWG, Tailscale or other
-  endpoint node cannot be shared, a ring through a detour is caught — the
-  editor blocks such a chain and the build drops it with a warning. Nodes
+  rewritten. One node or group has one path: a ring (a node at the entry and
+  also inside a Direction higher in the chain, or a detour back into the
+  chain) or a conflict (a node or group on a later position used again in the
+  chain or in another chain) is an error. The editor does not save such a
+  chain and says which copy to make; the build drops it with the same hint. Nodes
   past the first position lose fixed local ports. Internal `chain-hop`
   outbounds are hidden. The JSON tab of the node screen shows the node as the
   core runs it, with the core's changes. Needs the rc2 core, not pinned yet.
