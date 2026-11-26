@@ -964,7 +964,7 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
     if (c == null) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Text(getLocalText.s("No data: the tunnel is not running."),
+        child: Text(getLocalText.s("No data from the core: the tunnel is not running or the node is not in the running config."),
             style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
       );
     }

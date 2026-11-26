@@ -6963,8 +6963,8 @@
   "Original": {
     "value": "原始"
   },
-  "No data: the tunnel is not running.": {
-    "value": "无数据：隧道未运行。"
+  "No data from the core: the tunnel is not running or the node is not in the running config.": {
+    "value": "内核无数据：隧道未运行，或运行中的配置里没有该节点。"
   },
   "Changed by the core": {
     "value": "内核所做的更改"

@@ -7251,8 +7251,8 @@
   "Original": {
     "value": "Исходный"
   },
-  "No data: the tunnel is not running.": {
-    "value": "Нет данных: туннель не запущен."
+  "No data from the core: the tunnel is not running or the node is not in the running config.": {
+    "value": "Нет данных от ядра: туннель не запущен или узла нет в работающем конфиге."
   },
   "Changed by the core": {
     "value": "Изменено ядром"
