@@ -6956,5 +6956,26 @@
   },
   "frozen": {
     "value": "冻结"
+  },
+  "Effective": {
+    "value": "生效"
+  },
+  "Original": {
+    "value": "原始"
+  },
+  "No data: the tunnel is not running.": {
+    "value": "无数据：隧道未运行。"
+  },
+  "Changed by the core": {
+    "value": "内核所做的更改"
+  },
+  "chain %s, position %d": {
+    "value": "链 %s，位置 %d"
+  },
+  "rewrite of chain %s, position %d": {
+    "value": "链 %s 的 rewrite，位置 %d"
+  },
+  "MTU alignment (%s) under %s": {
+    "value": "MTU 对齐（%s），下层 %s"
   }
 }

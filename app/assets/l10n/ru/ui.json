@@ -7244,5 +7244,26 @@
   },
   "frozen": {
     "value": "заморозка"
+  },
+  "Effective": {
+    "value": "Действующий"
+  },
+  "Original": {
+    "value": "Исходный"
+  },
+  "No data: the tunnel is not running.": {
+    "value": "Нет данных: туннель не запущен."
+  },
+  "Changed by the core": {
+    "value": "Изменено ядром"
+  },
+  "chain %s, position %d": {
+    "value": "цепочка %s, позиция %d"
+  },
+  "rewrite of chain %s, position %d": {
+    "value": "rewrite цепочки %s, позиция %d"
+  },
+  "MTU alignment (%s) under %s": {
+    "value": "выравнивание MTU (%s) под %s"
   }
 }

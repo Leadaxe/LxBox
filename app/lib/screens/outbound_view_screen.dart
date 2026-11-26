@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show JsonEncoder, jsonEncode;
 
 import 'package:flutter/material.dart';
 
@@ -30,8 +31,8 @@ import '../widgets/focus_safe_tab_bar_view.dart';
 
 /// §258 — экран деталей outbound'а («View details» из меню ноды): вкладки
 /// **Overview** (основные параметры + рантайм-цепочка detour, хопы
-/// кликабельны → экран владельца) и **JSON** (прежний read-only дамп §099
-/// с Copy-аффордансом в AppBar). §355 — третья вкладка **Dependents**
+/// кликабельны → экран владельца) и **JSON** (§761: узел у ядра —
+/// `effective` / `original` и правки ядра; Copy-аффорданс в AppBar). §355 — третья вкладка **Dependents**
 /// (кто зависит от этой ноды по detour/Направлениям) — видна только когда
 /// зависимые есть; ⚠-метка мёртвого корня в списке нод открывает экран
 /// сразу на ней ([openDependents]).
@@ -61,6 +62,10 @@ class OutboundViewScreen extends StatefulWidget {
 
   final String tag;
   final String kind;
+
+  /// Тело узла из конфига приложения. §761: вкладка JSON его больше не
+  /// показывает (узел берётся у ядра, `GetOutboundConfig`); копирование в
+  /// AppBar идёт через [onCopy].
   final String json;
 
   /// §099 — число detour-хопов у ноды (0 = нет). Определяет вид Copy-аффорданса
@@ -83,7 +88,11 @@ class OutboundViewScreen extends StatefulWidget {
 }
 
 class _OutboundViewScreenState extends State<OutboundViewScreen> {
-  late final TextEditingController _jsonCtrl;
+  /// §761 — узел от ядра (`GetOutboundConfig`): вкладка JSON показывает его,
+  /// а не тело из конфига приложения. `null` после загрузки — нет данных.
+  CcOutboundConfig? _coreJson;
+  bool _coreJsonLoaded = false;
+  bool _showOriginal = false;
 
   // §258 — Направления: подпись Направлений хопов «⚙ label» + Направление-ветка
   // навигации.
@@ -237,14 +246,17 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   @override
   void initState() {
     super.initState();
-    _jsonCtrl = TextEditingController(text: widget.json);
     unawaited(_load());
+    unawaited(_loadCoreJson());
   }
 
-  @override
-  void dispose() {
-    _jsonCtrl.dispose();
-    super.dispose();
+  Future<void> _loadCoreJson() async {
+    final c = await CcChannel.instance.getOutboundConfig(widget.tag);
+    if (!mounted) return;
+    setState(() {
+      _coreJson = c;
+      _coreJsonLoaded = true;
+    });
   }
 
   Future<void> _load() async {
@@ -939,11 +951,91 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
 
   // ─── JSON ───────────────────────────────────────────────────────────────
 
+  /// §761 (решение владельца) — JSON узла у ядра в рантайме: по умолчанию
+  /// `effective` (каким ядро узел запустило), переключатель на `original`
+  /// (как написан в конфиге) и список правок ядра. Туннель не поднят — «нет
+  /// данных», свой конфиг вместо ответа ядра не подставляется.
   Widget _buildJsonTab(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (!_coreJsonLoaded) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final c = _coreJson;
+    if (c == null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Text(getLocalText.s("No data: the tunnel is not running."),
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+      );
+    }
+    final original = c.original;
+    final showOriginal = _showOriginal && original != null;
+    final body = showOriginal ? original : c.effective;
     return Padding(
       padding: const EdgeInsets.all(12),
-      child: LxJsonView(text: _jsonCtrl.text),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (original != null) ...[
+            SegmentedButton<bool>(
+              segments: [
+                ButtonSegment(
+                  value: false,
+                  label: Text(getLocalText.s("Effective")),
+                ),
+                ButtonSegment(
+                  value: true,
+                  label: Text(getLocalText.s("Original")),
+                ),
+              ],
+              selected: {showOriginal},
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 12)),
+              ),
+              onSelectionChanged: (v) =>
+                  setState(() => _showOriginal = v.first),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (c.changes.isNotEmpty) ...[
+            _sectionHeader(context, getLocalText.s("Changed by the core")),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 160),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final ch in c.changes)
+                    _kvRow(context, ch.field, _changeLine(ch)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Expanded(
+            child: LxJsonView(
+                text: const JsonEncoder.withIndent('  ').convert(body)),
+          ),
+        ],
+      ),
     );
   }
 
+  /// Строка правки: `было → стало · причина`. Нет `from` — поля не было,
+  /// нет `to` — поле снято.
+  String _changeLine(CcConfigChange ch) {
+    String v(bool has, Object? x) => has ? jsonEncode(x) : '—';
+    final by = ch.by;
+    final why = switch (by.type) {
+      CcConfigChangeBy.typeChain => getLocalText.s(
+          "chain %s, position %d", by.chain, by.position + 1),
+      CcConfigChangeBy.typeChainRewrite => getLocalText.s(
+          "rewrite of chain %s, position %d", by.chain, by.position + 1),
+      CcConfigChangeBy.typeMtuAlign => getLocalText.s(
+          "MTU alignment (%s) under %s", by.mode, by.below),
+      _ => by.type,
+    };
+    return '${v(ch.hasFrom, ch.from)} → ${v(ch.hasTo, ch.to)} · $why';
+  }
 }
