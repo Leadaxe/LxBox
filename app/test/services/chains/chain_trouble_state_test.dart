@@ -52,6 +52,9 @@ void main() {
     expect(t.map((e) => e.chain.tag), ['c2']);
     expect(t.single.message, contains('"c1"'));
     expect(t.single.message, contains('WireGuard copies need other keys'));
+    // На главном экране «здесь» нет: обе цепочки по имени.
+    expect(t.single.message, contains('and in chain "c2" (position 2)'));
+    expect(t.single.message, isNot(contains('here')));
   });
 
   test('общий вход двух цепочек — без подсказки', () {

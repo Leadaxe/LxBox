@@ -7286,5 +7286,11 @@
   },
   "Open chain": {
     "value": "Открыть цепочку"
+  },
+  "\"%s\" is used in chain \"%s\" (position %d) and in chain \"%s\" (position %d) — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
+    "value": "«%s» используется в цепочке «%s» (позиция %d) и в цепочке «%s» (позиция %d) — сделайте копию «%s» (и её узлов; копиям WireGuard нужны другие ключи) для одной из них."
+  },
+  "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.": {
+    "value": "В цепочке «%s» detour узла «%s» на входе ведёт в «%s», который цепочка берёт выше — уберите этот detour или уберите «%s» из цепочки."
   }
 }

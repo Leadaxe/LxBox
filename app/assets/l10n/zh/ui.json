@@ -6998,5 +6998,11 @@
   },
   "Open chain": {
     "value": "打开跳转链路"
+  },
+  "\"%s\" is used in chain \"%s\" (position %d) and in chain \"%s\" (position %d) — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
+    "value": "“%s”已在链“%s”（位置 %d）和链“%s”（位置 %d）中使用——请为其中之一复制“%s”（及其节点；WireGuard 副本需要其他密钥）。"
+  },
+  "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.": {
+    "value": "在链“%s”中，入口处“%s”的 detour 指向“%s”，而该链在更高位置接管了它——请删除该 detour，或把“%s”移出该链。"
   }
 }

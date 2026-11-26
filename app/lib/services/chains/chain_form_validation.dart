@@ -454,7 +454,10 @@ ChainTakeoverFailure? chainOnePathFailure(
 /// Что не так и что сделать — для находки формы и для плашки главного
 /// экрана. `null` — отказ, который форма называет своей находкой (повтор,
 /// вложенная цепочка): на плашку он не идёт.
-String? chainOnePathMessage(ChainTakeoverFailure f) {
+///
+/// [inEditor] — текст для редактора этой цепочки («here ("…")»). На плашке
+/// главного экрана «здесь» нет: обе цепочки называются по имени.
+String? chainOnePathMessage(ChainTakeoverFailure f, {bool inEditor = true}) {
   final p = f.position + 1;
   final op = f.otherPosition + 1;
   final hint = f.copyHint;
@@ -469,6 +472,12 @@ String? chainOnePathMessage(ChainTakeoverFailure f) {
     ChainTakeoverFault.twoPositions when hint != null => getLocalText.s(
         "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.",
         f.tag, op, p, hint.group, f.tag, hint.position + 1),
+    ChainTakeoverFault.otherChain when !inEditor => getLocalText.s(
+        "\"%s\" is used in chain \"%s\" (position %d) and in chain \"%s\" (position %d) — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.",
+        f.tag, f.otherChain, op, f.chain, p, f.tag),
+    ChainTakeoverFault.detourRing when !inEditor => getLocalText.s(
+        "In chain \"%s\" the detour of \"%s\" at the entry leads to \"%s\", which the chain takes over higher up — remove that detour or take \"%s\" out of the chain.",
+        f.chain, f.tag, f.via, f.via),
     ChainTakeoverFault.otherChain => getLocalText.s(
         "\"%s\" is used in chain \"%s\" (position %d) and here (\"%s\") at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.",
         f.tag, f.otherChain, op, f.chain, p, f.tag),
