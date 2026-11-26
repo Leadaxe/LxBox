@@ -3,11 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/tunnel_status.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/openconnect_auth.dart' show OpenConnectRowKind, openConnectRowState;
-import '../vpn/box_vpn_client.dart';
-import '../vpn/cc_channel.dart';
+import '../services/openconnect_status_feed.dart';
+import '../vpn/cc_openconnect.dart';
 import 'safe_bottom.dart';
 
 /// §764 — строка вкладки: название и значение.
@@ -108,7 +107,7 @@ class OpenConnectStatusTab extends StatefulWidget {
   /// Тег узла в работающем конфиге.
   final String liveTag;
 
-  /// Тесты: поток снапшотов вместо [CcChannel.openConnectStatus] (снапшот
+  /// Тесты: поток снапшотов вместо [OpenConnectStatusFeed.statuses] (снапшот
   /// при открытии тогда не запрашивается).
   @visibleForTesting
   final Stream<CcOpenConnectSnapshot>? statusSource;
@@ -126,7 +125,7 @@ class _OpenConnectStatusTabState extends State<OpenConnectStatusTab> {
   bool _hasData = false;
   CcOpenConnectStatus? _status;
   StreamSubscription<CcOpenConnectSnapshot>? _sub;
-  StreamSubscription<TunnelStatusEvent>? _vpnSub;
+  StreamSubscription<bool>? _vpnSub;
 
   @override
   void initState() {
@@ -136,15 +135,14 @@ class _OpenConnectStatusTabState extends State<OpenConnectStatusTab> {
       _vpnUp = forced;
     } else {
       unawaited(
-        BoxVpnClient.I.getVpnStatus().then((s) {
+        OpenConnectStatusFeed.vpnUp().then((up) {
           if (!mounted) return;
-          setState(() => _vpnUp = s.isUp);
-          if (s.isUp) unawaited(_fetch());
+          setState(() => _vpnUp = up);
+          if (up) unawaited(_fetch());
         }),
       );
-      _vpnSub = BoxVpnClient.I.onStatusChanged.listen((e) {
+      _vpnSub = OpenConnectStatusFeed.vpnUpChanges.listen((up) {
         if (!mounted) return;
-        final up = e.status.isUp;
         final wasUp = _vpnUp;
         setState(() {
           _vpnUp = up;
@@ -161,13 +159,13 @@ class _OpenConnectStatusTabState extends State<OpenConnectStatusTab> {
       _sub = source.listen(_onSnapshot);
     } else {
       // Слушатель до снапшота: обновление между ними не теряется.
-      _sub = CcChannel.instance.openConnectStatus.listen(_onSnapshot);
+      _sub = OpenConnectStatusFeed.statuses.listen(_onSnapshot);
     }
   }
 
   /// Текущий снапшот: поток шлёт только изменения.
   Future<void> _fetch() async {
-    final snap = await CcChannel.instance.getOpenConnectStatus();
+    final snap = await OpenConnectStatusFeed.snapshot();
     if (!mounted) return;
     if (snap == null) {
       setState(() => _hasData = true);
