@@ -252,6 +252,16 @@ Owner's decision, 2026-09-24.
 - Speed test with VPN on → result above 0.
 - DNS servers changed → restart → names resolve.
 
+### Failures on demand: `impair` (emulator)
+
+Node failures for balancing, failover and chain tests are made with the
+core's test outbound `impair` (core SPEC 164), driven by a script through the
+Debug API only — it has no UI in LxBox and must not get one. The scenario,
+with the traps met on the emulator, is in
+[`api/debug-api-reference.md`](api/debug-api-reference.md) → «Сценарий теста
+целиком (§762)». Run it on every core bump that touches groups or chains
+(see [`KERNEL.md`](KERNEL.md) → gotcha 7).
+
 ---
 
 ## Critical risks
