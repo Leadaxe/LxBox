@@ -445,7 +445,7 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/subs` | GET | `?reveal=true` — clear URLs |
-| `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` |
+| `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` → 201 `{id, kind, tags}` (одна запись) или `{ids, count, tags}`; **§762** `tags` — итоговые теги узлов в конфиге (с эмодзи и префиксом); `impair` сохраняет тег как передан |
 | `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity + **§636**: `tls` (частичная правка, `null` — наследовать). **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
@@ -738,6 +738,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 | Endpoint | Метод | Что делает |
 |---|---|---|
 | `/nodes/link?tag=<tag>` | GET | экспорт узла ссылкой — ровно то, что кладёт в буфер `Copy link` (`NodeSpec.toUri()`) |
+| `/nodes/{tag}` | PATCH | §762 — `{"detour": "<tag>" \| {folder_id?, tag} \| null}`: detour узла по тегу. Одиночный сервер — его `override_detour`, член папки — `detour` члена (self / цикл → 400); узел подписки → 409 (detour общий у подписки: `PATCH /subs/{id}`); узла нет → 404. Ответ `{ok, tag, entry_id, kind, detour}`, `?rebuild=true` |
 
 ```bash
 curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7&reveal=true" | jq
@@ -1352,19 +1353,24 @@ Runtime control); приложение их не проверяет.
 
 - Тег — фактический тег в конфиге, URL-encoded (эмодзи, пробелы, `/`).
 - `set` применяется сейчас, поверх идущего расписания; тело уходит в ядро
-  исходным текстом. Пустое тело или `{}` → 400. Под-линии снимаются
+  компактным JSON. Пустое тело, `{}` или не объект → 400. Под-линии снимаются
   `{"sublinks": false}` (не `[]`).
 - `schedule` заменяет расписание: линия и под-линии возвращаются к конфигу,
   записи идут от вызова (`now`) или от первого трафика (`first_use`), один раз
   или каждые `repeat`. `entries: []` — стоп и линия по конфигу. `entries` не
-  список, `start` / `repeat` не строка → 400.
+  список, `start` вне `""` / `now` / `first_use`, `repeat` не строка → 400 до
+  ядра; значение `repeat` проверяет ядро.
 - Ошибки: туннель не поднят / клиент недоступен → **409**; тега нет → **404**;
-  не impair или ядро отвергло JSON → **400**; сервис не запущен, ядро без
-  команд → **409**; прочее → **502**. Текст ядра — в `error.message`.
+  не impair или ядро отвергло JSON → **400**; сервис не запущен → **409**;
+  ядро без команд (Unimplemented) → **501** `not_implemented`; прочее →
+  **502**. Текст ядра — в `error.message`.
+- Пути, тела и коды совпадают с Debug API лаунчера (его спека
+  190-F-C-IMPAIR_DEBUG_API); конверт ошибки — общий для LxBox
+  `{"error":{"code","message"}}`.
 - Ассистенту (§750) маршрут закрыт.
 
 ```bash
-T=$(jq -rn --arg t "⚡ imp-test" '$t|@uri')
+T=imp-test   # тег узла как в конфиге; с эмодзи — URL-encode: jq -rn --arg t "$TAG" '$t|@uri'
 
 # Сайт закрыт на одном узле (домен виден, только когда impair стоит над узлом:
 # impair с detour на узел; под узлом impair видит лишь адрес сервера)
@@ -1387,6 +1393,49 @@ curl -s -X POST -H "$HDR" "$BASE/impair/$T/schedule" -d '{"entries": []}'
 # Статус: текущая линия, счётчики, где расписание
 curl -s -H "$HDR" "$BASE/impair/$T" | jq '{link_params, counters, schedule}'
 ```
+
+
+### Сценарий теста целиком (§762)
+
+Узел `impair` создаётся, ставится в путь трафика, меняется на ходу и
+удаляется только через Debug API. Нужно ядро rc3 (для `/impair/*`).
+
+```bash
+# 1. Создать impair над узлом Alpha (impair видит домены, гасит одиночные сайты)
+curl -s -X POST -H "$HDR" "$BASE/subs?rebuild=true" -d "$(jq -n --arg i \
+  '{"type":"impair","tag":"imp-test","detour":"⚡ Alpha","seed":1,"link_params":{"delay":"30ms"}}' '{input:$i}')"
+# → 201 {"id":"<impId>","kind":"UserServer","tags":["imp-test"], ...}
+#    (вместо detour в теле: PATCH /subs/<impId> {"override_detour":"⚡ Alpha"})
+
+# 1'. Или impair под узлом: detour узла Alpha → impair (impair видит только сервер узла)
+curl -s -X PATCH -H "$HDR" "$BASE/nodes/$(jq -rn '"⚡ Alpha"|@uri')?rebuild=true" -d '{"detour":"imp-test"}'
+# → {"ok":true,"tag":"⚡ Alpha","kind":"UserServer","detour":{"tag":"imp-test"}, ...}
+
+# 2. Направление round_robin из impair-узлов (фильтр по тегу) и его пул
+curl -s -X POST -H "$HDR" "$BASE/directions?rebuild=true" -d '{"tag":"imp-lab","label":"Impair lab",
+  "node_filter":"^imp-","auto":{"mode":"round_robin","balancer":{"pool":3}}}'
+curl -s -X POST -H "$HDR" "$BASE/action/reload-vpn"
+curl -s -H "$HDR" "$BASE/pool?tag=imp-lab-auto" | jq '.slots'
+
+# 3. Линия на ходу
+curl -s -X POST -H "$HDR" "$BASE/impair/imp-test/schedule" -d '{"start":"now","repeat":"2m","entries":[
+  {"at":"0s","link_params":{"outage":false}},{"at":"80s","link_params":{"outage":true}}]}'
+# → статус: {"tag":"imp-test", ..., "schedule":{"entries":2,"repeat":"2m0s","round":0, ...}}
+
+# 4. Замеры
+curl -s -H "$HDR" "$BASE/impair/imp-test" | jq '{link_params, counters, schedule}'
+curl -s -H "$HDR" "$BASE/pool?tag=imp-lab-auto" | jq '.slots[] | {tag, delay, quarantined, confirmedFailures}'
+curl -s -X POST -H "$HDR" "$BASE/action/urltest?tag=imp-test"
+curl -s -H "$HDR" "$BASE/state" | jq '{delay_by_direction, last_delay, traffic}'
+
+# 5. Сброс линии, снять detour, удалить
+curl -s -X POST -H "$HDR" "$BASE/impair/imp-test/schedule" -d '{"entries":[]}'
+curl -s -X PATCH -H "$HDR" "$BASE/nodes/$(jq -rn '"⚡ Alpha"|@uri')?rebuild=true" -d '{"detour":null}'
+curl -s -X DELETE -H "$HDR" "$BASE/subs/<impId>?rebuild=true"
+```
+
+Соединения по узлу (байты, закрытие) Debug API пока не отдаёт: есть только
+`traffic` в `/state` и `/profiler/live` (по приложениям, без outbound).
 
 ---
 

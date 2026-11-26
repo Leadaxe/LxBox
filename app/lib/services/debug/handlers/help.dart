@@ -106,8 +106,9 @@ POST /impair/{tag}/set              Body: a schedule entry without "at" (JSON ob
                                       applied now on top of the schedule → status. {"sublinks": false} drops sublinks.
 POST /impair/{tag}/schedule         Body: {"entries":[...], "start":""|"now"|"first_use", "repeat":""|"60s"}.
                                       Replaces the schedule; entries:[] stops it and restores the config line → status.
-                                      Keys are checked by the core. Tunnel down → 409; core errors: unknown tag 404,
-                                      not impair / bad JSON 400, service not started 409.
+                                      Bad body (start outside the three values too) → 400 before the core. Keys are
+                                      checked by the core. Tunnel down → 409; core errors: unknown tag 404,
+                                      not impair / bad JSON 400, service not started 409, core without it 501.
 
 === Logs ===
 
@@ -227,6 +228,8 @@ POST   /subs[?rebuild=true]                    Create. Body {"input":"<url|URI|W
                                                  JSON with multiple outbounds may create several entries.
                                                  Rejected input → 400, nothing created; top-level dropped[]
                                                  lists the parse reasons ({code, path, value, title_en}).
+                                                 → 201 {id, kind, tags} (one entry) or {ids, count, tags}; tags = final
+                                                 config tags of the created nodes. An impair outbound keeps its tag as written.
 PATCH  /subs/{id}[?rebuild=true][?reveal=true] Update meta, any subset: {enabled,name,url,tag_prefix,
                                                  update_interval_hours,override_detour,register_detour_servers,
                                                  register_detour_in_auto,use_detour_servers,replace_detour_chain,
@@ -290,6 +293,12 @@ GET    /nodes/link?tag=<tag>[?reveal=true]     Export the node as a link — exa
                                                  Found but not expressible as a link (app-built nodes, groups) →
                                                  {tag, protocol, error:"node has no link form"}, not a 404.
                                                  No such node → 404.
+PATCH  /nodes/{tag}[?rebuild=true]              Detour of one node by tag (as in the config or bare, URL-encoded):
+                                                 body {"detour": "<tag>" | {folder_id?, tag} | null}. Single server →
+                                                 its override_detour; folder member → its own detour (self/cycle →
+                                                 400). Subscription node → 409 (detour is per subscription:
+                                                 PATCH /subs/{id} override_detour). No node → 404.
+                                                 → {ok, tag, entry_id, kind, detour}.
 
 === Assistant (§750 — AI assistant functions for an agent on a computer) ===
 
@@ -792,7 +801,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Impair (§762)
     {'method': 'GET', 'path': '/impair/{tag}', 'description': 'Status of an impair outbound of the running core, as is → {tag,link_params,counters,sublinks,schedule}. Tunnel down → 409; unknown tag 404; not impair 400'},
     {'method': 'POST', 'path': '/impair/{tag}/set', 'body': 'schedule entry without at: {link_params?, sublinks?}', 'description': 'Change the line or sublinks now, on top of the schedule → status. Keys checked by the core (400 on reject)'},
-    {'method': 'POST', 'path': '/impair/{tag}/schedule', 'body': '{entries:[...], start?: ""|now|first_use, repeat?: ""|60s}', 'description': 'Replace the schedule → status; entries:[] stops it and restores the config line'},
+    {'method': 'POST', 'path': '/impair/{tag}/schedule', 'body': '{entries:[...], start?: ""|now|first_use, repeat?: ""|60s}', 'description': 'Replace the schedule → status; entries:[] stops it and restores the config line. Bad body / start → 400; core without it → 501'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warning,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},
@@ -835,7 +844,7 @@ const Map<String, dynamic> _capabilityJson = {
     // Subscriptions CRUD (user servers + subscriptions)
     {'method': 'GET', 'path': '/subs', 'params': {'reveal': 'true|false (default false → URLs masked)'}, 'description': 'Alias /state/subs'},
     {'method': 'GET', 'path': '/subs/{id}', 'params': {'reveal': 'true|false', 'warnings': 'true|false (default false)'}, 'description': 'Single entry. warnings=true (feature 478): adds origin_kind, source_kind and per-node PARSE warnings under `warnings` — {tag: [{code, severity, path, value, params, title_en, text_en}]}, pinned English; every node present, empty list when none. code/path/value/title_en are null for app-local warnings; text_en is always there. Off by default — on 500 nodes it is dead weight.'},
-    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries). Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
+    {'method': 'POST', 'path': '/subs', 'params': {'rebuild': 'true|false'}, 'body': '{"input":"<url|URI|WG-conf|JSON-outbounds>"}', 'description': 'Create via parser pipeline (JSON may create several entries) → 201 {id, kind, tags} or {ids, count, tags}; tags = final config tags. Rejected input → 400 with top-level dropped[] (parse reasons), nothing created'},
     {'method': 'PATCH', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false', 'reveal': 'true|false'}, 'body': 'Any subset: {enabled,name,url,tag_prefix,update_interval_hours,override_detour,register_detour_servers,register_detour_in_auto,use_detour_servers,replace_detour_chain,on_update_action,import_rules_enabled,identity,tls}', 'description': 'Update meta. tls (§636) = {fragment,record_fragment,fallback_delay,mixed_case_sni}: missing key keeps the field, null resets it to inherit (node → source → global); a bad fallback_delay → 400. Source level for a subscription/folder, node level for a standalone server. url is SubscriptionServers-only (no-op for UserServer). override_detour = node link {folder_id?, tag} (null clears; a string is read as {tag}). on_update_action: rebuild|reload|none. identity is a tristate: omit = keep, null = Default (global identity), object = Custom. The object patches the snapshot (initialised from globals on switch to Custom): {user_agent,send_hwid,hwid,device_os,ver_os,device_model} — so {"identity":{"send_hwid":true,"hwid":"<uuid>"}} enables HWID for this subscription only, leaving globals untouched.'},
     {'method': 'DELETE', 'path': '/subs/{id}', 'params': {'rebuild': 'true|false'}, 'description': 'Remove entry'},
     {'method': 'POST', 'path': '/subs/{id}/refresh', 'description': 'Force HTTP re-fetch (SubscriptionServers only). Fire-and-forget.'},
@@ -849,6 +858,7 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'POST', 'path': '/subs/{id}/rules/reorder', 'params': {'rebuild': 'true|false'}, 'body': '{"order":[old indexes in new order]}', 'description': 'Reorder (full permutation of 0..n-1). Order matters: rules apply sequentially, last enable/disable wins.'},
     // Nodes (the emitter's side)
     {'method': 'GET', 'path': '/nodes/link', 'params': {'tag': '<tag> (required)', 'reveal': 'true|false (default false)'}, 'description': 'Export the node as a link — exactly what Copy link puts on the clipboard (NodeSpec.toUri()). tag is taken either as it stands in the config (with the subscription prefix) or bare; chain hops are searched too. uri carries credentials → only with reveal=true → {tag, protocol, uri, private_key}. Without reveal → {tag, protocol, private_key, error:"reveal required"}. Found but not expressible as a link (app-built nodes, groups) → {tag, protocol, error:"node has no link form"}, not a 404. No such node → 404.'},
+    {'method': 'PATCH', 'path': '/nodes/{tag}', 'params': {'rebuild': 'true|false'}, 'body': '{"detour": "<tag>" | {folder_id?, tag} | null}', 'description': 'Detour of one node by tag: single server → override_detour, folder member → its detour; subscription node → 409 (use PATCH /subs/{id}); no node → 404 → {ok, tag, entry_id, kind, detour}'},
     // Assistant (§750)
     {'method': 'GET', 'path': '/assistant/overview', 'description': '{vpn_status, default_route, directions:[{tag,name,exit_count,current_exit}], connections:[{id,name,type,enabled,state}]}'},
     {'method': 'GET', 'path': '/assistant/exits', 'params': {'direction': 'direction tag', 'q': 'case-insensitive substring (optional)'}, 'description': 'Exit names of a direction as written → {direction, exits (≤200), total, truncated}'},

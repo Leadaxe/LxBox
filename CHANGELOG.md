@@ -71,8 +71,10 @@
   `GET /impair/{tag}`, `POST /impair/{tag}/set` and `POST /impair/{tag}/schedule`
   read and change the line of an `impair` outbound in the running core, for
   scripted balancing and failure tests. Needs core `v1.14.4-lx.37-rc3`; the
-  app has no UI for `impair`.
-  (RU: Debug API управляет тестовым outbound ядра `impair` — линия, расписание, статус на ходу; нужно ядро rc3, в интерфейсе `impair` нет.)
+  app has no UI for `impair`. An `impair` node added as a server keeps its
+  tag as written and shows `☠ impair` as its protocol. `POST /subs` returns
+  the final config tags; `PATCH /nodes/{tag}` sets or clears a node's detour.
+  (RU: Debug API управляет тестовым outbound ядра `impair` — линия, расписание, статус на ходу; нужно ядро rc3, в интерфейсе `impair` нет. Узел `impair` сохраняет тег как передан, протокол в строке узла — `☠ impair`. `POST /subs` отдаёт итоговые теги, `PATCH /nodes/{tag}` ставит и снимает detour узла.)
 
 - **Load balance: the pool's self-repair is visible ([task 759](docs/spec/tasks/759-pool-self-heal-state.md), core SPEC 138).**
   View pool and the pool section of the group screen show what the core does

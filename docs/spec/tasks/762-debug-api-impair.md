@@ -4,12 +4,13 @@
 |---|---|
 | **Статус** | In progress — ветка `claude/762-debug-api-impair`, ждёт ядро `v1.14.4-lx.37-rc3`; Kotlin не собран |
 | **Дата** | 2026-11-26 |
-| **Повод** | Решение владельца 26.11: `impair` в интерфейсе не показывать, но управлять им из Debug API — для скриптовых тестов балансировки и отказов |
+| **Повод** | Решение владельца 26.11: `impair` в интерфейсе не показывать, но весь тест с ним вести скриптом через Debug API — создание узла, detour, линия на ходу, замеры, удаление |
 | **Связанные** | 208 / 209 / 759 (`/pool`, карантин пула), 613 (коды ошибок ядра `CcStatusError`), 750 (политика ассистента); ядро: SPEC 164, `docs-lx/lx-impair.md` (Keys, Sublinks, Schedule, Runtime control) |
 
 ## Docs to update
 
-- `docs/api/debug-api-reference.md` — раздел `## Impair — /impair/*`, строка индекса.
+- `docs/api/debug-api-reference.md` — раздел `## Impair — /impair/*` со
+  сценарием, строка индекса, `PATCH /nodes/{tag}`, `tags` в ответе `POST /subs`.
 - `app/lib/services/debug/handlers/help.dart` — три маршрута (текст и JSON);
   заодно устаревшее описание `/pool` (поля 759).
 - `docs/KERNEL.md` — при бампе на rc3 (см. ниже), не в этой ветке.
@@ -25,9 +26,12 @@
 Решение владельца:
 
 - в интерфейсе `impair` нет: ни экрана, ни пункта меню, ни генератора, ни
-  редактора, ни строк l10n;
-- Debug API умеет управлять `impair`, который уже есть в работающем конфиге
-  (вписан руками через `PUT /config` или миксином).
+  редактора, ни строк l10n; единственная пометка — подпись протокола в строке
+  узла `☠ impair`;
+- узел `impair` заводится как любой свой сервер (`POST /subs` с JSON
+  outbound), тег не трогается (эмодзи по умолчанию не дописывается);
+- весь тест — скриптом через Debug API: создать, поставить в путь трафика,
+  менять линию на ходу, снимать замеры, снять, удалить.
 
 ## Diagnosis
 
@@ -43,6 +47,14 @@
   разбирает код (`endpointToggleErrorCode`), `BgCcMethods` бросает
   `BgError(code, message)`, Dart получает `PlatformException.code` из
   `CcStatusError`.
+- Создание: `POST /subs` с JSON outbound уже работает на rc2 (эмулятор 26.11):
+  тип вне реестра из своего источника идёт в конфиг как есть
+  (`UnknownTypeSpec`), но при создании получал эмодзи `⚡` (`_autoEmoji`), а
+  ответ не называл итоговый тег — скрипту не на что ссылаться.
+- Detour: у одиночного сервера — `override_detour` записи (`PATCH /subs/{id}`,
+  по id), у члена папки — `detour` члена (`/folders/{id}/members/{idx}`, по
+  индексу); по тегу узла маршрута не было. У узла подписки своего detour нет —
+  только общий у подписки.
 - Пин сейчас `v1.14.4-lx.37-rc.2`; в его AAR методов нет, Kotlin этой ветки
   до бампа не компилируется.
 
@@ -69,7 +81,9 @@ entry)`, `scheduleImpair(tag, entries, {start, repeat})` →
 статуса без своей модели полей. Отказ ядра — `PlatformException` с кодом
 `CcStatusError`, не глотается. Не-объект в `content` — `FormatException`.
 
-**Debug API** (`handlers/impair.dart`, смонтирован как `/impair`):
+**Debug API: `/impair`** (`handlers/impair.dart`). Пути, тела и коды — один в
+один с Debug API лаунчера (его спека 190-F-C-IMPAIR_DEBUG_API, develop
+e16014bb); конверт ошибки свой, `{"error":{"code","message"}}`.
 
 | Маршрут | Тело | Ответ |
 |---|---|---|
@@ -79,26 +93,86 @@ entry)`, `scheduleImpair(tag, entries, {start, repeat})` →
 
 - Тег берётся из `uri.pathSegments` (уже раскодирован): тег с эмодзи или
   `/` передаётся URL-encoded.
-- `set`: тело должно быть непустым JSON-объектом; в ядро уходит исходный текст
-  тела без пересборки.
+- `set`: тело — непустой JSON-объект; в ядро уходит компактным JSON.
 - `schedule`: `entries` обязателен и список (в ядро — `jsonEncode`); `start`
-  и `repeat` необязательны, только строки, умолчание `""`. Значения не
-  проверяются — это делает ядро.
-- Ошибки: клиент недоступен (`null`) или нет нативного метода → 409
-  `conflict`; `not_found` → 404; `invalid_argument` → 400;
-  `failed_precondition`, `unavailable`, `unimplemented` → 409; прочее → 502
+  — `""` / `now` / `first_use`, иначе 400; `repeat` — строка как есть
+  (значение проверяет ядро); оба необязательны, умолчание `""`.
+- Ошибки: неверное тело → 400 до ядра; клиент недоступен (`null`) или нет
+  нативного метода → 409 `conflict`; `not_found` → 404; `invalid_argument` →
+  400; `failed_precondition`, `unavailable` → 409; `unimplemented` (ядро без
+  ручки) → 501 `not_implemented` (новый класс `NotImplemented`); прочее → 502
   `upstream_error`. Текст ядра — в `error.message`.
 - Ассистент (§750): политика по умолчанию закрывает неизвестный префикс,
   `/impair/*` ему недоступен; закреплено тестом политики.
 
+**Узел `impair` скриптом.**
+
+- `POST /subs` отдаёт `tags` — итоговые теги созданных узлов в конфиге:
+  после сборки — ключ карты последней сборки (`lastEmittedTagMap`, по `id`
+  узла), до сборки — `TagResolver.displayTag(префикс, тег)`.
+- Тег `impair` не трогается: `keepsTagAsWritten` (`node_emoji.dart`) —
+  `UnknownTypeSpec` с типом `impair`; `_autoEmoji` и `withDefaultEmoji` его
+  пропускают. Прочие узлы получают эмодзи по-прежнему.
+- `PATCH /nodes/{tag}` `{"detour": "<tag>" | {folder_id?, tag} | null}` —
+  detour узла по тегу (как в конфиге или голый, URL-encoded), тем же путём,
+  что экран узла: одиночный сервер — `override_detour` записи, член папки —
+  `setMemberDetour` (self / цикл → 400). Узел подписки → 409 с подсказкой
+  `PATCH /subs/{id}` (detour общий у подписки). Узла нет → 404. Ответ
+  `{ok, tag, entry_id, kind, detour}`, `?rebuild=true`. Прочие методы на
+  `/nodes/{tag}` — 404, как раньше.
+- Подпись протокола в строке узла (`protoLabel`): `impair` → `☠ impair`.
+- Ассистенту (§750) `/impair/*` и `PATCH /nodes/*` закрыты (политика по
+  умолчанию), закреплено тестом.
+
 **Решения по умолчанию (приняты исполнителем, владелец не спрашивался).**
 
-- Не-строковые `start` / `repeat` → 400; пустая строка = умолчание ядра.
+- Не-строковый `repeat` → 400; пустая строка = умолчание ядра.
 - `set` с пустым телом или `{}` → 400 на стороне приложения (ядро `{}` тоже
-  отвергает, но так ответ понятнее).
-- `unimplemented` (ядро без команд) — 409, а не 501: отдельного класса ошибки
-  в Debug API нет, а «повторить на другом ядре» ближе к pre-condition.
+  отвергает).
 - Ответ `set` / `schedule` — статус ядра без обёртки, как `GET`.
+- `PATCH /nodes/{tag}` правит только detour; узел подписки не получает
+  личного detour (модель хранения не менялась).
+
+## Соответствие маршрутам лаунчера
+
+Наши пути не переименовываются; для сценария — аналоги:
+
+| Шаг | LxBox | Лаунчер |
+|---|---|---|
+| Создать узел | `POST /subs` `{"input": "<JSON outbound>"}` → `tags` | `POST /state/servers` |
+| Detour узла | `PATCH /nodes/{tag}` `{"detour"}`; запись — `PATCH /subs/{id}` `override_detour` | `PATCH /state/servers?tag=` |
+| Проба узла | `POST /action/urltest?tag=` | `POST /proxies/delay` |
+| Пул | `GET /pool?tag=<направление>-auto` | `GET /pool?group=` |
+| Конфиг узла | `GET /config/running` (весь), `GET /nodes/link?tag=` (ссылка) | `GET /outbounds/{tag}/config` |
+| Линия impair | `GET /impair/{tag}`, `POST /impair/{tag}/set`, `POST /impair/{tag}/schedule` | те же |
+
+## Сценарий
+
+Полный скрипт с curl — `docs/api/debug-api-reference.md` → «Сценарий теста
+целиком». Шаги и ожидаемые ответы:
+
+1. `POST /subs?rebuild=true` `{"input": "{\"type\":\"impair\",\"tag\":\"imp-test\",
+   \"detour\":\"⚡ Alpha\",\"seed\":1,\"link_params\":{\"delay\":\"30ms\"}}"}` →
+   201 `{"id", "kind": "UserServer", "tags": ["imp-test"]}`. Impair над узлом
+   (`detour` у impair) видит домены и гасит одиночные сайты.
+2. Либо impair под узлом: `PATCH /nodes/⚡%20Alpha?rebuild=true`
+   `{"detour": "imp-test"}` → `{"ok": true, "detour": {"tag": "imp-test"}}`.
+3. `POST /directions?rebuild=true` `{"tag": "imp-lab", "node_filter": "^imp-",
+   "auto": {"mode": "round_robin", "balancer": {"pool": 3}}}` → 201;
+   `POST /action/reload-vpn`; `GET /pool?tag=imp-lab-auto` → слоты.
+4. `POST /impair/imp-test/schedule` `{"start": "now", "repeat": "2m",
+   "entries": [{"at": "0s", "link_params": {"outage": false}}, {"at": "80s",
+   "link_params": {"outage": true}}]}` → статус с `schedule.entries: 2`.
+   `POST /impair/imp-test/set` `{"sublinks": [{"match": {"domain_suffix":
+   "example.org"}, "link_params": {"outage": true, "reset": true}}]}` → статус.
+5. Замеры: `GET /impair/imp-test` (линия, счётчики по направлениям,
+   под-линии, раунд расписания); `GET /pool?tag=imp-lab-auto` (`delay`,
+   `quarantined`, `confirmedFailures`, `shiftedKeys`, `frozen`);
+   `POST /action/urltest?tag=imp-test` и `GET /state` (`delay_by_direction`,
+   `last_delay`, `traffic`).
+6. `POST /impair/imp-test/schedule` `{"entries": []}` → статус, линия по
+   конфигу; `PATCH /nodes/⚡%20Alpha` `{"detour": null}` → `detour: null`;
+   `DELETE /subs/{id}?rebuild=true` → `{"action": "subs-delete"}`.
 
 ## Шаги при бампе на rc3
 
@@ -125,6 +199,9 @@ entry)`, `scheduleImpair(tag, entries, {start, repeat})` →
 
 ## Risks and edge cases
 
+- Тег в `tags` до сборки — расчётный; при совпадении тегов сборка разводит
+  дубли, точный тег — после `?rebuild=true`.
+
 - Kotlin не компилируется до бампа пина: ветку нельзя вливать раньше AAR rc3.
 - Код ошибки берётся из текста исключения; если gobind rc3 изменит формат,
   все отказы станут 502 с текстом ядра — функция не ломается, теряется
@@ -135,15 +212,27 @@ entry)`, `scheduleImpair(tag, entries, {start, repeat})` →
 ## Verification
 
 - `test/services/debug/impair_handler_test.dart` — маршруты, тег с эмодзи,
-  разбор тела, 400 на не-объект / не-список / не-строку, 409 при `null` и
-  без плагина, проброс кодов ядра.
+  компактный JSON `set`, 400 на не-объект / не-список / не-строку / чужой
+  `start`, 409 при `null` и без плагина, коды ядра (501 на unimplemented).
+- `test/services/debug/impair_node_scenario_test.dart` — `POST /subs` impair
+  → тег `imp-test` в записи и в `tags`, обычный узел с эмодзи; `PATCH` и
+  `DELETE /subs/{id}`; `PATCH /nodes/{tag}` у одиночного сервера (поставить,
+  снять) и члена папки, 400 / 404; `protoLabel('impair')` = `☠ impair`.
 - `test/vpn/cc_impair_test.dart` — канал: аргументы, `null`, разбор JSON,
   `PlatformException` наружу.
 - `test/services/debug/help_json_test.dart` — пути `/help` смонтированы,
   префикс `/impair` есть в JSON.
-- `test/services/assistant/assistant_gateway_test.dart` — `/impair/*` закрыт.
+- `test/services/assistant/assistant_gateway_test.dart` — `/impair/*` и
+  `PATCH /nodes/*` закрыты.
 - Kotlin не собран, на эмуляторе не проверено (ждёт rc3).
 
 ## Unresolved / follow-up
 
-- Бамп на rc3 и проверка на эмуляторе (шаги выше).
+- Бамп на rc3 и проверка на эмуляторе (шаги выше и сценарий).
+- Соединения по узлу (байты, ошибки, закрытие) Debug API не отдаёт: есть
+  `traffic` в `/state` (итог и число активных) и `/profiler/live` (по
+  приложениям, без outbound). Выборка соединений по outbound требует
+  подписки на поток соединений ядра (`CcChannel`) в Debug API — отдельная
+  работа; натив `ccCloseConnection` уже есть.
+- Личный detour узла подписки — модели нет (detour общий у подписки);
+  обход — перенести узел в папку.
