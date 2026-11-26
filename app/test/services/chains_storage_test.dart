@@ -106,14 +106,10 @@ void main() {
         tag: 'via-de',
         enabled: false,
         hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')],
-        idleTimeout: '10m',
-        stripEvasion: false,
       ));
       final got = (await SettingsStorage.getChains()).single;
       expect(got.enabled, isFalse);
       expect(got.hops, const [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]);
-      expect(got.idleTimeout, '10m');
-      expect(got.stripEvasion, isFalse);
 
       expect(() => SettingsStorage.updateChain(const SourceChain(tag: 'nope')),
           throwsA(isA<StateError>()));
@@ -178,9 +174,6 @@ void main() {
       const c = SourceChain(
         tag: 'tuned',
         hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
-        idleTimeout: '0s',
-        stripEvasion: false,
-        strip: {'tls.utls': true},
         rewrite: {
           'vless': {'flow': null},
         },

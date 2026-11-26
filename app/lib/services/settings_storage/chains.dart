@@ -130,9 +130,6 @@ Future<SourceChain> _createChain(SourceChain chain) async {
     tag: wanted,
     enabled: chain.enabled,
     hops: chain.hops,
-    idleTimeout: chain.idleTimeout,
-    stripEvasion: chain.stripEvasion,
-    strip: chain.strip,
     rewrite: chain.rewrite,
   );
   chains.add(created);

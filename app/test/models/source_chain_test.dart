@@ -61,20 +61,24 @@ void main() {
       expect((back.rewrite['vless'] as Map)['flow'], isNull);
     });
 
-    test('strip_evasion трёхзначен: нет ключа ≠ false', () {
-      // Отсутствие ключа = умолчание ядра (true), false = явное выключение.
-      // Схлопнув их в bool, мы потеряли бы выбор пользователя при смене
-      // дефолта ядра.
-      const unset = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
-      expect(_body(unset).containsKey('strip_evasion'), isFalse);
-      expect(unset.stripEvasion, isNull);
-      expect(unset.stripEvasionEnabled, isTrue);
-
-      const off = SourceChain(tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], stripEvasion: false);
-      expect(_body(off)['strip_evasion'], isFalse);
-      expect(off.stripEvasionEnabled, isFalse);
-      expect(_roundTrip(off).stripEvasion, isFalse);
-      expect(_roundTrip(unset).stripEvasion, isNull);
+    test('§761: idle_timeout / strip_evasion / strip старой записи '
+        'отброшены молча и не пишутся', () {
+      final read = chainFromRecord({
+        'kind': 'chain',
+        'tag': 'c',
+        'body': {
+          'type': 'chain',
+          'idle_timeout': '0s',
+          'strip_evasion': false,
+          'strip': {'tls.utls': true},
+        },
+        'hops': [
+          {'tag': 'a'},
+          {'tag': 'b'},
+        ],
+      });
+      expect(read.unknownKeys, isEmpty);
+      expect(_body(read.value!).keys.toSet(), {'type'});
     });
 
     test('пустые каталоги ключей в записи не создают', () {
@@ -85,7 +89,7 @@ void main() {
       expect(j.containsKey('idle_timeout'), isFalse);
     });
 
-    test('чтение терпимо к мусору: не-строки в hops и чужие ключи strip', () {
+    test('чтение терпимо к мусору: не-строки в hops', () {
       final notes = <String>[];
       final read = chainFromRecord({
         'kind': 'chain',
@@ -96,19 +100,12 @@ void main() {
           null,
           'b',
         ],
-        'body': {
-          'type': 'chain',
-          'strip': {'tls.utls': true, 'nonsense': true, 'tls.fragment': 'yes'},
-        },
+        'body': {'type': 'chain'},
       }, notes: notes);
       final back = read.value!;
       // Строка — корневая ссылка формы до 1.0; не ссылка — отброс с отметкой.
       expect(back.hops, const [NodeLink(tag: 'a'), NodeLink(tag: 'b')]);
       expect(notes, hasLength(2));
-      expect(read.unknownKeys,
-          ['body.strip.nonsense', 'body.strip.tls.fragment']);
-      // Неизвестный ключ отсеян на чтении — ядро на нём не стартует.
-      expect(back.strip, {'tls.utls': true});
     });
 
     test('§594: старый `label` читается молча и не пишется', () {
@@ -157,12 +154,6 @@ void main() {
       expect(chainEmitError(c({'vless': 1})), contains('not an object'));
       expect(chainEmitError(c({'vless': {'flow': null}})), isEmpty);
     });
-
-    test('§761: ключи strip цепочку не валят — в конфиг не пишутся', () {
-      final err = chainEmitError(const SourceChain(
-          tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], strip: {'tls.nope': true}));
-      expect(err, isEmpty);
-    });
   });
 
   group('chainOutboundObject', () {
@@ -182,17 +173,6 @@ void main() {
       // бы неотличим от дефолта уже в файле.
       expect(ob.containsKey('strip_evasion'), isFalse);
       expect(ob.containsKey('idle_timeout'), isFalse);
-    });
-
-    test('§761: idle_timeout / strip_evasion / strip в объект не попадают', () {
-      final ob = chainOutboundObject(const SourceChain(
-        tag: 'c',
-        hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')],
-        idleTimeout: '10m',
-        stripEvasion: false,
-        strip: {'tls.utls': true, 'tls.fragment': false},
-      ), const ['a', 'b']);
-      expect(ob.keys.toSet(), {'tag', 'type', 'outbounds'});
     });
 
     test('rewrite копируется, а не разделяется с моделью', () {

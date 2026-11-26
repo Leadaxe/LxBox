@@ -7,12 +7,12 @@
 ///
 /// Чтение терпимо, как у `source_record.dart`: позиция строкой читается
 /// корневой ссылкой, незнакомые ключи — в [RecordRead.unknownKeys] путями
-/// (`body.detour`, `body.strip.tls.foo`), прочитанное не дословно — в `notes`.
+/// (`body.detour`), прочитанное не дословно — в `notes`. §761 —
+/// `body.idle_timeout`, `body.strip_evasion`, `body.strip` (записи и бэкапы до
+/// ядра lx.37-rc.2) принимаются и молча отбрасываются (контракт 1.1.184).
 /// Пустая позиция и дубль не «чинятся»: их ловит `chainEmitError`.
 library;
 
-import '../../services/contract/chain_strip.dart'
-    show chainStripKeyKnown, orderedChainStrip;
 import '../../services/json_clone.dart' show deepCloneJson;
 import '../node_link.dart';
 import '../record_codec.dart' show RecordRead;
@@ -38,10 +38,6 @@ Map<String, dynamic> chainToRecord(SourceChain c) => {
       'enabled': c.enabled,
       'body': {
         'type': kChainOutboundType,
-        if (c.idleTimeout.isNotEmpty) 'idle_timeout': c.idleTimeout,
-        // Трёхзначность: null = умолчание ядра, ключа нет.
-        if (c.stripEvasion != null) 'strip_evasion': c.stripEvasion,
-        if (c.strip.isNotEmpty) 'strip': orderedChainStrip(c.strip),
         if (c.rewrite.isNotEmpty) 'rewrite': deepCloneJson(c.rewrite),
       },
       'hops': [for (final h in c.hops) nodeLinkToRecord(h)],
@@ -81,19 +77,6 @@ RecordRead<SourceChain> chainFromRecord(
     notes?.add('$where: body.type "$type" is not "$kChainOutboundType"');
   }
 
-  final strip = <String, bool>{};
-  final rawStrip = body['strip'];
-  if (rawStrip is Map) {
-    for (final e in rawStrip.entries) {
-      final key = e.key;
-      if (key is String && chainStripKeyKnown(key) && e.value is bool) {
-        strip['${e.key}'] = e.value as bool;
-      } else {
-        unknown.add('body.strip.${e.key}');
-      }
-    }
-  }
-
   final hops = <NodeLink>[];
   final rawHops = j['hops'];
   if (rawHops is List) {
@@ -108,18 +91,12 @@ RecordRead<SourceChain> chainFromRecord(
   }
 
   final rawRewrite = body['rewrite'];
-  final idleTimeout = body['idle_timeout'];
-  final stripEvasion = body['strip_evasion'];
   final enabled = j['enabled'];
   return RecordRead.ok(
     SourceChain(
       tag: tag,
       enabled: enabled is bool ? enabled : true,
       hops: hops,
-      idleTimeout: idleTimeout is String ? idleTimeout : '',
-      stripEvasion: stripEvasion is bool ? stripEvasion : null,
-      // Каталожный порядок ключей, как у записи.
-      strip: orderedChainStrip(strip),
       rewrite: rawRewrite is Map
           ? (deepCloneJson(rawRewrite) as Map).cast<String, dynamic>()
           : const {},

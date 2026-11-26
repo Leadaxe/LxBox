@@ -30,8 +30,6 @@ import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../../models/subscription_meta.dart';
 import '../parser/source_classify.dart' show migrateLegacyDialect;
-import '../contract/chain_strip.dart'
-    show chainStripKeyKnown, orderedChainStrip;
 import '../json_clone.dart' show deepCloneJson;
 import '../parser/body_decoder.dart';
 import '../parser/parse_all.dart';
@@ -209,16 +207,8 @@ LegacyChain readLegacyChain(Map<String, dynamic> json) {
         for (final h in (json['hops'] as List? ?? const []))
           if (h is String) NodeLink(tag: h),
       ],
-      idleTimeout: json['idle_timeout'] as String? ?? '',
-      stripEvasion:
-          json['strip_evasion'] is bool ? json['strip_evasion'] as bool : null,
-      strip: orderedChainStrip({
-        for (final e in ((json['strip'] as Map?) ?? const {}).entries)
-          if (e.key is String &&
-              chainStripKeyKnown(e.key as String) &&
-              e.value is bool)
-            e.key as String: e.value as bool,
-      }),
+      // §761 — `idle_timeout`, `strip_evasion`, `strip` отбрасываются
+      // (ядро lx.37-rc.2 их отвергает, контракт 1.1.184).
       rewrite:
           (deepCloneJson(json['rewrite']) as Map?)?.cast<String, dynamic>() ??
               const {},

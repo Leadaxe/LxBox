@@ -253,22 +253,6 @@ void main() {
     });
   });
 
-  // §761 — ключа `strip` у цепочки в конфиге нет (ядро lx.37-rc.2): находки
-  // `on_hop_required` форма не выдаёт, сохранённый патч сохранять не мешает.
-  test('сохранённый strip tls.utls на reality-звене — находок нет', () {
-    final issues = validateChainForm(
-      const ChainFormState(
-        tag: 'via-de',
-        hops: ['home', 'de-reality'],
-        stripEvasion: false,
-        strip: {'tls.utls': true},
-      ),
-      _ctx([_node('home'), _node('de-reality', reality: true)]),
-    );
-    expect(issues, isEmpty);
-    expect(chainFormCanSave(issues), isTrue);
-  });
-
   group('detour (T7) — зависит от позиции', () {
     test('детур позиции 0 — ПРЕДУПРЕЖДЕНИЕ, сохранять не мешает', () {
       // Узел идёт в сеть как есть, вместе со своим детуром: реальный путь

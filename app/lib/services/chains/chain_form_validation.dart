@@ -152,8 +152,6 @@ class ChainFormState {
   const ChainFormState({
     required this.tag,
     required this.hops,
-    this.stripEvasion,
-    this.strip = const {},
   });
 
   /// [pool] и [lists] — показ позиций-ссылок финальными тегами (§439,
@@ -164,16 +162,12 @@ class ChainFormState {
     NodeLinkTargets? pool,
     List<ServerList> lists = const [],
   })  : tag = c.tag,
-        hops = [for (final h in c.hops) nodeLinkDisplay(h, pool, lists: lists)],
-        stripEvasion = c.stripEvasion,
-        strip = c.strip;
+        hops = [for (final h in c.hops) nodeLinkDisplay(h, pool, lists: lists)];
 
   final String tag;
 
   /// Позиции финальными тегами.
   final List<String> hops;
-  final bool? stripEvasion;
-  final Map<String, bool> strip;
 }
 
 /// §393 C6 — всё, что форма нашла в [state], в порядке показа.

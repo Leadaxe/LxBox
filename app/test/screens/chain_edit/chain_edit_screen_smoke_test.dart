@@ -97,20 +97,6 @@ void main() {
     expect(titles.indexOf('de-exit'), lessThan(titles.indexOf('home')));
   });
 
-  // §761 — сохранённый strip в конфиг не пишется и сохранение не запирает.
-  testWidgets('снятый tls.utls на reality-звене сохранение НЕ запирает',
-      (tester) async {
-    await tester.pumpWidget(_host(const SourceChain(
-      tag: 'via-de',
-      hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-reality')],
-      strip: {'tls.utls': true},
-    )));
-    await tester.pumpAndSettle();
-    final save = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.check));
-    expect(save.onPressed, isNotNull);
-  });
-
   testWidgets('пикер позиций открывается и не предлагает уже занятые',
       (tester) async {
     await tester

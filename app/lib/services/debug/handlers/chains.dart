@@ -5,7 +5,6 @@ import '../../chains/chain_form_validation.dart';
 import '../../chains/chain_hop_candidate.dart';
 import '../../chains/chain_hop_targets.dart';
 import '../../builder/node_link_pool.dart';
-import '../../contract/chain_strip.dart' show chainStripKeyKnown, chainStripKeys;
 import '../../probe/chain_layer_probe.dart';
 import '../../settings_storage.dart';
 import '../context.dart';
@@ -380,50 +379,8 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   // §439 (D-112) — позиции ссылками `{folder_id?, tag}`; строка — корневая
   // ссылка (форма до 2.23.3).
   final hops = fieldNodeLinkList(body, 'hops');
-  final idleTimeout = fieldString(body, 'idle_timeout');
-
-  // Трёхзначность `strip_evasion` (см. [SourceChain.stripEvasion]): ключа нет
-  // = не трогаем, null = вернуть умолчание ядра, bool = явный выбор
-  // пользователя. Обычный `fieldBool` не отличил бы null от отсутствия.
-  var clearStripEvasion = false;
-  bool? stripEvasion;
-  if (body.containsKey('strip_evasion')) {
-    final raw = body['strip_evasion'];
-    if (raw == null) {
-      clearStripEvasion = true;
-    } else if (raw is bool) {
-      stripEvasion = raw;
-    } else {
-      throw BadRequest(
-          'field "strip_evasion" must be bool or null, got ${raw.runtimeType}');
-    }
-  }
-
-  // `strip` — ЗАМЕНА каталога, не merge: ключей всего четыре, они видны
-  // целиком, и «убрать галку» иначе было бы невыразимо. Неизвестный ключ —
-  // отказ, а не молчаливый отсев: ядро считает его ошибкой старта, и принять
-  // его здесь значило бы отдать пользователю цепочку, которой он не получит.
-  Map<String, bool>? strip;
-  if (body.containsKey('strip')) {
-    final raw = body['strip'];
-    if (raw is! Map) {
-      throw BadRequest('field "strip" must be object, got ${raw.runtimeType}');
-    }
-    strip = {};
-    for (final e in raw.entries) {
-      final key = e.key;
-      if (key is! String || !chainStripKeyKnown(key)) {
-        throw BadRequest('field "strip": unknown key "$key" '
-            '(allowed: ${chainStripKeys().join(', ')})');
-      }
-      final v = e.value;
-      if (v is! bool) {
-        throw BadRequest(
-            'field "strip.$key" must be bool, got ${v.runtimeType}');
-      }
-      strip[key] = v;
-    }
-  }
+  // §761 — `idle_timeout`, `strip_evasion`, `strip` сняты (ядро lx.37-rc.2
+  // их отвергает, контракт 1.1.184): не читаются, как любое неизвестное поле.
 
   // `rewrite` — произвольный JSON merge-patch по типам outbound'ов (RFC 7396),
   // формой не правится: `null` внутри патча УДАЛЯЕТ ключ, и «чистка пустого»
@@ -447,10 +404,6 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
   final changed = tag != null ||
       enabled != null ||
       hops != null ||
-      idleTimeout != null ||
-      stripEvasion != null ||
-      clearStripEvasion ||
-      strip != null ||
       rewrite != null;
   if (!changed) return null;
 
@@ -458,10 +411,6 @@ SourceChain? _applyPatch(SourceChain c, Map<String, dynamic> body,
     tag: tag,
     enabled: enabled,
     hops: hops,
-    idleTimeout: idleTimeout,
-    stripEvasion: stripEvasion,
-    clearStripEvasion: clearStripEvasion,
-    strip: strip,
     rewrite: rewrite,
   );
 }

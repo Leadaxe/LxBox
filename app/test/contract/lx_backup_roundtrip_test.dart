@@ -205,9 +205,6 @@ _State _source() {
       SourceChain(
         tag: 'jp-via-eu',
         hops: [NodeLink(folderId: 'fold-a', tag: 'de-1'), NodeLink(tag: 'root-jp')],
-        idleTimeout: '0s',
-        stripEvasion: false,
-        strip: {'tls.utls': true},
         rewrite: {
           'vless': {'flow': null},
         },

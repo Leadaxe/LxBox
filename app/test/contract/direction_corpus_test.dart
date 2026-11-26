@@ -355,13 +355,6 @@ SourceChain _toChain(Map<String, dynamic> c) => SourceChain(
       hops: [
         for (final h in (c['hops'] as List?) ?? const []) ?nodeLinkFromRecord(h),
       ],
-      idleTimeout: c['idle_timeout'] as String? ?? '',
-      stripEvasion:
-          c['strip_evasion'] is bool ? c['strip_evasion'] as bool : null,
-      strip: {
-        for (final e in ((c['strip'] as Map?) ?? const {}).entries)
-          if (e.value is bool) e.key.toString(): e.value as bool,
-      },
       rewrite: ((c['rewrite'] as Map?) ?? const {}).cast<String, dynamic>(),
     );
 

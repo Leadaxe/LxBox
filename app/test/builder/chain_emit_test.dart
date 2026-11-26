@@ -62,17 +62,13 @@ void main() {
       expect(tags.indexOf('ch'), lessThan(tags.indexOf('vpn-1')));
     });
 
-    test('§761: idle_timeout / strip_evasion / strip не пишутся, rewrite доезжает',
-        () async {
+    test('§761: в цепочке только tag, type, outbounds, rewrite', () async {
       final r = await _build(
         nodeTags: ['DE', 'NL'],
         chains: [
           const SourceChain(
             tag: 'tuned',
             hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
-            idleTimeout: '10m',
-            stripEvasion: false,
-            strip: {'tls.utls': true, 'tls.fragment': false},
             rewrite: {
               'vless': {'packet_encoding': 'xudp'},
             },
@@ -112,32 +108,6 @@ void main() {
       expect(_byTag(r, 'off'), isNull);
       expect(r.emitWarnings, isEmpty);
     });
-  });
-
-  // §761 — шаг `on_hop_required` (§57) снят: ключа `strip` в конфиге нет.
-  test('REALITY-звено с сохранённым strip tls.utls: цепочка без strip, без кода',
-      () async {
-    final r = await _build(
-      nodeTags: ['DE'],
-      extraUris: [
-        'vless://b831381d-6324-4d53-ad4f-8cda48b30811@203.0.113.7:443'
-            '?security=reality&sni=example.com&fp=chrome'
-            '&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0'
-            '&sid=0123abcd#NL',
-      ],
-      chains: [
-        const SourceChain(
-          tag: 'via-nl',
-          hops: [NodeLink(tag: 'DE'), NodeLink(tag: 'NL')],
-          strip: {'tls.utls': true, 'tls.fragment': false},
-        ),
-      ],
-    );
-    final chain = _byTag(r, 'via-nl');
-    expect(chain, isNotNull, reason: 'цепочка обязана собраться');
-    expect(chain!.containsKey('strip'), isFalse);
-    expect(r.emitWarnings.where((w) => w.contains('chain_strip_utls')),
-        isEmpty);
   });
 
   group('§393 C3 — порядок объявления и ссылка вперёд', () {

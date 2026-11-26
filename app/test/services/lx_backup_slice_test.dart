@@ -314,8 +314,6 @@ void main() {
             tag: 'c',
             enabled: false,
             hops: [NodeLink(tag: 'x')],
-            idleTimeout: '1m',
-            stripEvasion: true,
           )));
       for (final r in [
         ...s.rules,
