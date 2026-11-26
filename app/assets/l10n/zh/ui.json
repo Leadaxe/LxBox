@@ -7004,5 +7004,8 @@
   },
   "\"%s\" inside \"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or use a copy of the node without the port in \"%s\".": {
     "value": "链“%4$s”位置 %3$d 的“%2$s”中的“%1$s”设置了固定本地端口（%5$s）——请删除该节点的端口，或在“%6$s”中使用不带端口的节点副本。"
+  },
+  "These changes can't be saved until the error is fixed. Leave without saving?": {
+    "value": "在修正错误之前无法保存这些更改。不保存就离开吗？"
   }
 }

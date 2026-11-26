@@ -53,14 +53,22 @@ Future<bool?> showDeleteConfirmDialog(
 /// идентично продублирован в direction_edit / custom_rule_edit / dns_server_edit
 /// (`_handleBack`). Возвращает `'save'` / `'discard'` / `'keep'` / `null`
 /// (dismiss). Стилизация: Discard — `colorScheme.error`, Save — bold primary.
-Future<String?> showUnsavedChangesDialog(BuildContext context) {
+///
+/// [canSave] = false — сохранить нельзя (форма с блокирующей ошибкой): кнопки
+/// Save нет, иначе она лишь показала бы ошибку и оставила на экране —
+/// выйти можно было бы только через Discard.
+Future<String?> showUnsavedChangesDialog(BuildContext context,
+    {bool canSave = true}) {
   return showDialog<String>(
     context: context,
     builder: (ctx) {
       final cs = Theme.of(ctx).colorScheme;
       return AlertDialog(
         title: Text(getLocalText.s("Unsaved changes")),
-        content: Text(getLocalText.s("You have unsaved changes. Save before leaving?")),
+        content: Text(canSave
+            ? getLocalText.s("You have unsaved changes. Save before leaving?")
+            : getLocalText.s(
+                "These changes can't be saved until the error is fixed. Leave without saving?")),
         // §045 — все TextButton + короткие надписи вмещаются в строку.
         actionsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         actions: [
@@ -73,14 +81,15 @@ Future<String?> showUnsavedChangesDialog(BuildContext context) {
             onPressed: () => Navigator.pop(ctx, 'keep'),
             child: Text(getLocalText.s("Keep")),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, 'save'),
-            style: TextButton.styleFrom(
-              foregroundColor: cs.primary,
-              textStyle: const TextStyle(fontWeight: FontWeight.w600),
+          if (canSave)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, 'save'),
+              style: TextButton.styleFrom(
+                foregroundColor: cs.primary,
+                textStyle: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              child: Text(getLocalText.s("Save")),
             ),
-            child: Text(getLocalText.s("Save")),
-          ),
         ],
       );
     },

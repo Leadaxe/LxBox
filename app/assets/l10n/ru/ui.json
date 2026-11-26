@@ -7292,5 +7292,8 @@
   },
   "\"%s\" inside \"%s\" at position %d of chain \"%s\" has a fixed local port (%s) — remove the port from the node, or use a copy of the node without the port in \"%s\".": {
     "value": "«%s» внутри «%s» на позиции %d цепочки «%s» имеет фиксированный локальный порт (%s) — уберите порт у узла или используйте в «%6$s» копию узла без порта."
+  },
+  "These changes can't be saved until the error is fixed. Leave without saving?": {
+    "value": "Эти изменения нельзя сохранить, пока не исправлена ошибка. Выйти без сохранения?"
   }
 }

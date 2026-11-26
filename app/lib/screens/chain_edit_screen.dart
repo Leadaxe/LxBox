@@ -224,7 +224,8 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
       Navigator.pop(context);
       return;
     }
-    final action = await showUnsavedChangesDialog(context);
+    final action = await showUnsavedChangesDialog(context,
+        canSave: chainFormCanSave(_issues()));
     if (!mounted) return;
     if (action == 'save') {
       _save();

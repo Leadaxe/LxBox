@@ -68,6 +68,42 @@ void main() {
     expect(save.onPressed, isNull);
   });
 
+  testWidgets('нельзя сохранить — «назад» даёт выйти без сохранения, без Save',
+      (tester) async {
+    const chain = SourceChain(
+        tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')]);
+    await tester.pumpWidget(MaterialApp(
+      home: Builder(
+        builder: (ctx) => TextButton(
+          onPressed: () => Navigator.push(
+            ctx,
+            MaterialPageRoute<void>(
+              builder: (_) => ChainEditScreen(
+                initial: chain,
+                config: _config(),
+                directions: const [Direction(tag: 'vpn-1', label: 'vpn-1')],
+                chains: const [chain],
+              ),
+            ),
+          ),
+          child: const Text('open'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    // Убрать вторую позицию: форма грязная и с блокирующей ошибкой.
+    await tester.tap(find.byTooltip('Remove position').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Save'), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, 'Discard'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ChainEditScreen), findsNothing);
+  });
+
   testWidgets('две живые позиции — сохранение доступно', (tester) async {
     await tester.pumpWidget(_host(
         const SourceChain(tag: 'via-de', hops: [NodeLink(tag: 'home'), NodeLink(tag: 'de-exit')])));
