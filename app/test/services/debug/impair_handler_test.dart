@@ -79,12 +79,15 @@ void main() {
     expect((calls.single.arguments as Map)['tag'], '🇩🇪 de/1');
   });
 
-  test('POST set — исходный текст тела уходит в ядро', () async {
+  test('POST set — тело уходит в ядро компактным JSON', () async {
     const body = '{"link_params": {"outage": true, "reset": true}}';
     final r = await call('POST', '/impair/node-a/set', body);
     expect(r.status, 200);
     expect(calls.single.method, 'ccSetImpair');
-    expect(calls.single.arguments, {'tag': 'node-a', 'entry': body});
+    expect(calls.single.arguments, {
+      'tag': 'node-a',
+      'entry': '{"link_params":{"outage":true,"reset":true}}',
+    });
   });
 
   test('POST set — не объект, пустое тело и {} → 400', () async {
@@ -126,6 +129,7 @@ void main() {
       '[]',
       '{"entries": [], "start": 1}',
       '{"entries": [], "repeat": 60}',
+      '{"entries": [], "start": "later"}',
     ]) {
       final e = await err('POST', '/impair/node-a/schedule', b);
       expect(e, isA<BadRequest>(), reason: 'body $b');
@@ -156,7 +160,7 @@ void main() {
       'not_found': 404,
       'invalid_argument': 400,
       'failed_precondition': 409,
-      'unimplemented': 409,
+      'unimplemented': 501,
       'error': 502,
     };
     for (final c in cases.entries) {

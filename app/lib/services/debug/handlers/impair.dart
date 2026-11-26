@@ -17,8 +17,8 @@ import '../transport/response.dart';
 /// - `GET  /impair/{tag}`          → статус ядра как есть:
 ///   `{tag, link_params, counters, sublinks, schedule}`
 /// - `POST /impair/{tag}/set`      → body — запись расписания без `at`
-///   (JSON-объект: `link_params`, `sublinks` или оба), уходит в ядро исходным
-///   текстом; ответ — статус
+///   (JSON-объект: `link_params`, `sublinks` или оба), уходит в ядро
+///   компактным JSON; ответ — статус
 /// - `POST /impair/{tag}/schedule` → body `{"entries": [...], "start":
 ///   ""|"now"|"first_use", "repeat": ""|"60s"}`; `entries: []` — стоп
 ///   расписания и линия по конфигу; ответ — статус
@@ -26,8 +26,10 @@ import '../transport/response.dart';
 /// Тег — из раскодированных сегментов пути: тег с эмодзи передаётся
 /// URL-encoded. Смысл ключей проверяет ядро. Клиент недоступен (туннель не
 /// поднят) → 409; ошибки ядра: `not_found` → 404, `invalid_argument` → 400,
-/// `failed_precondition` / `unavailable` / `unimplemented` → 409, прочее →
-/// 502; текст ядра — в `error.message`.
+/// `failed_precondition` / `unavailable` → 409, `unimplemented` (ядро без
+/// ручки) → 501, прочее → 502; текст ядра — в `error.message`. Пути, тела и
+/// коды совпадают с Debug API лаунчера (его спека 190-F-C-IMPAIR_DEBUG_API),
+/// конверт ошибки — свой.
 Future<DebugResponse> impairHandler(DebugRequest req, DebugContext ctx) async {
   final s = req.uri.pathSegments;
   if (s.length < 2 || s.length > 3 || s[0] != 'impair' || s[1].isEmpty) {
@@ -52,6 +54,10 @@ Future<DebugResponse> impairHandler(DebugRequest req, DebugContext ctx) async {
         throw const BadRequest('"entries" must be a JSON array ([] resets)');
       }
       final start = _optString(body, 'start');
+      if (!_kStarts.contains(start)) {
+        throw BadRequest('"start" must be "", "now" or "first_use", '
+            'got "$start"');
+      }
       final repeat = _optString(body, 'repeat');
       return _call(() =>
           cc.scheduleImpair(tag, entries, start: start, repeat: repeat));
@@ -59,20 +65,22 @@ Future<DebugResponse> impairHandler(DebugRequest req, DebugContext ctx) async {
   throw NotFound('impair path: ${req.path}');
 }
 
+const _kStarts = {'', 'now', 'first_use'};
+
 void _requireMethod(DebugRequest req, String method, String route) {
   if (req.method != method) {
     throw BadRequest('method ${req.method} not allowed on $route');
   }
 }
 
-/// Непустой JSON-объект тела — исходным текстом, без пересборки.
+/// Непустой JSON-объект тела — компактным JSON (как у лаунчера, спека 190).
 String _objectBody(DebugRequest req) {
   final parsed = req.jsonBodyAsMap();
   if (parsed.isEmpty) {
     throw const BadRequest(
         'body must be a non-empty JSON object: link_params, sublinks or both');
   }
-  return utf8.decode(req.body);
+  return jsonEncode(parsed);
 }
 
 String _optString(Map<String, dynamic> body, String key) {
@@ -92,10 +100,9 @@ Future<DebugResponse> _call(
     throw switch (e.code) {
       CcStatusError.notFound => NotFound(text),
       CcStatusError.invalidArgument => BadRequest(text),
-      CcStatusError.failedPrecondition ||
-      CcStatusError.unavailable ||
-      CcStatusError.unimplemented =>
+      CcStatusError.failedPrecondition || CcStatusError.unavailable =>
         Conflict(text),
+      CcStatusError.unimplemented => NotImplemented(text),
       _ => UpstreamError(text),
     };
   } on FormatException catch (e) {

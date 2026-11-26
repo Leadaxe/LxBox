@@ -101,6 +101,12 @@ class UpstreamError extends DebugError {
   const UpstreamError(super.message) : super(status: 502, code: 'upstream_error');
 }
 
+/// 501 — §762: у ядра нет нужной ручки (gRPC Unimplemented, старое ядро).
+class NotImplemented extends DebugError {
+  const NotImplemented(super.message)
+      : super(status: 501, code: 'not_implemented');
+}
+
 /// 504 — handler не уложился в `requestTimeout`.
 class RequestTimeout extends DebugError {
   const RequestTimeout()
