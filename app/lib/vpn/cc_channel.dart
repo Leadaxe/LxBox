@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show jsonDecode;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,8 @@ part 'cc_channel/models_tailscale.dart';
 part 'cc_channel/models_status.dart';
 part 'cc_channel/models_traffic.dart';
 part 'cc_channel/models_probe.dart';
+part 'cc_channel/chain_hop.dart';
+part 'cc_channel/models_outbound_config.dart';
 
 /// §122 Фаза 1a — Dart-клиент нативного libbox `CommandClient`-канала
 /// (`BoxCommandClient.kt`, Фаза 0). Замена `ClashApiClient` (HTTP-петли).
@@ -89,17 +92,33 @@ class CcChannel {
   late final Stream<List<CcOutbound>> _outboundsStream =
       _sharedStream<List<CcOutbound>>(
         _outboundsChannel,
-        (e) => _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList(),
+        (e) => _withoutHopsRemembered(
+            _asList(e).map((m) => CcOutbound.fromMap(_asMap(m))).toList()),
       );
+  // §761 — хопы цепочек (`chain-hop`) скрываются по типу во всех точках
+  // декодирования узлов и групп.
   late final Stream<List<CcGroup>> _groupsStream = _sharedStream<List<CcGroup>>(
     _groupsChannel,
-    (e) => _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList(),
+    (e) => groupsWithoutChainHops(
+        _asList(e).map((m) => CcGroup.fromMap(_asMap(m))).toList()),
   );
   late final Stream<List<CcConnection>> _connectionsStream =
       _sharedStream<List<CcConnection>>(
         _connectionsChannel,
-        (e) => _asList(e).map((m) => CcConnection.fromMap(_asMap(m))).toList(),
+        (e) => _asList(e)
+            .map((m) => CcConnection.fromMap(
+                connectionMapWithoutChainHops(_asMap(m), _chainHopTags)))
+            .toList(),
       );
+
+  /// §761 — теги хопов из последнего снимка узлов: у соединения в
+  /// `chains`/`detours` только теги, тип узнаётся отсюда.
+  Set<String> _chainHopTags = const {};
+
+  List<CcOutbound> _withoutHopsRemembered(List<CcOutbound> list) {
+    _chainHopTags = chainHopTagsOf(list);
+    return withoutChainHops(list);
+  }
   // §180 — DNS-журнал (SPEC 018). Батч событий списком (EventEmitter native).
   late final Stream<List<CcDnsQuery>> _dnsQueriesStream =
       _sharedStream<List<CcDnsQuery>>(
@@ -851,7 +870,8 @@ class CcChannel {
   Future<List<CcGroup>?> getGroups() async {
     final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetGroups);
     if (r == null) return null;
-    return r.map((m) => CcGroup.fromMap(_asMap(m))).toList();
+    return groupsWithoutChainHops(
+        r.map((m) => CcGroup.fromMap(_asMap(m))).toList());
   }
 
   /// §535 (ядро SPEC 097) — unary pull плоского списка outbound'ов и
@@ -862,7 +882,8 @@ class CcChannel {
   Future<List<CcOutbound>?> getOutbounds() async {
     final r = await _methods.invokeMethod<List<dynamic>>(_CcMethods.ccGetOutbounds);
     if (r == null) return null;
-    return r.map((m) => CcOutbound.fromMap(_asMap(m))).toList();
+    return _withoutHopsRemembered(
+        r.map((m) => CcOutbound.fromMap(_asMap(m))).toList());
   }
 
   /// §311 — unary снапшот конфига РАБОТАЮЩЕГО ядра (kernel SPEC 036
@@ -882,6 +903,38 @@ class CcChannel {
       return null; // ядро не STARTED / RPC-ошибка — не фатально
     } on MissingPluginException {
       return null; // юнит-тест / native не готов
+    }
+  }
+
+  /// §761 — конфиг работающего ядра ПОСЛЕ перезаписи (ядро
+  /// v1.14.4-lx.37-rc.2 `GetEffectiveConfig`): хопы цепочек, перехваченный
+  /// `detour`, выровненный MTU, развёрнутый `lx.detour`. Контракт как у
+  /// [getRunningConfig]: `null` = недоступен по любой причине.
+  Future<String?> getEffectiveConfig() async {
+    try {
+      final r =
+          await _methods.invokeMethod<String>(_CcMethods.ccGetEffectiveConfig);
+      return (r == null || r.isEmpty) ? null : r;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// §761 — один узел, группа, endpoint или хоп цепочки таким, каким его
+  /// запустило ядро (`GetOutboundConfig(tag)`, SPEC 165 форка §2.2).
+  /// `null` = нет данных: туннель не поднят, ядро без метода, тег неизвестен
+  /// (`NotFound`). Своего конфига вместо ответа ядра не подставляем.
+  Future<CcOutboundConfig?> getOutboundConfig(String tag) async {
+    try {
+      final r = await _methods.invokeMethod<String>(
+          _CcMethods.ccGetOutboundConfig, {'tag': tag});
+      return CcOutboundConfig.tryParse(r);
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
     }
   }
 

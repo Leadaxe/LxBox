@@ -23,6 +23,8 @@ class _CcMethods {
   static const ccGetPool = 'ccGetPool';
   static const ccGetRules = 'ccGetRules';
   static const ccGetRunningConfig = 'ccGetRunningConfig';
+  static const ccGetEffectiveConfig = 'ccGetEffectiveConfig';
+  static const ccGetOutboundConfig = 'ccGetOutboundConfig';
   static const ccGetTailscaleStatus = 'ccGetTailscaleStatus';
   static const ccGetUrlViaOutbound = 'ccGetUrlViaOutbound';
   static const ccGetWireGuardStatus = 'ccGetWireGuardStatus';
