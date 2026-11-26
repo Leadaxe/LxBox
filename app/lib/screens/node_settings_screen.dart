@@ -297,7 +297,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
         ? getLocalText.s("No address (Tailscale)")
         : node.isAddressless
             ? getLocalText.s("No address")
-            : '${node.server}:${node.port}';
+            // Порт 0 — узел без отдельного порта (OpenConnect: адрес шлюза
+            // целиком в `server`, с портом внутри URL) — «:0» не дописываем.
+            : node.port > 0
+                ? '${node.server}:${node.port}'
+                : node.server;
     // §455 — источник как есть; предпросмотр JSON — то, что уйдёт в ядро:
     // у записи вида `singbox` это объект узла (дословно), иначе emit()
     // модели. §722 — гейт тот же, что у сборки (`verbatimBodyOf`): вид
