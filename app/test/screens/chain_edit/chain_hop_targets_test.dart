@@ -167,61 +167,6 @@ void main() {
     });
   });
 
-  group('tunnelInside (§760)', () {
-    // Туннели живут в секции `endpoints` — как в собранном конфиге (#233).
-    final config = ParsedConfig.parse(jsonEncode({
-      'endpoints': [
-        {'tag': 'wg-nl', 'type': 'wireguard'},
-        {'tag': 'ovpn', 'type': 'openvpn-client'},
-      ],
-      'outbounds': [
-        {'tag': 'vless-de', 'type': 'vless'},
-        {'tag': 'warp-masque', 'type': 'masque'},
-        {
-          'tag': 'o-proton-auto',
-          'type': 'urltest',
-          'outbounds': ['wg-nl']
-        },
-        {
-          'tag': 'o-proton',
-          'type': 'selector',
-          'outbounds': ['o-proton-auto', 'wg-nl']
-        },
-        {
-          'tag': 'o-de',
-          'type': 'selector',
-          'outbounds': ['vless-de']
-        },
-      ],
-    }));
-
-    test('Направление → selector → urltest → wireguard: признак есть', () {
-      final byTag = chainHopLookup(collectChainHopTargets(
-        config: config,
-        directions: const [Direction(tag: 'o-proton', label: 'o-proton')],
-        chains: const [],
-        selfTag: 'c-proton',
-      ));
-      expect(byTag['o-proton']!.kind, ChainHopKind.direction);
-      expect(byTag['o-proton']!.tunnelInside, isTrue);
-      expect(byTag['o-proton-auto']!.tunnelInside, isTrue);
-      expect(byTag['wg-nl']!.tunnelInside, isTrue);
-      expect(byTag['ovpn']!.tunnelInside, isTrue);
-      expect(byTag['warp-masque']!.tunnelInside, isTrue);
-    });
-
-    test('группа и узел без WireGuard — признака нет', () {
-      final byTag = chainHopLookup(collectChainHopTargets(
-        config: config,
-        directions: const [],
-        chains: const [],
-        selfTag: 'c-proton',
-      ));
-      expect(byTag['o-de']!.tunnelInside, isFalse);
-      expect(byTag['vless-de']!.tunnelInside, isFalse);
-    });
-  });
-
   group('describeChainHop', () {
     test('пропавший тег при готовом снимке — unknown, а не выброшен молча', () {
       final c = describeChainHop('gone', const {}, targetsKnown: true);

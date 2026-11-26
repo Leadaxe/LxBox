@@ -1431,16 +1431,6 @@ running core.
   only over UDP and has no fallback transport. You cannot spot the bad case in
   advance: the connection looks successful, and the server either forwards the
   datagrams or drops them without a word.
-- Tunnels after the first position are not recommended: WireGuard
-  (AmneziaWG included), MASQUE, Tailscale, OpenVPN and OpenConnect, as a node
-  or inside a group or direction. From the second position on, the chain dials
-  a copy of the node with the same keys, and a tunnel server keeps one session
-  per key. While the node itself is also in use, for example by a group check,
-  the copy and the node knock each other off, and the group still shows the
-  node as working. The chain editor warns about such positions and marks
-  tunnels in the list of positions to add; the chain can still be saved. Proxy
-  protocols (VLESS, Trojan, Hysteria2, TUIC and others) open a connection per
-  request and are not affected.
 - An HTTP proxy carries only TCP connections. Nodes with a TCP transport
   (VLESS, Trojan, VMess) work behind it fully, including the UDP of apps that
   they wrap inside their own stream. Nodes that speak UDP themselves

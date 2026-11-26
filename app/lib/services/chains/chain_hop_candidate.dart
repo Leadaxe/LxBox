@@ -49,7 +49,6 @@ class ChainHopCandidate {
     this.detour = false,
     this.outboundType = '',
     this.masqueVhttp = '',
-    this.tunnelInside = false,
     this.offered = true,
     this.displayLabel = '',
     this.subline = '',
@@ -110,15 +109,6 @@ class ChainHopCandidate {
   /// предыдущий хоп без бюджета хендшейка (SPEC 074) — может повиснуть;
   /// `auto`/`h2` легальны и молчат (директива оператора 25.08).
   final String masqueVhttp;
-
-  /// Позиция сама туннель — узел секции `endpoints` (wireguard/AWG,
-  /// tailscale, openvpn-client, openconnect) или masque — туннель, не
-  /// прокси-протокол, — или
-  /// группа/Направление, где такой узел есть среди членов (рекурсивно).
-  /// На позиции ≥1 ядро ходит через КОПИЮ узла с теми же ключами/учёткой, а
-  /// сервер туннеля держит одну сессию на ключ — копия и оригинал перебивают
-  /// друг друга (§760).
-  final bool tunnelInside;
 }
 
 /// Быстрый доступ к кандидату по тегу.

@@ -3799,12 +3799,6 @@
   "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
     "value": "位置 %s 是固定 h3 的 MASQUE：经上一跳的 QUIC 可能卡住。请把该节点的 vhttp 设为 auto（或 h2）。"
   },
-  "Not recommended: positions %s are tunnels (WireGuard, MASQUE, Tailscale, OpenVPN, OpenConnect) or contain them. After the first position the chain dials a copy of the node with the same keys, and a tunnel server keeps one session per key. While the node itself is in use, for example by a group check, the copy and the node knock each other off, and the group still shows the node as working.": {
-    "value": "不建议：位置 %s 是隧道（WireGuard、MASQUE、Tailscale、OpenVPN、OpenConnect）或包含隧道。从第二个位置起，链路通过使用相同密钥的节点副本连接，而隧道服务器对每个密钥只保留一个会话。当节点本身也在使用中（例如被组检测）时，副本与节点会相互挤掉，而组仍显示该节点可用。"
-  },
-  "Tunnel: not recommended after the first position": {
-    "value": "隧道：不建议放在第一个位置之后"
-  },
   "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
     "value": "位置 %s 是位于 TCP 跳之后的 WireGuard：上一跳服务器必须能真正转发 UDP，否则握手无处可去。"
   },
@@ -3820,8 +3814,8 @@
   "Positions %s are empty — remove them: the core rejects a chain with a blank position.": {
     "value": "位置 %s 为空——请移除：内核不接受含空位置的链路。"
   },
-  "Positions %s have their own detour — it does not apply inside a chain: a link always dials through the previous position. The path is exactly as shown.": {
-    "value": "位置 %s 自带 detour——它在链路内部不生效：每一环始终经上一位置拨号。路径就如所示。"
+  "Positions %s have their own detour — it does not apply inside a chain: a position past the first always dials through the previous one. The path is exactly as shown.": {
+    "value": "位置 %s 有自己的 detour——在链内不生效：第一个之后的位置总是经由前一个位置连接。路径与显示完全一致。"
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "偏好设置、测速选项、自动更新、Wi-Fi 历史"

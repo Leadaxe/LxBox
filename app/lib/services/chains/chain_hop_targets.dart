@@ -49,8 +49,6 @@ List<ChainHopCandidate> collectChainHopTargets({
 }) {
   final seen = <String>{};
   final out = <ChainHopCandidate>[];
-  final wgMemo = <String, bool>{};
-  bool wg(String tag) => _tunnelInside(config, tag, wgMemo, <String>{});
 
   void add(ChainHopCandidate c) {
     final tag = c.tag.trim();
@@ -70,7 +68,6 @@ List<ChainHopCandidate> collectChainHopTargets({
         tag: d.tag,
         kind: ChainHopKind.direction,
         offered: d.isDetour,
-        tunnelInside: wg(d.tag),
         displayLabel: d.displayLabel,
         subline: d.tag));
   }
@@ -123,7 +120,6 @@ List<ChainHopCandidate> collectChainHopTargets({
       // transportLabel у masque — это и есть vhttp ('h3'/'h2'/'auto',
       // пусто → дефолт ядра h3), см. ConfigNode._deriveTransport.
       masqueVhttp: n.type == 'masque' ? (n.transportLabel ?? 'h3') : '',
-      tunnelInside: wg(n.tag),
       subline: _nodeSubline(n, isGroup: isGroup),
       offered: !isGroup,
       link: pool?.linkOfFinal(n.tag),
@@ -135,40 +131,6 @@ List<ChainHopCandidate> collectChainHopTargets({
   }
 
   return out;
-}
-
-/// §760 — [tag] сам туннель (узел секции `endpoints`: wireguard/AWG,
-/// tailscale, openvpn-client, openconnect — `kind: endpoint` реестра — и
-/// masque) или
-/// группа, где такой узел есть среди членов (рекурсивно по `outbounds`). [path] рвёт циклы групп, [memo] — общий
-/// кэш на один сбор целей.
-bool _tunnelInside(
-  ParsedConfig config,
-  String tag,
-  Map<String, bool> memo,
-  Set<String> path,
-) {
-  final cached = memo[tag];
-  if (cached != null) return cached;
-  final n = config.byTag[tag];
-  if (n == null || !path.add(tag)) return false;
-  // MASQUE в реестре `kind: outbound`, но это IP-туннель с ключом
-  // устройства (CONNECT-IP), а не прокси на соединение.
-  var found = n.kind == 'endpoint' || n.type == 'masque';
-  if (!found && (n.type == 'selector' || n.type == 'urltest')) {
-    final members = n.raw['outbounds'];
-    if (members is List) {
-      for (final m in members) {
-        if (m is String && _tunnelInside(config, m, memo, path)) {
-          found = true;
-          break;
-        }
-      }
-    }
-  }
-  path.remove(tag);
-  memo[tag] = found;
-  return found;
 }
 
 /// Разобран ли снимок целей.

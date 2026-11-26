@@ -68,13 +68,6 @@ enum ChainIssueCode {
   /// протоколах не существует, отказ выглядит чёрной дырой.
   wgBehindTcpHop,
 
-  /// Туннель (узел секции `endpoints`: WireGuard/AWG, Tailscale, OpenVPN,
-  /// OpenConnect) или MASQUE позицией ≥1 — сам узел или внутри группы/Направления. Ядро
-  /// ходит через копию узла с теми же ключами; сервер держит одну сессию на
-  /// ключ — копия и оригинал перебивают друг друга, а проверка группы смотрит
-  /// на оригинал и остаётся зелёной (§760, issue #233). Не запрет — совет.
-  tunnelOnLink,
-
   /// Позиция — цепочка, объявленная НИЖЕ по списку (ссылка вперёд).
   forwardChainReference,
 
@@ -371,34 +364,9 @@ List<ChainFormIssue> validateChainForm(
       code: ChainIssueCode.detourIgnoredOnLink,
       level: ChainIssueLevel.info,
       message: getLocalText.s("Positions %s have their own detour — it does not apply inside a chain: "
-        "a link always dials through the previous position. The path is exactly "
+        "a position past the first always dials through the previous one. The path is exactly "
         "as shown.", _list(detoured)),
       hops: detoured,
-    ));
-  }
-
-  // §760 — туннель на позиции ≥1. Позиция 0 не копируется ядром
-  // (`hop.go` ResolveLeaf: index 0 → сам узел), там конфликта нет.
-  final tunnelLinks = <String>[];
-  for (var i = 1; i < hops.length; i++) {
-    if ((ctx.candidates[hops[i]]?.tunnelInside ?? false) &&
-        !tunnelLinks.contains(hops[i])) {
-      tunnelLinks.add(hops[i]);
-    }
-  }
-  if (tunnelLinks.isNotEmpty) {
-    soft.add(ChainFormIssue(
-      code: ChainIssueCode.tunnelOnLink,
-      level: ChainIssueLevel.warning,
-      message: getLocalText.s(
-          "Not recommended: positions %s are tunnels (WireGuard, MASQUE, "
-          "Tailscale, OpenVPN, OpenConnect) or contain them. After the first position the "
-          "chain dials a copy of the node with the same keys, and a tunnel "
-          "server keeps one session per key. While the node itself is in use, "
-          "for example by a group check, the copy and the node knock each "
-          "other off, and the group still shows the node as working.",
-          _list(tunnelLinks)),
-      hops: tunnelLinks,
     ));
   }
 

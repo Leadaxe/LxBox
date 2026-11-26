@@ -4057,12 +4057,6 @@
   "Position %s is MASQUE with fixed h3: QUIC through the previous hop may hang. Set vhttp: auto (or h2) on the node.": {
     "value": "Позиция %s — MASQUE с фиксированным h3: QUIC через предыдущий хоп может повиснуть. Включите у узла vhttp: auto (или h2)."
   },
-  "Not recommended: positions %s are tunnels (WireGuard, MASQUE, Tailscale, OpenVPN, OpenConnect) or contain them. After the first position the chain dials a copy of the node with the same keys, and a tunnel server keeps one session per key. While the node itself is in use, for example by a group check, the copy and the node knock each other off, and the group still shows the node as working.": {
-    "value": "Не рекомендуется: позиции %s — туннели (WireGuard, MASQUE, Tailscale, OpenVPN, OpenConnect) или содержат их. После первой позиции цепочка ходит через копию узла с теми же ключами, а сервер туннеля держит одну сессию на ключ. Пока сам узел тоже в работе, например его проверяет группа, копия и узел перебивают друг друга, а группа показывает узел рабочим."
-  },
-  "Tunnel: not recommended after the first position": {
-    "value": "Туннель: после первой позиции не рекомендуется"
-  },
   "Position %s is WireGuard behind a TCP hop: the previous server must actually proxy UDP, otherwise the handshake goes nowhere.": {
     "value": "Позиция %s — WireGuard за TCP-хопом: сервер предыдущей позиции должен реально проксировать UDP, иначе хендшейк уходит в никуда."
   },
@@ -4078,8 +4072,8 @@
   "Positions %s are empty — remove them: the core rejects a chain with a blank position.": {
     "value": "Позиции %s пусты — уберите их: цепочку с пустой позицией ядро отвергает."
   },
-  "Positions %s have their own detour — it does not apply inside a chain: a link always dials through the previous position. The path is exactly as shown.": {
-    "value": "У позиций %s есть свой detour — внутри цепочки он не действует: звено всегда ходит через предыдущую позицию. Путь ровно такой, как показано."
+  "Positions %s have their own detour — it does not apply inside a chain: a position past the first always dials through the previous one. The path is exactly as shown.": {
+    "value": "У позиций %s свой detour — внутри цепочки он не действует: позиция после первой всегда идёт через предыдущую. Путь ровно такой, как показан."
   },
   "Preferences, ping options, auto-update, wifi history": {
     "value": "Предпочтения, параметры пинга, автообновление, история Wi-Fi"

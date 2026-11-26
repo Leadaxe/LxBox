@@ -43,8 +43,7 @@ ChainHopCandidate _tunnel(String tag, {ChainHopKind kind = ChainHopKind.node}) =
     ChainHopCandidate(
         tag: tag,
         kind: kind,
-        outboundType: kind == ChainHopKind.node ? 'wireguard' : '',
-        tunnelInside: true);
+        outboundType: kind == ChainHopKind.node ? 'wireguard' : '');
 
 ChainHopCandidate _chain(String tag, {bool below = false}) =>
     ChainHopCandidate(tag: tag, kind: ChainHopKind.chain, below: below);
@@ -286,41 +285,15 @@ void main() {
     });
   });
 
-  group('туннель на позиции ≥1 (§760)', () {
-    test('WG-группа второй позицией — warning, сохранение разрешено', () {
-      final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: ['direct-out', 'o-proton']),
-        _ctx([
-          const ChainHopCandidate(
-              tag: 'direct-out', kind: ChainHopKind.builtin),
-          _tunnel('o-proton', kind: ChainHopKind.direction),
-        ]),
-      );
-      final n = _find(issues, ChainIssueCode.tunnelOnLink);
-      expect(n, isNotNull);
-      expect(n!.level, ChainIssueLevel.warning);
-      expect(n.hops, ['o-proton']);
-      expect(chainFormCanSave(issues), isTrue);
-    });
-
-    test('WG первой позицией — тишина: позицию 0 ядро не копирует', () {
-      final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: ['wg-home', 'de-exit']),
-        _ctx([_tunnel('wg-home'), _node('de-exit')]),
-      );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.tunnelOnLink)));
-    });
-
-    test('несколько WG-позиций — одна находка со всеми тегами', () {
-      final issues = validateChainForm(
-        const ChainFormState(tag: 'via-de', hops: ['home', 'wg-a', 'wg-b']),
-        _ctx([_node('home'), _tunnel('wg-a'), _tunnel('wg-b')]),
-      );
-      final found =
-          issues.where((i) => i.code == ChainIssueCode.tunnelOnLink);
-      expect(found, hasLength(1));
-      expect(found.single.hops, ['wg-a', 'wg-b']);
-    });
+  // §760 снято (ядро v1.14.4-lx.37-rc.2 узлы на позициях не копирует):
+  // туннель на позиции ≥1 — не находка.
+  test('WG-узел второй позицией — без находки про туннель', () {
+    final issues = validateChainForm(
+      const ChainFormState(tag: 'via-wg', hops: ['home', 'wg-nl']),
+      _ctx([_node('home'), _tunnel('wg-nl')]),
+    );
+    // Остаётся только находка про UDP-туннель за TCP-позицией.
+    expect(_codes(issues), {ChainIssueCode.wgBehindTcpHop});
   });
 
   group('потерянные позиции', () {

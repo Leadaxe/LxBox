@@ -1005,13 +1005,11 @@ Write'ы проходят **тот же гейт, что и форма реда�
 | `tagEmpty` / `tagTaken` | тег пустой / занят |
 
 Предупреждения и справки формы write **не** блокируют (та же граница, что у
-кнопки «сохранить»): `stripKeptForHop` — цепочка снимает strip-ключ, который
-звено требует (`on_hop_required` реестра, напр. `tls.utls` на reality; сборка
-снимет ключ с патча), `detourAtEntry`, `detourIgnoredOnLink`, `missingHops`,
-`masqueFixedH3OnLink`, `wgBehindTcpHop`, `tunnelOnLink` (туннель — WireGuard,
-MASQUE, Tailscale, OpenVPN, OpenConnect — на позиции ≥1: копия узла
-конфликтует с оригиналом, задача 760). Бывший блокирующий
-`realityUtlsStripped` снят (задача 556).
+кнопки «сохранить»): `detourAtEntry`, `detourIgnoredOnLink`, `missingHops`,
+`masqueFixedH3OnLink`, `wgBehindTcpHop`. Сняты: блокирующий
+`realityUtlsStripped` (задача 556), `stripKeptForHop` и `tunnelOnLink`
+(задачи 761 и 760: ядро v1.14.4-lx.37-rc.2 не принимает `strip` цепочки и не
+копирует узлы на позициях).
 
 Этот класс ошибок `sing-box check` **пропускает**, а `run` роняет, — поэтому
 гейт стоит на записи, а не на сборке.
