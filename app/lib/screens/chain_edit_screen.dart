@@ -36,6 +36,7 @@ import '../widgets/emoji_picker_button.dart';
 import '../widgets/reorder_grab_strip.dart';
 import '../services/chains/chain_form_validation.dart';
 import '../services/chains/chain_takeover.dart' show ChainBodies;
+import '../services/chains/chain_trouble_state.dart' show chainBodiesOfParsed;
 import '../services/chains/chain_hop_candidate.dart';
 import '../services/chains/chain_hop_targets.dart';
 import '../widgets/app_bottom_sheet.dart';
@@ -123,13 +124,7 @@ class _ChainEditScreenState extends State<ChainEditScreen> with SnackHelper {
   late List<ChainHopCandidate> _cands;
 
   /// §761 — тела последнего собранного конфига для проверки «один путь».
-  late final ChainBodies _bodies = {
-    for (final n in widget.config.byTag.values)
-      n.tag: (
-        section: n.kind == 'endpoint' ? 'endpoints' : 'outbounds',
-        body: n.raw,
-      ),
-  };
+  late final ChainBodies _bodies = chainBodiesOfParsed(widget.config);
   late Map<String, ChainHopCandidate> _lookup;
 
   @override

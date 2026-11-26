@@ -1095,6 +1095,15 @@ class SettingsStorage {
   static Future<void> setShownCrashStamp(String stamp) =>
       setVar('shown_crash_stamp', stamp);
 
+  /// §761 — отметка «плашку выпадающих цепочек скрыли» (хеш собранного
+  /// конфига и отказов, `chainTroubleStamp`). Новая сборка с другим
+  /// конфигом — другая отметка, плашка возвращается.
+  static Future<String> getDismissedChainTroubleStamp() async =>
+      getVar('dismissed_chain_trouble_stamp', '');
+
+  static Future<void> setDismissedChainTroubleStamp(String stamp) =>
+      setVar('dismissed_chain_trouble_stamp', stamp);
+
   // ---------------------------------------------------------------------------
   // Debug API (§031) — runtime toggle, bearer token, port.
   // ---------------------------------------------------------------------------

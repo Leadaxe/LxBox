@@ -7283,5 +7283,14 @@
   },
   "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
     "value": "Тег «%s» занят узлом или группой, а цепочке он нужен для хопа — переименуйте этот узел."
+  },
+  "Hop chain \"%s\" is not built": {
+    "value": "Цепочка «%s» не собирается"
+  },
+  "More chains are not built: %d.": {
+    "value": "Не собираются ещё цепочки: %d."
+  },
+  "Open chain": {
+    "value": "Открыть цепочку"
   }
 }

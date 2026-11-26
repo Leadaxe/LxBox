@@ -6995,5 +6995,14 @@
   },
   "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
     "value": "标签“%s”已被节点或组占用，而链的跃点需要它——请重命名该节点。"
+  },
+  "Hop chain \"%s\" is not built": {
+    "value": "跳转链路“%s”未构建"
+  },
+  "More chains are not built: %d.": {
+    "value": "另有未构建的跳转链路：%d。"
+  },
+  "Open chain": {
+    "value": "打开跳转链路"
   }
 }

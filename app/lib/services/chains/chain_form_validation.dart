@@ -451,32 +451,46 @@ bool chainFormCanSave(List<ChainFormIssue> issues) =>
 
 String _list(List<String> tags) => tags.join(', ');
 
-/// §761 — проверка сборки по последнему собранному конфигу: правленая
-/// цепочка встаёт последней, прочие цепочки конфига держат свои места.
-/// Кольцо или конфликт — ошибка с подсказкой, что сделать.
-ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
-  if (ctx.bodies.isEmpty || state.hops.length < 2) return null;
-  final tag = state.tag.trim().isEmpty ? ctx.originalTag : state.tag.trim();
-  final bodies = <String, ({String section, Map<String, dynamic> body})>{
-    for (final e in ctx.bodies.entries)
-      if (e.key != ctx.originalTag && e.key != tag) e.key: e.value,
+/// §761 — проверка сборки по последнему собранному конфигу [bodies]:
+/// цепочка [state] встаёт последней, прочие цепочки конфига держат свои
+/// места. Отказ — кольцо, конфликт и прочее, из-за чего сборка цепочку
+/// выбросит; `null` — цепочка собирается. [originalTag] — прежний тег
+/// цепочки: её же экземпляр в конфиге не считается чужим.
+///
+/// Одна проверка на редактор и на плашку главного экрана
+/// (`chain_trouble_state.dart`).
+ChainTakeoverFailure? chainOnePathFailure(
+  ChainFormState state,
+  ChainBodies bodies, {
+  String originalTag = '',
+}) {
+  if (bodies.isEmpty || state.hops.length < 2) return null;
+  final tag = state.tag.trim().isEmpty ? originalTag : state.tag.trim();
+  final local = <String, ({String section, Map<String, dynamic> body})>{
+    for (final e in bodies.entries)
+      if (e.key != originalTag && e.key != tag) e.key: e.value,
   };
-  bodies[tag] = (
+  local[tag] = (
     section: 'outbounds',
     body: {'tag': tag, 'type': 'chain', 'outbounds': [...state.hops]},
   );
   final others = [
-    for (final e in bodies.entries)
+    for (final e in local.entries)
       if (e.value.body['type'] == 'chain' && e.key != tag) e.key,
   ];
-  final f = checkChainTakeover(bodies, [...others, tag])
+  return checkChainTakeover(local, [...others, tag])
       .where((f) => f.chain == tag)
       .firstOrNull;
-  if (f == null) return null;
+}
+
+/// Что не так и что сделать — для находки формы и для плашки главного
+/// экрана. `null` — отказ, который форма называет своей находкой (повтор,
+/// вложенная цепочка): на плашку он не идёт.
+String? chainOnePathMessage(ChainTakeoverFailure f) {
   final p = f.position + 1;
   final op = f.otherPosition + 1;
   final hint = f.copyHint;
-  final message = switch (f.fault) {
+  return switch (f.fault) {
     ChainTakeoverFault.ring when hint != null && hint.position == 0 =>
       getLocalText.s(
           "\"%s\" at position %d is also inside \"%s\" at the entry — make a copy of \"%s\" without \"%s\" for the entry.",
@@ -500,6 +514,13 @@ ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
     // кольцо без группы (узел стоит позицией дважды) — тот же повтор.
     _ => null,
   };
+}
+
+ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
+  final f =
+      chainOnePathFailure(state, ctx.bodies, originalTag: ctx.originalTag);
+  if (f == null) return null;
+  final message = chainOnePathMessage(f);
   if (message == null) return null;
   return ChainFormIssue(
     code: ChainIssueCode.onePath,

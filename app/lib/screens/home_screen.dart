@@ -6,6 +6,7 @@ import '../controllers/home_controller.dart';
 import '../controllers/subscription_controller.dart';
 import '../models/home_state.dart';
 import '../models/validation.dart';
+import '../services/chains/chain_trouble_state.dart';
 import '../services/app_log.dart';
 import '../services/core_reject/core_reject_guard.dart';
 import '../services/core_reject/core_reject_runner.dart';
@@ -254,6 +255,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     // §555 — предупреждения шаблона после сборки: снек со счётчиком.
     _prevTemplateStamp = _subController.templateWarningsStamp;
     _subController.addListener(_onTemplateWarnings);
+    // §761 — сохранённые цепочки, которые сборка выбрасывает: проверка при
+    // старте и после каждой сборки конфига (новый `configModel`) или смены
+    // источников (пул ссылок позиций).
+    _controller.addListener(_checkChainTroubles);
+    _subController.addListener(_checkChainTroubles);
+    _checkChainTroubles();
     // §565 / задача 570 — выбор члена selector-группы (главный экран, экран
     // узла) запоминается у своей группы папки или подписки.
     _controller.onMemberSelected = (group, node) => unawaited(
@@ -351,6 +358,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
       if (!mounted) return;
       showTemplateWarningsSnack(context, items);
     });
+  }
+
+  /// §761 — снимок, по которому цепочки проверены последний раз.
+  Object? _chainCheckModel;
+  Object? _chainCheckEntries;
+
+  void _checkChainTroubles() {
+    final model = _controller.state.configModel;
+    final entries = _subController.entries;
+    if (identical(model, _chainCheckModel) &&
+        identical(entries, _chainCheckEntries)) {
+      return;
+    }
+    _chainCheckModel = model;
+    _chainCheckEntries = entries;
+    unawaited(ChainTroubleState.I
+        .refresh(model, [for (final e in entries) e.list]));
   }
 
   void _onControllerChange() {
@@ -577,6 +601,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, Ti
     _controller.removeListener(_onControllerChange);
     _subController.removeListener(_onDirectionsWithoutNodes);
     _subController.removeListener(_onTemplateWarnings);
+    _controller.removeListener(_checkChainTroubles);
+    _subController.removeListener(_checkChainTroubles);
     _controller.onMemberSelected = null;
     WidgetsBinding.instance.removeObserver(this);
     homeReturnObserver.clearHandler();

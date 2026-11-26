@@ -6,6 +6,7 @@ import '../../../services/core_reject/core_reject_guard.dart';
 import '../core_reject_ui.dart';
 
 import '../../../models/home_state.dart';
+import '../../../services/chains/chain_trouble_state.dart' show ChainTrouble;
 import '../../../services/l10n/locale_controller.dart';
 
 /// §116 — единый banner-механизм для home. Принцип: **баннер = чистая
@@ -67,7 +68,16 @@ class BannerActions {
     required this.onDismissCrash,
     required this.onShowCoreRejected,
     required this.onDismissCoreRejected,
+    this.onOpenChain,
+    this.onDismissChainTroubles,
   });
+
+  /// §761 — кнопка плашки выпадающей цепочки: редактор цепочки по тегу.
+  final void Function(String chainTag)? onOpenChain;
+
+  /// §761 — крестик плашки выпадающих цепочек: скрыть до следующего
+  /// изменения конфига.
+  final VoidCallback? onDismissChainTroubles;
 
   final VoidCallback onRebuild;
   final VoidCallback onConfirmStop;
@@ -98,6 +108,7 @@ List<AppBanner> activeBanners(
   required BannerActions actions,
   bool crashPending = false,
   List<DisabledNode> coreRejected = const [],
+  List<ChainTrouble> chainTroubles = const [],
 }) {
   final a = actions;
   final out = <AppBanner>[];
@@ -128,6 +139,28 @@ List<AppBanner> activeBanners(
       palette: BannerPalette.error,
       onTap: a.onShareCrash,
       onDismiss: a.onDismissCrash,
+    ));
+  }
+  // §761 — сохранённая цепочка, которую сборка выбрасывает (кольцо или
+  // конфликт под перезапись `detour` ядра). Одна плашка на все: первая
+  // цепочка с причиной и тем, что сделать, остальные — счётчиком. Кнопка
+  // открывает редактор первой; исправили её — плашка переходит к следующей.
+  if (chainTroubles.isNotEmpty) {
+    final first = chainTroubles.first;
+    final more = chainTroubles.length - 1;
+    out.add(AppBanner(
+      key: 'chain_trouble',
+      title: getLocalText.s("Hop chain \"%s\" is not built", first.chain.tag),
+      message: more > 0
+          ? '${first.message}\n${getLocalText.s("More chains are not built: %d.", more)}'
+          : first.message,
+      icon: Icons.link_off,
+      palette: BannerPalette.warning,
+      actionLabel: getLocalText.s("Open chain"),
+      onAction: a.onOpenChain == null
+          ? null
+          : () => a.onOpenChain!(first.chain.tag),
+      onDismiss: a.onDismissChainTroubles,
     ));
   }
   if (configDirty && !busy) {
