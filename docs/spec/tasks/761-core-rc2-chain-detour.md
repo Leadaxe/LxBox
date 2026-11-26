@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| **Статус** | In progress — ветка `claude/761-core-rc2-chain-detour`, ждёт rc2; не собрано, не проверено |
+| **Статус** | In progress — в develop с пином `v1.14.4-lx.37-rc.2` (26.11); эмулятор — см. «Verification» |
 | **Дата** | 2026-11-26 |
-| **Повод** | Пререлиз ядра `v1.14.4-lx.37-rc.2` (ещё не вышел) приносит SPEC 165 ядра «Цепочка как перезапись `detour`»: ломающее изменение конфига и API командного клиента |
+| **Повод** | Пререлиз ядра `v1.14.4-lx.37-rc.2` (вышел 26.11, тег на `4c57babea`) приносит SPEC 165 ядра «Цепочка как перезапись `detour`»: ломающее изменение конфига и API командного клиента |
 | **Связанные** | 393 (цепочки), 709 (корневой блок `lx` шаблона), 758 (миграция путей `lx.wg.*` в миксинах), 760 (туннель после первой позиции), 311 (running config); ядро: SPEC 165 (§2, §5), ALGORITHM К5, `docs-lx/lx-chain.md`, `docs-lx/lx-block.md`, `docs-lx/lx-observability.md`; LxBox#233 |
 
 ## Docs to update
@@ -293,7 +293,13 @@ core: …», свой конфиг не подставляется. Кнопки
   затронутым файлам — чисто. Полный прогон и сборка — нет (Kotlin не
   соберётся до AAR rc2).
 
-После rc2: шаги бампа выше, `sing-box check` на golden-конфигах, эмулятор.
+Бамп на rc2 (26.11): пин и `kCoreBuildTagsPin` → `v1.14.4-lx.37-rc.2`, теги
+сборки те же. `javap` релизного AAR: `getOutboundConfig(String)`,
+`getEffectiveConfig()` → `RunningConfig.content()`, `setChainPositionEnabled`
+без результата, `GetChains`/`GetChainCloneConfig` нет — как в Kotlin.
+`sing-box check` (darwin-arm64 rc2): `avd_v0.config.json` — ок;
+`rich_v0.config.json` (две цепочки) — ок после снятия локальных rule-set и
+подстановки валидного ключа shadowsocks (данные фикстуры, не генератор).
 
 ## Unresolved / follow-up
 
