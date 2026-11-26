@@ -57,8 +57,11 @@ measurements.
   real path is longer than shown"), detour on links ("does not apply inside
   a chain"), WireGuard behind a TCP hop, MASQUE with fixed h3 on a link.
 - No Advanced block (task 761): core `v1.14.4-lx.37-rc.2` rejects
-  `idle_timeout`, `strip_evasion`, `strip`; values saved earlier stay in the
-  record and the backup.
+  `idle_timeout`, `strip_evasion`, `strip`; values saved earlier are dropped
+  on read (contract 1.1.184).
+- A node past the first position with a fixed local port blocks saving: the
+  message names the node, the chain and the position and says to remove the
+  port or put a copy of the node without it there.
 - Candidates are rebuilt every time the picker opens — the "Use as detour"
   flag may have changed while the form was open.
 - Groups, `direct-out`, chains are not offered in the picker, but positions

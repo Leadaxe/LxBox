@@ -76,9 +76,11 @@ are hidden from node selection.
   more than … culprits". **Mutation:** break all edges of the ring.
 - **P7. A chain is a `type: chain` node in packet order.** Positions go out
   verbatim in the `outbounds` key; `rewrite` is written only when set;
-  `idle_timeout`, `strip_evasion`, `strip` stay in storage but are not written
-  (core `v1.14.4-lx.37-rc.2` rejects them, task 761); nodes past the first
-  position lose fixed local ports, socket options stay;
+  `idle_timeout`, `strip_evasion`, `strip` are neither written nor stored
+  (core `v1.14.4-lx.37-rc.2` rejects them; an old record or backup is read
+  with them dropped, like the launcher, task 761); a fixed local port on a
+  node past the first position is not removed — the chain drops (P8), socket
+  options stay;
   the chain gets into the Direction
   pool on a par with servers. **Witness:** units "hop order = PACKET order",
   "defaults are not written into the config", "a chain is a node: the
@@ -87,7 +89,10 @@ are hidden from node selection.
 - **P8. An invalid chain drops out entirely, the config is built.** Fewer
   than two positions, empty/repeated/self-reference, a position pointing
   nowhere, a reference to a chain lower in the list, a nested chain not in
-  the first position, an occupied tag, a core older than
+  the first position, a node past the first position with a fixed local port
+  (WireGuard/AWG `listen_port`, Tailscale `listen_port`/`relay_server_port`,
+  OpenConnect `dtls_local_port`; task 761, launcher code
+  `chain_hop_local_port`), an occupied tag, a core older than
   `1.14.0-lx.27-rc.5` → no chain, a warning, the rest is built.
   **Witness:** units "a position pointing nowhere drops the CHAIN", "a FORWARD
   reference drops the chain", "a nested chain at position ≥1 drops the

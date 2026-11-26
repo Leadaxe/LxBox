@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Статус** | Done — в develop с пином `v1.14.4-lx.37-rc.2` (26.11, `ebc549ac`); эмулятор проверен; на телефоне не проверено |
+| **Статус** | Done — в develop с пином `v1.14.4-lx.37-rc.2` (26.11, `ebc549ac`); эмулятор проверен; на телефоне не проверено. Сверка с лаунчером (контракт 1.1.184) — ветка `claude/761-launcher-parity`, эмулятор не проверялся |
 | **Дата** | 2026-11-26 |
 | **Повод** | Пререлиз ядра `v1.14.4-lx.37-rc.2` (вышел 26.11, тег на `4c57babea`) приносит SPEC 165 ядра «Цепочка как перезапись `detour`»: ломающее изменение конфига и API командного клиента |
 | **Связанные** | 393 (цепочки), 709 (корневой блок `lx` шаблона), 758 (миграция путей `lx.wg.*` в миксинах), 760 (туннель после первой позиции), 311 (running config); ядро: SPEC 165 (§2, §5), ALGORITHM К5, `docs-lx/lx-chain.md`, `docs-lx/lx-block.md`, `docs-lx/lx-observability.md`; LxBox#233 |
@@ -89,15 +89,19 @@
 
 ## Solution
 
-**Ключи цепочки (решение по умолчанию).** В конфиг ядра не пишутся
+**Ключи цепочки.** В конфиг ядра не пишутся
 `idle_timeout`, `strip_evasion`, `strip` — `chainOutboundObject` выпускает только
 `tag`, `type`, `outbounds`, `rewrite`. Шаг `on_hop_required` из сборки снят (ключей
 `strip` у цепочки нет — снимать нечего), код `stripKeptForHop` из валидации формы
-снят. Сохранённое не ломается: модель, запись `sources[]`, бэкап, миграция
-`legacy_form_v0` и Debug API продолжают читать и писать поля как есть
-(round-trip точный), миграции хранилища нет — поля просто не действуют. Из
-редактора цепочки убран блок Advanced целиком (в нём были только эти три поля);
-правленое в нём раньше значение остаётся в записи и уходит в бэкап.
+снят. Из редактора цепочки убран блок Advanced целиком (в нём были только эти
+три поля). Хранить их тоже перестали — как лаунчер (контракт 1.1.184: «импорт
+снимает их, стороны не пишут»; корпус `backup/chains_roundtrip`, `v10_*` ждёт
+цепочки без ключей): у `SourceChain` полей нет; запись `sources[]`, старый
+бэкап и миграция `legacy_form_v0` ключи принимают (не `unknownKeys`) и
+отбрасывают молча; Debug API `/chains` их не читает. Читатель каталога `strip`
+(`services/contract/chain_strip.dart`) удалён вместе с каталогом в
+`chain.json`. Миграции хранилища нет: запись перепишется без ключей при первом
+сохранении источников.
 
 **`mtu_align`.** Шаблон пишет `lx.detour.mtu_align` вместо `lx.mtu_align`
 (условие прежнее: режим ≠ `clamp`). Миксины: `migrateLegacyLxDetourMixin`
@@ -116,8 +120,8 @@
 Клиент кольца и конфликты не разводит, а находит и объясняет, что сделать
 пользователю. Проверка — `checkChainTakeover` / `applyChainTakeover`
 (`services/chains/chain_takeover.dart`), цепочки в порядке объявления,
-достижимость по всем членам групп любой вложенности, `direct`/`block`/`dns` не
-считаются:
+достижимость по всем членам групп любой вложенности, `direct` и `block` не
+считаются (как ядро, `protocol/chain/rewrite.go`; `dns` считается):
 - **кольцо** — узел или группа достижимы на позиции 0 и на позиции выше той же
   цепочки; собственный `detour` узла позиции 0 (с переходами по `detour` и
   членам групп) ведёт в узел позиции выше;
@@ -176,11 +180,23 @@ keys) for one of them»; кольцо через `detour` — убрать эт�
   цепочка не исправлена. Переживает перезапуск; конфиг на изменение не
   помечает.
 
-**Порты (К5).** `applyChainPositionYields`
-(`builder/post_steps/chain_position_yields.dart`) — после плана: у листьев
-позиций ≥ 1 снимаются три поля портов, строкой предупреждения
-сборки. Поля сокета не трогаются. В предупреждения узла по тегу не кладётся —
-у них коды реестра, а кода под это нет (запрос лаунчеру ниже).
+**Порты (К5) — как у лаунчера.** Фиксированный локальный порт (WireGuard/AWG
+`listen_port`, Tailscale `listen_port`/`relay_server_port`, OpenConnect
+`dtls_local_port`, ненулевой) у узла позиции ≥ 1 или у любого члена группы
+там (любая вложенность) — отказ `ChainTakeoverFault.localPort` в той же
+проверке `checkChainTakeover`: сборка выбрасывает цепочку с предупреждением,
+редактор запирает сохранение (находка `onePath`), плашка главного называет
+цепочку. Порт не снимается (шаг `chain_position_yields` удалён). Проверка идёт
+до колец и конфликтов, выпавшая так цепочка мест не занимает — порядок
+`ChainDetourProblems` лаунчера (код `chain_hop_local_port`). Поля сокета не
+трогаются и ошибкой не являются. Текст (EN, ru/zh в `ui.json`):
+- узел позицией: `"<узел>" at position <i> of chain "<цепочка>" has a fixed
+  local port (<поля>) — remove the port from the node, or put a copy of the
+  node without the port at this position.`
+- узел в группе: `"<узел>" inside "<группа>" at position <i> of chain
+  "<цепочка>" has a fixed local port (<поля>) — remove the port from the node,
+  or use a copy of the node without the port in "<группа>".`
+Предупреждение сборки — те же слова после `Hop chain "<цепочка>" was dropped:`.
 
 **Ручки (п. 9).** `GetChains`, `GetChainCloneConfig`, `SetChainPositionEnabled`,
 `GetChainStatus` LxBox не вызывает (grep по `lib/` и
@@ -222,33 +238,45 @@ core: …», свой конфиг не подставляется. Кнопки
 4. Rebase ветки на develop, CI (`build-fast`), эмулятор: конфиг с цепочкой
    (WG на позиции 1, группа на позиции 1), `check-config`, экран узла.
 
-**Контракт лаунчера (руками не правится, запрос в singbox-launcher).**
-- `registry/protocols/chain.json`: снять `idle_timeout`, `strip_evasion`,
-  `strip` (каталог `strip` с `on_hop_required`) из `body.fields`, либо пометить
-  запрещёнными с rc2; код `chain_strip_utls_on_reality` в `warnings.json` —
-  снять.
-- `schema/source_chain.schema.json`: те же поля — как сохраняемые, но не
-  эмитируемые (или снять).
-- `registry/core_config.json`: `lx.mtu_align` — `forbidden` с rc2 (min_core как
-  история); новые `lx.detour` и `lx.detour.mtu_align`, `lx.detour.strip`,
-  `lx.detour.except_outbounds` с `min_core: 1.14.4-lx.37-rc.2`.
-- `registry/vars.json` `mtu_align`: нота — путь `lx.detour.mtu_align`.
-- Связь «узел на позиции ≥ 1 цепочки» в реестре: `conflicts` с кодом (по образцу
-  `conflicts {with: detour}`, контракт 1.1.65) для WireGuard `listen_port`,
-  Tailscale `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` и
-  dial-полей К5 (`dialer.json`); код конфликта перехвата цепочек. Пока их нет,
-  LxBox снимает поля без кода.
-- Тип `chain-hop`: в реестре не нужен (в пользовательском конфиге запрещён), но
-  гард сборки не должен принимать его от пользователя.
+**Сверка с лаунчером (контракт 1.1.184, 26.11).** Синк вендоренной копии с
+develop лаунчера `ed1e206a` (1.1.184; пин ядра лаунчера — rc.2, `3eaa3715`).
+Запросы, которые здесь стояли, лаунчер закрыл: `chain.json` без
+`idle_timeout`/`strip_evasion`/`strip` и каталога `strip`, код
+`chain_strip_utls_on_reality` снят, коды `chain_detour_conflict`,
+`chain_detour_ring`, `chain_detour_ring_detour`, `chain_hop_local_port`,
+`chain_hop_tag_taken`, `chain_rewrite_detour`; `core_config.json` — `lx.detour`
+с `min_core` rc.2 и новый атрибут `max_core` (у `lx.mtu_align` — rc.2).
+Сведено:
+- порт на позиции ≥ 1 — ошибка, а не снятие (см. «Порты»);
+- редактор называет обе цепочки по тегу, как плашка: у `chainOnePathMessage`
+  один текст, параметра `inEditor` нет, строки «here ("…")» / «this chain
+  ("…")» из `ui.json` ru/zh убраны (лаунчер 090b6ab3 тоже убрал «here»);
+- `dns` при подсчёте мест считается — как ядро (`rewrite.go`: пропуск только
+  `direct` и `block`) и лаунчер (`counted`);
+- ключи цепочки не хранятся (см. «Ключи цепочки»).
+- `max_core`: гарда по `core_config.json` в LxBox нет и не нужно — нота
+  реестра: сторона, у которой ядро всегда своё и равно пину (LxBox), таблицу не
+  исполняет (grep: файл в `lib/` не читается). Шаблон пишет только
+  `lx.detour.mtu_align` (`wizard_template.json`, `config.lx`), обе формы —
+  только лаунчеру (его конфиг может исполнить чужое ядро).
+- Коды реестра (`chain_hop_local_port` и др.) LxBox не выдаёт — его строки
+  цепочек, как и прежде, без кода; карточка предупреждения по коду — не в этой
+  задаче.
 
-- Корпус: `chain_cycle_excluded_from_direction` (`[proxy-out, NL]` при
-  proxy-out со всеми узлами — кольцо) и `chain_interrupt_connections`
-  (`[F, A]` и `[A, F]` — конфликт) — по новым правилам цепочка выпадает;
-  обновить ожидания (тот же алгоритм в лаунчере).
-- Корпус `corpus/direction/chain_strip_and_timeout.expected.json` ждёт
-  `idle_timeout` / `strip_evasion` / `strip` в выпущенной цепочке — обновить
-  ожидание; до этого кейс пропущен в `test/contract/direction_corpus_test.dart`
-  (`_skipChainRc2`).
+**Корпус Направлений.** `chain_strip_and_timeout` проходит без пропуска.
+`chain_cycle_excluded_from_direction` (`[proxy-out{DE, NL}, NL]`) и
+`chain_interrupt_connections` (`[F, A]` и `[A, F]`) лаунчер не менял — и прав
+LxBox: по SPEC 165 ALGORITHM К1 первое — кольцо (NL достижим на позиции 0 и 1
+одной цепочки, апстримное `circular outbound dependency`), второе — конфликт
+(F на входе одной цепочки и на позиции 2 другой — Т11; `placesConflict` в
+`rewrite.go`); ядро такой конфиг не грузит. Расхождение — в слое: раннер
+лаунчера (`core/config/contract_direction_test.go`) проверяет генерацию
+(`GenerateOutboundsFromParserConfig`) до проверки цепочек, а сборка лаунчера
+(`applyChainDetourRules`) снимает те же цепочки кодами `chain_detour_ring` /
+`chain_detour_conflict`. Раннер LxBox гоняет всю сборку. Оба кейса пропущены
+с этой причиной (`_skipChainRc2`); лаунчеру — либо вынести кейсы из корпуса
+генерации, либо перевести на пары без пересечений, если флаг/подвычитание
+должны проверяться и дальше.
 
 ## Risks and edge cases
 
@@ -267,6 +295,8 @@ core: …», свой конфиг не подставляется. Кнопки
   должен сделать копию Направления сам (подсказка это называет).
 - Цепочка, ставшая кольцом после обновления подписки (узел добавился в
   Направление), выпадает; об этом говорит плашка на главном (см. Solution).
+- Конфиг, собранный до этой правки, уже без порта (его снимала сборка):
+  редактор и плашка увидят порт только после следующей сборки.
 - Плашка судит по последнему собранному конфигу; пул ссылок позиций строится
   из источников: пока они не загружены, позиция-ссылка на узел папки или
   подписки не разрешается и цепочка не судится (плашка молчит, а не врёт).
@@ -298,8 +328,6 @@ core: …», свой конфиг не подставляется. Кнопки
   пути нет.
 - `test/services/mixins/mixin_legacy_lx_detour_test.dart` — перенос путей,
   объекты, идемпотентность, `Mixin.fromJson`.
-- `test/builder/chain_position_yields_test.dart` — порты сняты у листьев
-  позиций ≥ 1 через группы, поля сокета остались, позиция 0 не трогается.
 - `test/services/chains/chain_takeover_test.dart` — `[A, Направление{A, X}]` и
   `[Dir{A, B}, A]` → выпала с подсказкой, копий нет; общий вход двух цепочек
   (WireGuard) — не конфликт; группа на позиции ≥ 1 в двух цепочках, узел на
@@ -311,10 +339,7 @@ core: …», свой конфиг не подставляется. Кнопки
 - `test/builder/chain_emit_test.dart` — T9 при фильтре, не берущем выход;
   `[proxy-out, NL]` при фильтре «всё» — цепочка выпала с подсказкой.
 - `test/models/source_chain_test.dart` — `rewrite` с `detour` и не-объект.
-- Корпус Направлений: кроме `chain_strip_and_timeout` пропущены
-  `chain_cycle_excluded_from_direction` и `chain_interrupt_connections` —
-  без пропуска падают (проверено): по новым правилам цепочка выпадает, а
-  ожидание держит её (запрос лаунчеру).
+- Корпус Направлений: см. «Сверка с лаунчером» ниже.
 - `test/vpn/cc_outbound_config_test.dart` — разбор ответа `GetOutboundConfig`
   (узел, хоп, мусор).
 - `test/vpn/chain_hop_filter_test.dart` — скрытие `chain-hop`.
@@ -371,6 +396,31 @@ core: …», свой конфиг не подставляется. Кнопки
   сотовая под трафиком; телефон. Кольцо `[A, Направление{A}]` в UI не собрать —
   выбор позиции на стенде предлагает только Servers.
 
+Сверка с лаунчером (ветка `claude/761-launcher-parity`, 26.11), по одному
+файлу, зелёные:
+- `test/services/chains/chain_takeover_test.dart` — WireGuard с `listen_port` на
+  позиции 2 → выпала, порт на месте; Tailscale `relay_server_port` у члена
+  группы позиции 2 → `localPort`, подсказка с группой; порт на входе, нулевой
+  порт и `bind_interface` — не ошибка; выпавшая по порту цепочка мест не
+  занимает; узел типа `dns` в двух цепочках на позиции ≥ 1 — конфликт.
+- `test/screens/chain_edit/chain_form_validation_test.dart` — порт: точный
+  текст, сохранение заперто; конфликт: обе цепочки по тегу, без «here».
+- `test/services/chains/chain_trouble_state_test.dart` — плашка называет
+  цепочку с портом.
+- После синка 1.1.184: `direction_corpus_test` (28, 2 пропуска с причиной),
+  `backup_corpus_test` (без пропусков; до правки ключей цепочки падали 7
+  кейсов), `registry_sync_test`, `registry_load_test`,
+  `registry_invariant_test`, `registry_dart_refs_test`, `docs_mirror_test`,
+  `template_contract_test`, `warning_text_render_test`, `contract_test`,
+  `lx_backup_*` (test, roundtrip, v10, sections, group_links),
+  `backup_service_test`, `backup_service_legacy_test`, `migrate_storage_test`,
+  `migrate_node_links_test`, `golden_config_test`, `chain_emit_test`,
+  `source_chain_test`, `record_codec_sources_test`, `chains_storage_test`,
+  `chains_handler_test`, `chains_probe_handler_test`, `lx_backup_slice_test`,
+  `chain_edit_screen_smoke_test`, `chain_trouble_banner_test`;
+  `check_contract_lock.dart` — совпадает; `ui_check --strict` — 0;
+  `flutter analyze` по затронутым — чисто. Полный прогон, CI и эмулятор — нет.
+
 ## Unresolved / follow-up
 
 - Предупреждение задачи 760 о туннеле на позиции ≥ 1 снято целиком 26.11
@@ -390,4 +440,3 @@ core: …», свой конфиг не подставляется. Кнопки
 - `GetChainStatus` и переключатель позиций в UI — не используются.
 - Probe-конфиги (`probe_config.dart`, послойная проба цепочки) шаг К5 не
   проходят — проверить на стенде после rc2.
-- Запросы лаунчеру из Solution — после выхода rc2.

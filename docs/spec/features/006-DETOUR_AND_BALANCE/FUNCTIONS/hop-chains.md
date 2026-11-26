@@ -28,7 +28,7 @@ filters select it, it can be chosen on the main screen.
 | Tag | `chain-N` (first free) or custom; editable — references to the old tag are rewritten | `chain-N` | `tag` |
 | Enabled | on/off | on | a disabled one is not emitted |
 | Positions | ≥2, in packet order; a position is a node, a subscription group, a Direction, `direct-out`, a chain higher in the list (first position only) | — | `outbounds` |
-| Idle timeout, Strip evasion, Per-key overrides | kept in storage and backup | — | not written (task 761: core `v1.14.4-lx.37-rc.2` rejects `idle_timeout`, `strip_evasion`, `strip`) |
+| Idle timeout, Strip evasion, Per-key overrides | dropped on read, not stored | — | not written (task 761: core `v1.14.4-lx.37-rc.2` rejects `idle_timeout`, `strip_evasion`, `strip`; contract 1.1.184) |
 | rewrite | merge-patch by node type | `{}` | `rewrite` |
 
 ## Inputs / Outputs
@@ -60,9 +60,11 @@ Direction groups; the chain tag in Direction pools; warnings with codes
   ≥ 1 or in another chain; a shared entry is fine), a taken hop tag
   `<chain>#<i>` — the chain is dropped with a warning that says which copy to
   make. Of two conflicting chains the lower one in the list drops.
-- Nodes past the first position lose WireGuard `listen_port`, Tailscale
-  `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` with a build
-  warning; socket options stay (the core accepts them under `detour`).
+- A node past the first position (or a group member there) with WireGuard/AWG
+  `listen_port`, Tailscale `listen_port`/`relay_server_port`, OpenConnect
+  `dtls_local_port` (non-zero) drops the chain with a build warning; the port
+  is not removed, as in the launcher (`chain_hop_local_port`). Socket options
+  stay (the core accepts them under `detour`).
 - A Direction does not take a chain going through it, including transitively
   (P9): "Hop chain "…" runs through direction "…" and was left out of
   it…". The subtraction is not counted as a fault of the Direction's filter.
@@ -103,4 +105,4 @@ Direction groups; the chain tag in Direction pools; warnings with codes
 | 7 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | A chain is a row of the shared source list |
 | 8 | [594](../../../tasks/594-chain-label-removed-tag-only.md) | Done | The chain name (label) removed again: the tag is the one name |
 | 9 | [609](../../../tasks/609-chain-tag-editable.md) | Done | The tag is editable, like a node's: the place in the list stays, references follow the new tag |
-| 10 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | No `idle_timeout`/`strip_evasion`/`strip` in the config; ports and socket options removed past the first position |
+| 10 | [761](../../../tasks/761-core-rc2-chain-detour.md) | Done (develop, core rc2) | No `idle_timeout`/`strip_evasion`/`strip`; one path per node; a fixed local port past the first position drops the chain |

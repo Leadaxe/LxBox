@@ -13,8 +13,9 @@
 - **Hop chains for core `v1.14.4-lx.37-rc.2` ([task 761](docs/spec/tasks/761-core-rc2-chain-detour.md)).**
   The core will route every node past the first chain position through the
   chain itself, with no link copies. The config no longer carries the chain
-  keys `idle_timeout`, `strip_evasion` and `strip` (saved values stay in the
-  chain and the backup); the chain editor loses its Advanced block. The
+  keys `idle_timeout`, `strip_evasion` and `strip`, and they are no longer
+  kept: a saved chain or a backup is read with them dropped, as in the
+  launcher (contract 1.1.184); the chain editor loses its Advanced block. The
   `mtu_align` setting is written to `lx.detour.mtu_align`, old mixins are
   rewritten. One node or group has one path: a ring (a node at the entry and
   also inside a Direction higher in the chain, or a detour back into the
@@ -22,10 +23,14 @@
   chain or in another chain) is an error. The editor does not save such a
   chain and says which copy to make; the build drops it with the same hint,
   and the home screen shows a banner for such a saved chain with a button
-  that opens it (dismissed until the config changes). Nodes
-  past the first position lose fixed local ports. Internal `chain-hop`
+  that opens it (dismissed until the config changes). A node past the first
+  position with a fixed local port (WireGuard/AWG `listen_port`, Tailscale
+  `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port`) is an
+  error of the same kind, as in the launcher: the port is not removed, the
+  chain drops. Both chains of a conflict are named by tag in the editor too.
+  Internal `chain-hop`
   outbounds are hidden. The JSON tab of the node screen shows the node as the
-  core runs it, with the core's changes. Needs the rc2 core, not pinned yet.
+  core runs it, with the core's changes. Contract 1.1.184.
 
 - **Core `v1.14.4-lx.37-rc.1`.** `round_robin` repairs itself on a failed
   connection instead of waiting for the next check: a retry through another
