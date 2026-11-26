@@ -16,6 +16,7 @@ import '../services/contract/registry_form.dart' hide FormState;
 import '../services/contract/registry_form.dart' as rf show FormState;
 import '../services/contract/registry_warning.dart';
 import '../services/l10n/locale_controller.dart';
+import '../services/tls/cert_pin_fetcher.dart';
 import 'banner_palette.dart' show warningSeverityStyle;
 import 'dpad_radio_group.dart';
 
@@ -74,6 +75,7 @@ class OpenConnectForm extends StatefulWidget {
     required this.onChanged,
     this.showErrors = false,
     this.enabled = true,
+    this.certPinFetcher = const IoCertPinFetcher(),
   });
 
   /// Тело узла (без правок формой — как есть, с `type`/`tag`, если есть).
@@ -87,6 +89,9 @@ class OpenConnectForm extends StatefulWidget {
 
   /// `false` — форма видна, но не правится.
   final bool enabled;
+
+  /// Снятие отпечатка сертификата для варианта «Pinned fingerprint».
+  final CertPinFetcher certPinFetcher;
 
   @override
   State<OpenConnectForm> createState() => _OpenConnectFormState();
@@ -106,6 +111,9 @@ class _OpenConnectFormState extends State<OpenConnectForm> {
   final Map<String, String> _picked = {};
   // Последнее тело, отданное формой: его эхо — не правка извне.
   Map<String, dynamic>? _emitted;
+  // Снятие отпечатка с сервера: идёт запрос / текст последней ошибки.
+  bool _pinBusy = false;
+  String? _pinError;
 
   Map<String, dynamic> get _body => widget.body;
 
@@ -437,6 +445,124 @@ class _OpenConnectFormState extends State<OpenConnectForm> {
     ];
   }
 
+  static const _pinPath = 'tls.peer_fingerprint';
+  static const _pinChoice = 'server_cert_check';
+
+  String _pinErrorText(CertPinError kind) => switch (kind) {
+    CertPinError.noAddress => getLocalText.s("Enter the server address first"),
+    CertPinError.resolve => getLocalText.s("Server not found"),
+    CertPinError.timeout => getLocalText.s("No response from the server"),
+    CertPinError.notTls => getLocalText.s("No TLS on this address"),
+    CertPinError.other => getLocalText.s("Could not get the certificate"),
+  };
+
+  /// Снять отпечаток с сервера из поля `server`, показать сертификат и по
+  /// «Use» записать отпечаток в [_pinPath] (одним значением).
+  Future<void> _fetchPin() async {
+    if (_pinBusy) return;
+    setState(() {
+      _pinBusy = true;
+      _pinError = null;
+    });
+    final server = _textOf(formValueAt(_body, 'server'));
+    final sni = _textOf(formValueAt(_body, 'tls.server_name'));
+    CertPinInfo? info;
+    String? error;
+    try {
+      info = await widget.certPinFetcher.fetch(server, serverName: sni);
+    } on CertPinException catch (e) {
+      error = _pinErrorText(e.kind);
+    } catch (_) {
+      error = _pinErrorText(CertPinError.other);
+    }
+    if (!mounted) return;
+    setState(() {
+      _pinBusy = false;
+      _pinError = error;
+    });
+    if (info == null) return;
+    final ok = await _confirmPin(info);
+    if (!mounted || ok != true) return;
+    _text[_pinPath]?.text = info.pin;
+    setState(() => _picked[_pinChoice] = 'pinned');
+    _emit(withFormValue(_body, _pinPath, [info.pin]));
+  }
+
+  Future<bool?> _confirmPin(CertPinInfo info) {
+    final until = info.notAfter;
+    final rows = <(String, String)>[
+      (getLocalText.s("Issued to"), info.subject),
+      (getLocalText.s("Issued by"), info.issuer),
+      if (until != null)
+        (
+          getLocalText.s("Valid until"),
+          until.toIso8601String().substring(0, 10),
+        ),
+      (getLocalText.s("Fingerprint"), info.pin),
+    ];
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(getLocalText.s("Pin this certificate?")),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (k, v) in rows) ...[
+                Text(k, style: Theme.of(ctx).textTheme.labelMedium),
+                SelectableText(v),
+                const SizedBox(height: 8),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(getLocalText.s("Cancel")),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(getLocalText.s("Use")),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Кнопка «Fetch from server» под полем отпечатка и строка ошибки.
+  List<Widget> _pinFetchWidgets() {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return [
+      Padding(
+        padding: const EdgeInsets.only(left: 16, bottom: 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _pinBusy ? null : _fetchPin,
+            icon: _pinBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download, size: 18),
+            label: Text(getLocalText.s("Fetch from server")),
+          ),
+        ),
+      ),
+      if (_pinError case final e?)
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 8),
+          child: Text(
+            e,
+            style: small?.copyWith(color: Theme.of(context).colorScheme.error),
+          ),
+        ),
+    ];
+  }
+
   /// Группа выбора (`form.choices`): радио по вариантам, ввод для путей
   /// выбранного варианта, которые он не ставит сам (`set`), и
   /// предупреждения `advisory` полей варианта.
@@ -486,6 +612,7 @@ class _OpenConnectFormState extends State<OpenConnectForm> {
           ),
         );
       }
+      if (p == _pinPath) inputs.addAll(_pinFetchWidgets());
     }
     return [
       const SizedBox(height: 4),

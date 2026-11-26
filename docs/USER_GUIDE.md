@@ -328,7 +328,10 @@ The tabs of a server screen are **Node** (tag, detour, TLS and the other
 settings), a tab named after the protocol (**VLESS**, **WireGuard**,
 **OpenConnect**…) with the server's source, **JSON** and **Diagnostics**.
 On OpenConnect the protocol tab holds the connection form (server
-certificate and the rest) above the source text.
+certificate and the rest) above the source text. Under **Pinned
+fingerprint**, **Fetch from server** connects to the server address, shows
+who the certificate is issued to, who issued it, the expiry date and the
+fingerprint; **Use** puts that fingerprint into the field.
 
 The protocol tab of your own server and of a folder's server shows the
 text it came from: a link, a `.conf` or JSON. Comments in JSON — `//`,

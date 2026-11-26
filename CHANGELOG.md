@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- **OpenConnect: the certificate fingerprint is taken from the server ([details](docs/spec/tasks/763-openconnect-fetch-cert-pin.md)).**
+  Under Pinned fingerprint, Fetch from server connects to the server, shows
+  the certificate (issued to, issued by, valid until, fingerprint) and on Use
+  writes the `pin-sha256:` fingerprint of its public key into the node.
+
 ## [2.26.0] — 2026-11-26
 
 Stable release. Includes everything since 2.25.22, together with the

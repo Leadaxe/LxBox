@@ -1455,6 +1455,39 @@
   "Pinned fingerprint": {
     "value": "Закреплённый отпечаток"
   },
+  "Fetch from server": {
+    "value": "Получить с сервера"
+  },
+  "Pin this certificate?": {
+    "value": "Закрепить этот сертификат?"
+  },
+  "Issued to": {
+    "value": "Кому выдан"
+  },
+  "Issued by": {
+    "value": "Кем выдан"
+  },
+  "Valid until": {
+    "value": "Действует до"
+  },
+  "Fingerprint": {
+    "value": "Отпечаток"
+  },
+  "Use": {
+    "value": "Использовать"
+  },
+  "Enter the server address first": {
+    "value": "Сначала укажите адрес сервера"
+  },
+  "No response from the server": {
+    "value": "Сервер не отвечает"
+  },
+  "No TLS on this address": {
+    "value": "По этому адресу нет TLS"
+  },
+  "Could not get the certificate": {
+    "value": "Не удалось получить сертификат"
+  },
   "Reconnect timeout": {
     "value": "Время переподключения"
   },

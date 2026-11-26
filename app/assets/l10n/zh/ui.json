@@ -1263,6 +1263,39 @@
   "Pinned fingerprint": {
     "value": "固定指纹"
   },
+  "Fetch from server": {
+    "value": "从服务器获取"
+  },
+  "Pin this certificate?": {
+    "value": "固定此证书？"
+  },
+  "Issued to": {
+    "value": "颁发给"
+  },
+  "Issued by": {
+    "value": "颁发者"
+  },
+  "Valid until": {
+    "value": "有效期至"
+  },
+  "Fingerprint": {
+    "value": "指纹"
+  },
+  "Use": {
+    "value": "使用"
+  },
+  "Enter the server address first": {
+    "value": "请先填写服务器地址"
+  },
+  "No response from the server": {
+    "value": "服务器无响应"
+  },
+  "No TLS on this address": {
+    "value": "此地址没有 TLS"
+  },
+  "Could not get the certificate": {
+    "value": "无法获取证书"
+  },
   "Reconnect timeout": {
     "value": "重连超时"
   },
