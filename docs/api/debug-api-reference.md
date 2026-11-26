@@ -445,7 +445,7 @@ curl -s -X PATCH -H "$HDR" "$BASE/folders/$FID/members/0?rebuild=true" \
 | Endpoint | Метод | Body |
 |---|---|---|
 | `/subs` | GET | `?reveal=true` — clear URLs |
-| `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` → 201 `{id, kind, tags}` (одна запись) или `{ids, count, tags}`; **§762** `tags` — итоговые теги узлов в конфиге (с эмодзи и префиксом); `impair` сохраняет тег как передан |
+| `/subs` | POST | `{"input":"<url\|URI\|WG-ini\|JSON-outbound>"}` → 201 `{id, kind, tags}` (одна запись) или `{ids, count, tags}`; `tags` — итоговые теги узлов в конфиге (с эмодзи и префиксом); `impair` сохраняет тег как передан |
 | `/subs/{id}` | GET | `?reveal=true`, `?warnings=true` — см. ниже |
 | `/subs/{id}` | PATCH | subset: name/enabled/tag_prefix/update_interval_hours/override_detour/register_detour_{servers,in_auto}/use_detour_servers/replace_detour_chain/url + **§346**: on_update_action/import_rules_enabled/identity + **§636**: `tls` (частичная правка, `null` — наследовать). **§439:** `override_detour` — ссылка на узел `{folder_id?, tag}`, `null` снимает |
 | `/subs/{id}` | DELETE | — |
@@ -738,7 +738,7 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 | Endpoint | Метод | Что делает |
 |---|---|---|
 | `/nodes/link?tag=<tag>` | GET | экспорт узла ссылкой — ровно то, что кладёт в буфер `Copy link` (`NodeSpec.toUri()`) |
-| `/nodes/{tag}` | PATCH | §762 — `{"detour": "<tag>" \| {folder_id?, tag} \| null}`: detour узла по тегу. Одиночный сервер — его `override_detour`, член папки — `detour` члена (self / цикл → 400); узел подписки → 409 (detour общий у подписки: `PATCH /subs/{id}`); узла нет → 404. Ответ `{ok, tag, entry_id, kind, detour}`, `?rebuild=true` |
+| `/nodes/{tag}` | PATCH | `{"detour": "<tag>" \| {folder_id?, tag} \| null}`: detour узла по тегу. Одиночный сервер — его `override_detour`, член папки — `detour` члена (self / цикл → 400); узел подписки → 409 (detour общий у подписки: `PATCH /subs/{id}`); узла нет → 404. Ответ `{ok, tag, entry_id, kind, detour}`, `?rebuild=true` |
 
 ```bash
 curl -s -H "$HDR" "$BASE/nodes/link?tag=vpn-1-node-7&reveal=true" | jq
@@ -1338,8 +1338,7 @@ curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
 
 ## Impair — `/impair/*`
 
-[Задача 762](../spec/tasks/762-debug-api-impair.md): управление тестовым outbound ядра `impair`
-([SPEC 164 ядра](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/164-IMPAIR_OUTBOUND/SPEC.md)) на лету (ядро с `v1.14.4-lx.37-rc3`). Что это и какие у него ключи —
+Управление тестовым outbound ядра `impair` на лету (ядро с `v1.14.4-lx.37-rc3`). Что это и какие у него ключи —
 [документация ядра `lx-impair`](https://github.com/Leadaxe/sing-box-lx/blob/lx/docs-lx/lx-impair.md)
 (Keys, Sublinks, Schedule, рецепты). В интерфейсе LxBox его нет; узел
 `impair` добавляется как любой сервер — `POST /subs` с JSON outbound.
@@ -1354,7 +1353,7 @@ curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
 поднят → 409; тега нет → 404; не `impair` → 400; ядро без ручки → 501.
 Пути, тела и коды — как у Debug API лаунчера.
 
-### Сценарий теста целиком (§762)
+### Сценарий теста целиком
 
 Узел `impair` создаётся, ставится в путь трафика, меняется на ходу и
 удаляется только через Debug API. Нужно ядро rc3 (для `/impair/*`).
@@ -2055,7 +2054,7 @@ curl -s -X POST -H "$HDR" -H "Content-Type: application/json" \
 | 404 | `not_found` | unknown endpoint, id не существует |
 | 409 | `conflict` | pre-condition (tunnel down, controller not ready, blocked var) |
 | 413 | `payload_too_large` | body > 1 MiB |
-| 501 | `not_implemented` | у ядра нет ручки (gRPC Unimplemented; §762 `/impair/*`) |
+| 501 | `not_implemented` | у ядра нет ручки (gRPC Unimplemented; `/impair/*`) |
 | 502 | `upstream_error` | native plugin / CommandClient / saveConfig failed |
 | 504 | `timeout` | handler не уложился в 30s |
 | 500 | `internal` | unhandled — детали в AppLog, не в response |
