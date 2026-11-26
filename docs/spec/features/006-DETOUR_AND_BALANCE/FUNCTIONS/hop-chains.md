@@ -54,12 +54,14 @@ Direction groups; the chain tag in Direction pools; warnings with codes
      a chain lower in the list (cycles between chains are excluded by
      order);
   5. a nested chain not in the first position.
-- Nodes the chain reaches past the first position (the node itself or any
-  leaf of a group there): WireGuard `listen_port`, Tailscale
-  `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` and the
-  socket binding fields the core rejects under `detour` are removed, with a
-  build warning; a node reached by two chain positions gets a warning (the
-  core rejects that config). Task 761.
+- One path per node or group (task 761): a position's group is a copy without
+  the nodes standing as positions or lower; a node or group used by an earlier
+  chain is a copy under its own tag; a session node (WireGuard/AWG, Tailscale,
+  any endpoint) used twice, a ring through a node's `detour`, an emptied group,
+  a taken hop tag `<chain>#<i>` — the chain is dropped with a warning.
+- Nodes past the first position lose WireGuard `listen_port`, Tailscale
+  `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` with a build
+  warning; socket options stay (the core accepts them under `detour`).
 - A Direction does not take a chain going through it, including transitively
   (P9): "Hop chain "…" runs through direction "…" and was left out of
   it…". The subtraction is not counted as a fault of the Direction's filter.

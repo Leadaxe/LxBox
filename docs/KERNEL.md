@@ -1357,10 +1357,14 @@ Core SPEC 165. LxBox is ready in the branch of
 - **Load errors.** In the `chain` body: `idle_timeout`, `strip_evasion`, `strip`. The
   root `lx.mtu_align` moved to `lx.detour.mtu_align`, `lx.mtu_align.except` to
   `lx.detour.except_outbounds`. A node on position ≥ 1 with WireGuard `listen_port`,
-  Tailscale `listen_port`/`relay_server_port`, OpenConnect `dtls_local_port` or a
-  socket binding field (`bind_interface`, `routing_mark`, `tcp_fast_open` and the
-  rest of ALGORITHM K5). A node taken over by two chain positions, or on ≥ 1 in one
-  chain and on 0 in another.
+  Tailscale `listen_port`/`relay_server_port` or OpenConnect `dtls_local_port`
+  (socket binding fields are accepted and shown as inactive). One path per node or
+  group: a ring (reached at position 0 and higher in the same chain, or a position-0
+  node's own `detour` into a higher position) is upstream's `circular outbound
+  dependency` with hop tags; a node or group in two chains (any positions) or on two
+  positions ≥ 1 is "`<tag>` is needed on chain X position i and on chain Y position
+  j: one node or group has one path"; a repeated tag is "duplicate outbound …". LxBox
+  resolves these with copies or drops the chain before the core sees them.
 - **Default.** Without `lx.detour` the core filters `tls.fragment`, `tls.spoof`, kTLS
   and the `apple` engine off any node whose connection has no kernel socket under
   it, not only off chain links. `"detour": false` gives the upstream behaviour.

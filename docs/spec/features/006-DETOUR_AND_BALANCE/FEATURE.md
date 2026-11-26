@@ -78,7 +78,7 @@ are hidden from node selection.
   verbatim in the `outbounds` key; `rewrite` is written only when set;
   `idle_timeout`, `strip_evasion`, `strip` stay in storage but are not written
   (core `v1.14.4-lx.37-rc.2` rejects them, task 761); nodes past the first
-  position lose the local ports and socket options the core rejects there;
+  position lose fixed local ports, socket options stay;
   the chain gets into the Direction
   pool on a par with servers. **Witness:** units "hop order = PACKET order",
   "defaults are not written into the config", "a chain is a node: the
@@ -161,10 +161,25 @@ are hidden from node selection.
 | Chain | rewrite | JSON merge-patch by node type, not editable in the form | `{}` | `rewrite` |
 
 The minimum core version for chains is `1.14.0-lx.27-rc.5`. From
-`v1.14.4-lx.37-rc.2` the core rewrites the `detour` of the nodes on positions
-≥ 1 itself and adds internal `chain-hop` outbounds; the app hides them, and
-the node screen shows the node's JSON as the core runs it
-(task 761).
+`v1.14.4-lx.37-rc.2` (task 761) the core rewrites the `detour` of the nodes on
+positions ≥ 1 itself and adds internal `chain-hop` outbounds; the app hides
+them, and the node screen shows the node's JSON as the core runs it. What it
+means for the user:
+
+- a node on position ≥ 1 goes the chain's path everywhere, including a direct
+  route to it and a manual check;
+- a group on position ≥ 1 is in the chain as a whole: every member, picked or
+  not, goes through the position below;
+- `direct` picked by a group on position ≥ 1 goes through the position below,
+  not around the chain;
+- one node or group has one path. A group on a position is built from a copy
+  without the nodes that stand as positions themselves or lower in the chain
+  (`[A, Direction{A, X}]` uses a copy of the Direction without A); a node or
+  group used by an earlier chain is taken as a copy under its own tag. A node
+  with its own session (WireGuard/AWG, Tailscale and other endpoints) cannot
+  be copied: the editor blocks such a chain and the build drops it with a
+  warning. A ring through a node's own `detour`, a nested chain past the
+  first position, a group left empty — the same.
 
 ## Inputs / Outputs
 
