@@ -87,6 +87,7 @@ auth), а не факт, что за границей всё открыто.
 - [Core-rejected nodes — `/core_reject/*`](#core-rejected-nodes--core_reject)
 - [WARP — `/warp`](#warp--warp)
 - [Pool — `/pool`](#pool--pool)
+- [Impair — `/impair/*`](#impair--impair)
 - [Settings writes — `/settings/*`](#settings-writes--settings)
 - [Wi-Fi history — `/wifi_history`](#wi-fi-history--wifi_history)
 - [Files](#files)
@@ -1330,6 +1331,61 @@ curl -X POST -H "$HDR" -H "Content-Type: application/json" \
 
 ```bash
 curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
+```
+
+---
+
+## Impair — `/impair/*`
+
+§762 (ядро SPEC 164, libbox с `v1.14.4-lx.37-rc3`) — управление тестовым
+outbound `impair` работающего ядра без перезапуска: задержки, потери, обрывы,
+под-линии по сайту, расписание. В интерфейсе приложения `impair` нет; outbound
+попадает в конфиг как любой узел (`POST /subs` с JSON outbound, `PUT /config`,
+миксин). Смысл ключей — `docs-lx/lx-impair.md` ядра (Keys, Sublinks, Schedule,
+Runtime control); приложение их не проверяет.
+
+| Endpoint | Метод | Тело → ответ |
+|---|---|---|
+| `/impair/{tag}` | GET | — → статус ядра как есть: `{tag, link_params, counters, sublinks, schedule}` |
+| `/impair/{tag}/set` | POST | запись расписания без `at` (объект: `link_params`, `sublinks` или оба) → статус |
+| `/impair/{tag}/schedule` | POST | `{"entries": [...], "start": ""\|"now"\|"first_use", "repeat": ""\|"60s"}` → статус |
+
+- Тег — фактический тег в конфиге, URL-encoded (эмодзи, пробелы, `/`).
+- `set` применяется сейчас, поверх идущего расписания; тело уходит в ядро
+  исходным текстом. Пустое тело или `{}` → 400. Под-линии снимаются
+  `{"sublinks": false}` (не `[]`).
+- `schedule` заменяет расписание: линия и под-линии возвращаются к конфигу,
+  записи идут от вызова (`now`) или от первого трафика (`first_use`), один раз
+  или каждые `repeat`. `entries: []` — стоп и линия по конфигу. `entries` не
+  список, `start` / `repeat` не строка → 400.
+- Ошибки: туннель не поднят / клиент недоступен → **409**; тега нет → **404**;
+  не impair или ядро отвергло JSON → **400**; сервис не запущен, ядро без
+  команд → **409**; прочее → **502**. Текст ядра — в `error.message`.
+- Ассистенту (§750) маршрут закрыт.
+
+```bash
+T=$(jq -rn --arg t "⚡ imp-test" '$t|@uri')
+
+# Сайт закрыт на одном узле (домен виден, только когда impair стоит над узлом:
+# impair с detour на узел; под узлом impair видит лишь адрес сервера)
+curl -s -X POST -H "$HDR" "$BASE/impair/$T/set" -d '{"sublinks": [
+  {"match": {"domain_suffix": "example.org"}, "link_params": {"outage": true, "reset": true}}]}'
+
+# Обрыв с reset на 10 с (соединения рвутся, новые 10 с отвергаются)
+curl -s -X POST -H "$HDR" "$BASE/impair/$T/schedule" -d '{"start": "now", "entries": [
+  {"at": "0s",  "link_params": {"outage": true, "reset": true}},
+  {"at": "10s", "link_params": {"outage": false}}]}'
+
+# Мигание по кругу 2 мин: 80 с работает, 40 с молча пропадает
+curl -s -X POST -H "$HDR" "$BASE/impair/$T/schedule" -d '{"start": "now", "repeat": "2m", "entries": [
+  {"at": "0s",  "link_params": {"outage": false}},
+  {"at": "80s", "link_params": {"outage": true}}]}'
+
+# Сброс: стоп расписания, линия по конфигу
+curl -s -X POST -H "$HDR" "$BASE/impair/$T/schedule" -d '{"entries": []}'
+
+# Статус: текущая линия, счётчики, где расписание
+curl -s -H "$HDR" "$BASE/impair/$T" | jq '{link_params, counters, schedule}'
 ```
 
 ---

@@ -91,10 +91,23 @@ GET /config/running                 Running kernel snapshot (409 if none)
 === Pool (round_robin balancer) ===
 
 GET /pool?tag=<autoTag>             Snapshot of a round_robin urltest pool (e.g. tag=vpn-1-auto).
-                                      → {"tag","count","slots":[{slot,tag,delay,alive}]}. delay=0 → dead/untested.
+                                      → {"tag","count","shiftedKeys","markedKeys","frozen","frozenSeconds",
+                                         "slots":[{slot,tag,delay,alive,quarantined,connections,confirmedFailures}]}.
+                                      delay=0 → dead/untested; quarantined → out of rotation (delay stays non-zero).
                                       non-round_robin group → 200 slots:[] (pool is empty, not an error).
                                       tunnel down / command client unavailable → 409 Conflict (NOT empty 200).
                                       Works while the app is backgrounded (tunnel must be up).
+
+=== Impair (test outbound, runtime control) ===
+
+GET  /impair/{tag}                  Status of an impair outbound of the running core, as the core returns it:
+                                      {tag,link_params,counters,sublinks,schedule}. Tag URL-encoded.
+POST /impair/{tag}/set              Body: a schedule entry without "at" (JSON object: link_params, sublinks or both),
+                                      applied now on top of the schedule → status. {"sublinks": false} drops sublinks.
+POST /impair/{tag}/schedule         Body: {"entries":[...], "start":""|"now"|"first_use", "repeat":""|"60s"}.
+                                      Replaces the schedule; entries:[] stops it and restores the config line → status.
+                                      Keys are checked by the core. Tunnel down → 409; core errors: unknown tag 404,
+                                      not impair / bad JSON 400, service not started 409.
 
 === Logs ===
 
@@ -775,7 +788,11 @@ const Map<String, dynamic> _capabilityJson = {
     {'method': 'GET', 'path': '/config/path', 'description': 'On-device file path'},
     {'method': 'GET', 'path': '/config/running', 'description': 'Config of the running kernel (SPEC 036); 409 when unavailable'},
     // Pool (§208)
-    {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,slots:[{slot,tag,delay,alive}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
+    {'method': 'GET', 'path': '/pool', 'params': {'tag': '<autoTag> (e.g. vpn-1-auto)'}, 'description': 'Snapshot of a round_robin urltest pool → {tag,count,shiftedKeys,markedKeys,frozen,frozenSeconds,slots:[{slot,tag,delay,alive,quarantined,connections,confirmedFailures}]}. Non-round_robin group → slots:[]; tunnel down → 409'},
+    // Impair (§762)
+    {'method': 'GET', 'path': '/impair/{tag}', 'description': 'Status of an impair outbound of the running core, as is → {tag,link_params,counters,sublinks,schedule}. Tunnel down → 409; unknown tag 404; not impair 400'},
+    {'method': 'POST', 'path': '/impair/{tag}/set', 'body': 'schedule entry without at: {link_params?, sublinks?}', 'description': 'Change the line or sublinks now, on top of the schedule → status. Keys checked by the core (400 on reject)'},
+    {'method': 'POST', 'path': '/impair/{tag}/schedule', 'body': '{entries:[...], start?: ""|now|first_use, repeat?: ""|60s}', 'description': 'Replace the schedule → status; entries:[] stops it and restores the config line'},
     // Logs
     {'method': 'GET', 'path': '/logs', 'params': {'limit': 'N (default 200)', 'source': 'app|core', 'q': 'substring search', 'level': 'comma-separated: error,warning,info,debug'}, 'description': 'AppLog entries'},
     {'method': 'GET', 'path': '/logs/app', 'description': 'Alias for /logs?source=app (same params)'},

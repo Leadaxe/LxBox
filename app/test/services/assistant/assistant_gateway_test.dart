@@ -68,6 +68,10 @@ void main() {
       ('GET', '/logs/app', deny),
       ('GET', '/nodes/link', deny),
       ('GET', '/mixins', deny),
+      // §762 — тестовый outbound impair ассистенту не виден.
+      ('GET', '/impair/node-a', deny),
+      ('POST', '/impair/node-a/set', deny),
+      ('POST', '/impair/node-a/schedule', deny),
       ('PUT', '/settings/vars/appfunctions_allow_changes', deny),
       ('PUT', '/settings/dns_options/servers', deny),
       ('PUT', '/settings/config_locked', deny),

@@ -22,6 +22,7 @@ import '../handlers/mixins.dart';
 import '../handlers/help.dart';
 import '../handlers/nodes.dart';
 import '../handlers/ping.dart';
+import '../handlers/impair.dart';
 import '../handlers/pool.dart';
 import '../handlers/profiler.dart';
 import '../handlers/support.dart';
@@ -223,6 +224,7 @@ Router buildDebugRouter() {
     ..mount('/device', deviceHandler)
     ..mount('/config', configHandler)
     ..mount('/pool', poolHandler) // §208 — снапшот пула round_robin
+    ..mount('/impair', impairHandler) // §762 — линия outbound impair
     ..mount('/logs', logsHandler)
     ..mount('/action', actionHandler)
     ..mount('/files', filesHandler)

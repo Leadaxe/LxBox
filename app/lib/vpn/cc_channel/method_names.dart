@@ -20,6 +20,7 @@ class _CcMethods {
   static const ccGetGroups = 'ccGetGroups';
   static const ccGetOpenConnectStatus = 'ccGetOpenConnectStatus';
   static const ccGetOutbounds = 'ccGetOutbounds';
+  static const ccGetImpairStatus = 'ccGetImpairStatus';
   static const ccGetPool = 'ccGetPool';
   static const ccGetRules = 'ccGetRules';
   static const ccGetRunningConfig = 'ccGetRunningConfig';
@@ -28,6 +29,8 @@ class _CcMethods {
   static const ccGetTailscaleStatus = 'ccGetTailscaleStatus';
   static const ccGetUrlViaOutbound = 'ccGetUrlViaOutbound';
   static const ccGetWireGuardStatus = 'ccGetWireGuardStatus';
+  static const ccScheduleImpair = 'ccScheduleImpair';
+  static const ccSetImpair = 'ccSetImpair';
   static const ccPauseClients = 'ccPauseClients';
   static const ccResumeClients = 'ccResumeClients';
   static const ccResyncForReopen = 'ccResyncForReopen';

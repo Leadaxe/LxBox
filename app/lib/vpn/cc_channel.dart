@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -960,6 +960,51 @@ class CcChannel {
     });
     if (r == null) return null; // клиент недоступен (§209)
     return CcPoolState.fromWire(r);
+  }
+
+  /// §762 (ядро SPEC 164) — статус тестового outbound `impair` [tag]: линия,
+  /// счётчики, под-линии, расписание. JSON ядра без своей модели полей —
+  /// Debug API отдаёт его как есть. `null` — клиент недоступен (туннель не
+  /// поднят); отказ ядра — [PlatformException] с кодом из [CcStatusError].
+  Future<Map<String, dynamic>?> getImpairStatus(String tag) => _impair(
+      _CcMethods.ccGetImpairStatus, {'tag': tag});
+
+  /// §762 — запись расписания без `at` ([entry] — JSON-объект строкой:
+  /// `link_params`, `sublinks` или оба) применяется сейчас, поверх
+  /// расписания. Ответ и ошибки — как у [getImpairStatus].
+  Future<Map<String, dynamic>?> setImpair(String tag, String entry) =>
+      _impair(_CcMethods.ccSetImpair, {'tag': tag, 'entry': entry});
+
+  /// §762 — новое расписание [entries] (пустой список — стоп и линия по
+  /// конфигу); [start] `""` / `now` / `first_use`, [repeat] `""` или
+  /// длительность круга. Значения проверяет ядро.
+  Future<Map<String, dynamic>?> scheduleImpair(
+    String tag,
+    List<Object?> entries, {
+    String start = '',
+    String repeat = '',
+  }) =>
+      _impair(_CcMethods.ccScheduleImpair, {
+        'tag': tag,
+        'entries': jsonEncode(entries),
+        'start': start,
+        'repeat': repeat,
+      });
+
+  Future<Map<String, dynamic>?> _impair(
+      String method, Map<String, Object?> args) async {
+    final String? content;
+    try {
+      content = await _methods.invokeMethod<String>(method, args);
+    } on MissingPluginException {
+      return null; // юнит-тест / native без метода
+    }
+    if (content == null) return null; // клиент недоступен
+    final decoded = jsonDecode(content);
+    if (decoded is! Map) {
+      throw const FormatException('impair status is not a JSON object');
+    }
+    return _asMap(decoded);
   }
 
   /// §312 — unary снапшот состояния DNS-групп (kernel SPEC 035
