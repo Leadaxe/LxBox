@@ -93,10 +93,10 @@ enum ChainIssueCode {
   /// Имя цепочки пустое.
   tagEmpty,
 
-  /// Одному узлу или группе нужен один путь, а сборка не может развести
-  /// цепочку копиями (кольцо, узел с собственной сессией в двух цепочках,
-  /// опустевшая группа, кольцо через detour, занятый тег хопа). Ядро такой
-  /// конфиг не грузит, сборка цепочку выбросит.
+  /// Одному узлу или группе нужен один путь: кольцо, конфликт с другой
+  /// позицией или цепочкой, кольцо через detour, занятый тег хопа. Ядро такой
+  /// конфиг не грузит, сборка цепочку выбросит; подсказка — какую копию
+  /// сделать.
   onePath,
 }
 
@@ -452,7 +452,8 @@ bool chainFormCanSave(List<ChainFormIssue> issues) =>
 String _list(List<String> tags) => tags.join(', ');
 
 /// §761 — проверка сборки по последнему собранному конфигу: правленая
-/// цепочка встаёт последней, прочие цепочки конфига держат свои узлы.
+/// цепочка встаёт последней, прочие цепочки конфига держат свои места.
+/// Кольцо или конфликт — ошибка с подсказкой, что сделать.
 ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
   if (ctx.bodies.isEmpty || state.hops.length < 2) return null;
   final tag = state.tag.trim().isEmpty ? ctx.originalTag : state.tag.trim();
@@ -468,34 +469,45 @@ ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
     for (final e in bodies.entries)
       if (e.value.body['type'] == 'chain' && e.key != tag) e.key,
   ];
-  final result = planChainTakeover(bodies, [...others, tag]);
-  final f = result.failures.where((f) => f.chain == tag).firstOrNull;
+  final f = checkChainTakeover(bodies, [...others, tag])
+      .where((f) => f.chain == tag)
+      .firstOrNull;
   if (f == null) return null;
-  final pos = f.position + 1;
+  final p = f.position + 1;
+  final op = f.otherPosition + 1;
+  final hint = f.copyHint;
   final message = switch (f.fault) {
-    ChainTakeoverFault.positionBelow => getLocalText.s(
-        "\"%s\" at position %d is already reached at a lower position: one node or group has one path.",
-        f.tag, pos),
-    ChainTakeoverFault.groupEmptied => getLocalText.s(
-        "Group \"%s\" at position %d has no nodes left after removing those that stand lower in the chain.",
-        f.tag, pos),
-    ChainTakeoverFault.sessionShared => getLocalText.s(
-        "Node \"%s\" at position %d is already used by chain \"%s\". It holds its own session and cannot serve two paths.",
-        f.tag, pos, f.other),
+    ChainTakeoverFault.ring when hint != null && hint.position == 0 =>
+      getLocalText.s(
+          "\"%s\" at position %d is also inside \"%s\" at the entry — make a copy of \"%s\" without \"%s\" for the entry.",
+          f.tag, p, hint.group, hint.group, f.tag),
+    ChainTakeoverFault.ring when hint != null => getLocalText.s(
+        "\"%s\" is the entry and also inside \"%s\" at position %d — make a copy of \"%s\" without \"%s\" for this position.",
+        f.tag, hint.group, hint.position + 1, hint.group, f.tag),
+    ChainTakeoverFault.twoPositions when hint != null => getLocalText.s(
+        "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.",
+        f.tag, op, p, hint.group, f.tag, hint.position + 1),
+    ChainTakeoverFault.otherChain => getLocalText.s(
+        "\"%s\" is used in chain \"%s\" (position %d) and here at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.",
+        f.tag, f.otherChain, op, p, f.tag),
     ChainTakeoverFault.detourRing => getLocalText.s(
-        "The detour of \"%s\" at position 1 leads to \"%s\", which this chain takes over higher up: that makes a ring.",
-        f.tag, f.other),
+        "The detour of \"%s\" at the entry leads to \"%s\", which this chain takes over higher up — remove that detour or take \"%s\" out of this chain.",
+        f.tag, f.via, f.via),
     ChainTakeoverFault.hopTagTaken => getLocalText.s(
-        "The tag \"%s\" is taken by a node or group; the chain needs it for its hop.",
+        "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.",
         f.tag),
-    // Повтор и вложенную цепочку форма называет своими находками выше.
-    ChainTakeoverFault.duplicate || ChainTakeoverFault.nestedChain => null,
+    // Повтор и вложенную цепочку форма называет своими находками выше;
+    // кольцо без группы (узел стоит позицией дважды) — тот же повтор.
+    _ => null,
   };
   if (message == null) return null;
   return ChainFormIssue(
     code: ChainIssueCode.onePath,
     level: ChainIssueLevel.blocking,
     message: message,
-    hops: [if (state.hops.contains(f.tag)) f.tag],
+    hops: [
+      for (final h in {f.via, f.otherVia, f.tag})
+        if (state.hops.contains(h)) h,
+    ],
   );
 }

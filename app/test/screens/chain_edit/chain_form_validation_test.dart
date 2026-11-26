@@ -197,7 +197,7 @@ void main() {
       }),
     };
 
-    test('WireGuard уже в другой цепочке — блокирует, называет обе', () {
+    test('WireGuard на позиции ≥ 1 другой цепочки — ошибка, называет обе', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'mine', hops: ['home', 'wg']),
         ChainFormContext(bodies: bodies),
@@ -206,29 +206,26 @@ void main() {
       expect(i.level, ChainIssueLevel.blocking);
       expect(i.message, contains('"wg"'));
       expect(i.message, contains('"other"'));
+      expect(i.message, contains('make a copy'));
+      expect(chainFormCanSave(issues), isFalse);
     });
 
-    test('[home, vpn-1{home, de}] — сборка разведёт копией, находки нет', () {
+    test('[home, vpn-1{home, de}] — ошибка с подсказкой про копию vpn-1', () {
       final issues = validateChainForm(
         const ChainFormState(tag: 'mine', hops: ['home', 'vpn-1']),
         ChainFormContext(bodies: bodies),
       );
-      expect(_codes(issues), isNot(contains(ChainIssueCode.onePath)));
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.message, contains('make a copy of "vpn-1" without "home"'));
+      expect(i.hops, containsAll(['home', 'vpn-1']));
     });
 
-    test('группа опустела: [home, vpn-2{home}] — блокирует', () {
+    test('общий вход с другой цепочкой — не ошибка', () {
       final issues = validateChainForm(
-        const ChainFormState(tag: 'mine', hops: ['home', 'vpn-2']),
-        ChainFormContext(bodies: {
-          ...bodies,
-          'vpn-2': ob({
-            'tag': 'vpn-2',
-            'type': 'selector',
-            'outbounds': ['home'],
-          }),
-        }),
+        const ChainFormState(tag: 'mine', hops: ['de', 'home']),
+        ChainFormContext(bodies: bodies),
       );
-      expect(_codes(issues), contains(ChainIssueCode.onePath));
+      expect(_codes(issues), isNot(contains(ChainIssueCode.onePath)));
     });
   });
 
