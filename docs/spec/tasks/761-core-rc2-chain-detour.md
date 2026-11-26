@@ -162,8 +162,16 @@ is not running», свой конфиг не подставляется. Кно�
 - Тип `chain-hop`: в реестре не нужен (в пользовательском конфиге запрещён), но
   гард сборки не должен принимать его от пользователя.
 
+- Корпус `corpus/direction/chain_strip_and_timeout.expected.json` ждёт
+  `idle_timeout` / `strip_evasion` / `strip` в выпущенной цепочке — обновить
+  ожидание; до этого кейс пропущен в `test/contract/direction_corpus_test.dart`
+  (`_skipChainRc2`).
+
 ## Risks and edge cases
 
+- `GetEffectiveConfig` отдаёт весь конфиг через Binder процесса `:bg`, как
+  `GetRunningConfig`; на очень большом конфиге упрётся в тот же предел (§747).
+  Потребителей в UI пока нет.
 - Пользователь, выключавший `strip_evasion` ради узла, которому нужен разрез
   ClientHello через цепочку, теряет это без замены: `lx.detour.strip` LxBox пока
   не пишет (дефолт ядра — все четыре фильтра). Настройку `lx.detour` в UI в эту
@@ -197,6 +205,16 @@ is not running», свой конфиг не подставляется. Кно�
   (узел, хоп, мусор).
 - `test/vpn/chain_hop_filter_test.dart` — скрытие `chain-hop`.
 - Golden `rich_v0.config.json` — у `chain-1` нет трёх ключей.
+- Правлены под новое поведение: `test/models/source_chain_test.dart`,
+  `test/screens/chain_edit/chain_form_validation_test.dart`,
+  `test/screens/chain_edit/chain_edit_screen_smoke_test.dart`,
+  `test/contract/direction_corpus_test.dart` (скип кейса).
+- Прогнаны по одному файлу (зелёные): все перечисленные выше, плюс
+  `golden_config_test`, `mixin_legacy_lx_wg_test`, тесты экрана узла
+  (`outbound_view_route_live_test`, `selector_member_pick_test`,
+  `path_mtu_island_test`); `ui_check --strict` — 0; `flutter analyze` по
+  затронутым файлам — чисто. Полный прогон и сборка — нет (Kotlin не
+  соберётся до AAR rc2).
 
 После rc2: шаги бампа выше, `sing-box check` на golden-конфигах, эмулятор.
 
