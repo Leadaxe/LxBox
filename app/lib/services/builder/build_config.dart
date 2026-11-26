@@ -32,6 +32,7 @@ import '../mixins/mixin_apply.dart';
 import 'node_link_resolve.dart';
 import 'rule_order.dart';
 import 'post_steps.dart';
+import 'post_steps/chain_position_yields.dart' show applyChainPositionYields;
 import 'preset_expand.dart' show PresetNode;
 import 'registry_gate.dart';
 import 'rule_set_registry.dart';
@@ -884,6 +885,10 @@ Future<BuildResult?> _buildConfig({
           .add(w);
     }
   }
+  // §761 — узлам, которые цепочка перехватывает на позиции ≥ 1, `detour`
+  // поставит ядро (v1.14.4-lx.37-rc.2): поля портов и привязки сокета ядро
+  // у них отвергает — снимаются здесь, по готовому конфигу.
+  emitWarnings.addAll(applyChainPositionYields(config));
   // §636 — уровни узла и источника поверх глобальных `vars`.
   applyTlsFragment(config, vars, byTag: ctx.tlsByTag);
   applyMixedCaseSni(config, vars, byTag: ctx.tlsByTag);
