@@ -7007,5 +7007,14 @@
   },
   "These changes can't be saved until the error is fixed. Leave without saving?": {
     "value": "在修正错误之前无法保存这些更改。不保存就离开吗？"
+  },
+  "Node": {
+    "value": "节点"
+  },
+  "SSL VPN client: Cisco AnyConnect (ocserv), Fortinet, Palo Alto GlobalProtect, Juniper / Pulse Secure.": {
+    "value": "SSL VPN 客户端：Cisco AnyConnect（ocserv）、Fortinet、Palo Alto GlobalProtect、Juniper / Pulse Secure。"
+  },
+  "Source — the node's original text. Save writes it as is.": {
+    "value": "Source — 节点的原始文本。Save 会按原样写入。"
   }
 }

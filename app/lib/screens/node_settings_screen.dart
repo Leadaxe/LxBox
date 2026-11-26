@@ -243,6 +243,38 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
 
   /// §686 — группа auto-узла папки (член `kind: auto`); `null` — иной узел.
   /// Решает тип узла, а не экран, откуда открыли карточку.
+  /// Подпись вкладки источника — имя протокола узла (решение владельца
+  /// 26.11.2026: «Source → OpenConnect (название протокола)»). У узла
+  /// автовыбора и неизвестного типа — «Source».
+  String get _sourceTabLabel {
+    if (_autoGroup != null) return getLocalText.s("Source");
+    if (_isAwg) return 'AmneziaWG'; // l10n-exempt: protocol name
+    final p = _node?.protocol ?? '';
+    // l10n-exempt: protocol names
+    const names = {
+      'vless': 'VLESS',
+      'vmess': 'VMess',
+      'trojan': 'Trojan',
+      'shadowsocks': 'Shadowsocks',
+      'hysteria': 'Hysteria',
+      'hysteria2': 'Hysteria2',
+      'tuic': 'TUIC',
+      'naive': 'NaïveProxy',
+      'anytls': 'AnyTLS',
+      'ssh': 'SSH',
+      'socks': 'SOCKS',
+      'http': 'HTTP',
+      'wireguard': 'WireGuard',
+      'masque': 'MASQUE',
+      'tailscale': 'Tailscale',
+      'openconnect': 'OpenConnect',
+      'openvpn-client': 'OpenVPN',
+      'trusttunnel': 'TrustTunnel',
+      'impair': 'impair',
+    };
+    return names[p] ?? getLocalText.s("Source");
+  }
+
   AutoSelectSpec? get _autoGroup {
     final n = _member?.node;
     return n is AutoSelectSpec ? n : null;
@@ -880,8 +912,10 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              Tab(text: getLocalText.s("Settings")),
-              Tab(text: getLocalText.s("Source")),
+              Tab(text: getLocalText.s("Node")),
+              // Вкладка источника названа протоколом узла: у OpenConnect там
+              // форма настроек, у остальных — исходный текст узла.
+              Tab(text: _sourceTabLabel),
               // l10n-exempt: format name, locale-invariant
               const Tab(text: 'JSON'),
               // l10n-exempt: format name, locale-invariant
@@ -1394,6 +1428,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   Widget _buildSourceTab(ThemeData theme) {
     // §686 — у auto-узла источник — запись группы, подписи вида нет.
     final isAuto = _autoGroup != null;
+    final isOpenConnect = _node?.protocol == kOpenConnectScheme;
     final kindNote = switch (_dialect) {
       SourceDialect.singbox => getLocalText.s(
           "sing-box JSON: sent to the core as is. The core checks it on save."),
@@ -1408,13 +1443,33 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       padding:
           EdgeInsets.fromLTRB(16, 16, 16, MediaQuery.of(context).padding.bottom + 24),
       children: [
-        _sectionHeader(getLocalText.s("Source"),
-            getLocalText.s("The node's original text. Save writes it as is."), theme),
-        if (_node?.protocol == kOpenConnectScheme)
+        // OpenConnect: шапка — что это за клиент (владелец 26.11.2026), под
+        // ней форма; подпись про исходный текст — над полем текста.
+        if (isOpenConnect)
+          _sectionHeader(
+              'OpenConnect', // l10n-exempt: protocol name
+              getLocalText.s(
+                  "SSL VPN client: Cisco AnyConnect (ocserv), Fortinet, Palo Alto GlobalProtect, Juniper / Pulse Secure."),
+              theme)
+        else
+          _sectionHeader(getLocalText.s("Source"),
+              getLocalText.s("The node's original text. Save writes it as is."), theme),
+        if (isOpenConnect) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: _buildOpenConnectSourceForm(theme),
           ),
+          Padding(
+            key: const ValueKey('openconnect-source-note'),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              getLocalText.s(
+                  "Source — the node's original text. Save writes it as is."),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ],
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           // §614/§624 — редактор с подсветкой: язык по виду источника на

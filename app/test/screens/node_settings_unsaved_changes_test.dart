@@ -170,7 +170,7 @@ void main() {
   testWidgets('правка Source → Back → диалог; пустой Source при Save — экран '
       'остаётся', (tester) async {
     final (_, host) = await open(tester);
-    await tester.tap(find.text('Source'));
+    await tester.tap(find.text('VLESS'));
     await tester.pumpAndSettle();
     final editor = find.descendant(
         of: find.byKey(const ValueKey('node-source-editor')),
@@ -202,7 +202,8 @@ void main() {
           input: '{"type":"$type","tag":"old-name","server":"192.0.2.1",'
               '"server_port":1080}');
       expect(c.entries.single.list.nodes.single.tag, contains('old-name'));
-      await tester.tap(find.text('Source'));
+      // Вкладка источника названа протоколом узла.
+      await tester.tap(find.text(type.toUpperCase()));
       await tester.pumpAndSettle();
       final field = find.byKey(const ValueKey('node-source-editor'));
       final text = tester.widget<LxTextCodeField>(field).controller.text;

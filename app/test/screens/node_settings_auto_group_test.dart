@@ -113,7 +113,7 @@ void main() {
   }
 
   Future<void> toSettings(WidgetTester tester) async {
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.text('Node'));
     await tester.pumpAndSettle();
   }
 

@@ -7295,5 +7295,14 @@
   },
   "These changes can't be saved until the error is fixed. Leave without saving?": {
     "value": "Эти изменения нельзя сохранить, пока не исправлена ошибка. Выйти без сохранения?"
+  },
+  "Node": {
+    "value": "Узел"
+  },
+  "SSL VPN client: Cisco AnyConnect (ocserv), Fortinet, Palo Alto GlobalProtect, Juniper / Pulse Secure.": {
+    "value": "Клиент SSL VPN: Cisco AnyConnect (ocserv), Fortinet, Palo Alto GlobalProtect, Juniper / Pulse Secure."
+  },
+  "Source — the node's original text. Save writes it as is.": {
+    "value": "Source — исходный текст узла. Save записывает его как есть."
   }
 }

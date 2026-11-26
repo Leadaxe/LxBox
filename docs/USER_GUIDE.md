@@ -297,7 +297,7 @@ carries only such an address is added as that subscription.
 
 The **Masquerade** section of your own WireGuard or AmneziaWG server adds
 decoy packets before the handshake: the client sends packets that look like
-QUIC, DNS, STUN or SIP. Where: server screen → Settings → Masquerade.
+QUIC, DNS, STUN or SIP. Where: server screen → Node → Masquerade.
 Options:
 
 | Option | Domain |
@@ -324,7 +324,13 @@ A JSON body can hold keys a `.conf` has no place for; the tab lists them
 under the text as "Not in INI". **Edit INI** makes this text the server's
 source and opens Source; the tag and the detour server stay as they are.
 
-The **Source** tab of your own server and of a folder's server shows the
+The tabs of a server screen are **Node** (tag, detour, TLS and the other
+settings), a tab named after the protocol (**VLESS**, **WireGuard**,
+**OpenConnect**…) with the server's source, **JSON** and **Diagnostics**.
+On OpenConnect the protocol tab holds the connection form (server
+certificate and the rest) above the source text.
+
+The protocol tab of your own server and of a folder's server shows the
 text it came from: a link, a `.conf` or JSON. Comments in JSON — `//`,
 `/* */` and `#` to the end of the line — are kept with the text: your notes
 on a server stay on Source after pasting, saving and restoring a backup.
@@ -1683,7 +1689,7 @@ config, and keeps it while the tunnel runs.
 
 The section sets the default for all servers. The same four options can be
 overridden for one subscription or folder (its settings tab, **TLS** section)
-and for one server (the server's Settings tab, **TLS** section, under
+and for one server (the server's Node tab, **TLS** section, under
 Detour). Each option is resolved on its own: server, then
 subscription or folder, then the global section; **Default** takes the value
 from the level above, and the row shows which one. **Off** on a server turns
@@ -2573,7 +2579,7 @@ empty filter offers it on its own: manual selection, the auto twin's test and
 the ping in the server list reach B directly. A detour changes B itself, and
 the config keeps no direct path to it.
 
-1. Detour on B: Servers → tap B → Settings tab → **Detour server** → A →
+1. Detour on B: Servers → tap B → Node tab → **Detour server** → A →
    Save.
 2. Only B in the direction: Routing → Directions → VPN ① (`vpn-1`) →
    **Node filter (regex)** — a pattern that matches B's name and nothing else:
