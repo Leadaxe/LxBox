@@ -58,11 +58,17 @@ String defaultEmojiFor(NodeSpec node) {
   return '⚡';
 }
 
+/// §762 — узел, чей тег не получает эмодзи по умолчанию: тестовый outbound
+/// ядра `impair`. Скрипт Debug API ссылается на него ровно тем тегом, который
+/// передал при создании.
+bool keepsTagAsWritten(NodeSpec node) =>
+    node is UnknownTypeSpec && node.type == 'impair';
+
 /// Если в теге ноды НЕТ эмодзи — вернуть `rawBody` с дефолтным эмодзи в
 /// name-части; иначе вернуть `rawBody` как есть. Точка вызова — создание
 /// UserServer (paste / wizard / SOCKS-форма).
 String withDefaultEmoji(String rawBody, NodeSpec node) {
-  if (hasEmoji(node.tag)) return rawBody;
+  if (hasEmoji(node.tag) || keepsTagAsWritten(node)) return rawBody;
   return prependEmojiToRawBody(rawBody, defaultEmojiFor(node));
 }
 

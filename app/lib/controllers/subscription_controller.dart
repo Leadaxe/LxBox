@@ -955,6 +955,7 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   /// ошибку парса / отсутствие изменений — возвращаем исходный.
   UserServer _autoEmoji(UserServer us) {
     if (us.nodes.isEmpty || us.rawBody.isEmpty) return us;
+    if (keepsTagAsWritten(us.nodes.first)) return us; // §762 — impair
     final newRaw = _isJsonDocument(us.rawBody, us.dialect)
         ? _documentWithDefaultEmoji(us.rawBody, us.dialect, us.nodes.first)
         : withDefaultEmoji(us.rawBody, us.nodes.first);

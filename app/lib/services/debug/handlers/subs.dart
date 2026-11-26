@@ -8,6 +8,7 @@ import '../../../models/codec/node_link_record.dart';
 import '../../../models/server_list.dart';
 import '../../../models/source_entry.dart';
 import '../../node_link_address.dart';
+import '../../tag_resolver.dart';
 import '../context.dart';
 import '../contract/errors.dart';
 import '../serializers/subs.dart';
@@ -192,6 +193,9 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
       'kind': added.first.list is SubscriptionServers
           ? 'SubscriptionServers'
           : 'UserServer',
+      // §762 — итоговые теги узлов в конфиге (с эмодзи и префиксом): на них
+      // ссылаются следующие вызовы скрипта (`/impair/{tag}`, detour).
+      'tags': _finalTags(added.first, sub),
       ...extras,
     }, status: 201);
   }
@@ -200,8 +204,24 @@ Future<DebugResponse> _create(DebugRequest req, DebugContext ctx) async {
     'action': 'subs-add',
     'ids': added.map((e) => e.id).toList(),
     'count': added.length,
+    'tags': [for (final e in added) ..._finalTags(e, sub)],
     ...extras,
   }, status: 201);
+}
+
+/// §762 — теги узлов записи [e] так, как они стоят в конфиге: после сборки —
+/// по карте последней сборки (там и разведение дублей), до неё — префикс
+/// записи плюс тег узла, как пишет сборка ([TagResolver.displayTag]).
+List<String> _finalTags(SubscriptionEntry e, SubscriptionController sub) {
+  final emitted = sub.lastEmittedTagMap;
+  return [
+    for (final n in e.list.nodes)
+      emitted.entries
+              .where((m) => m.value.id == n.id)
+              .map((m) => m.key)
+              .firstOrNull ??
+          TagResolver.displayTag(e.tagPrefix, n.tag),
+  ];
 }
 
 Future<DebugResponse> _update(

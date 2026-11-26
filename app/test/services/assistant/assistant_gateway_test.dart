@@ -72,6 +72,7 @@ void main() {
       ('GET', '/impair/node-a', deny),
       ('POST', '/impair/node-a/set', deny),
       ('POST', '/impair/node-a/schedule', deny),
+      ('PATCH', '/nodes/node-a', deny),
       ('PUT', '/settings/vars/appfunctions_allow_changes', deny),
       ('PUT', '/settings/dns_options/servers', deny),
       ('PUT', '/settings/config_locked', deny),

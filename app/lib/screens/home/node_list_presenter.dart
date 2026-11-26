@@ -32,6 +32,8 @@ String protoLabel(String type) => type == GroupGenus.manual
       'socks' => 'SOCKS',
       'http' => 'HTTP',
       'tailscale' => 'Tailscale', // §435 — l10n-exempt: protocol name
+      // §762 — тестовый outbound ядра: череп, чтобы не путать с рабочим узлом.
+      'impair' => '☠ impair', // l10n-exempt: protocol name
       // §359 — узел автовыбора подписки (§322) как протокол в чипах фильтра.
       // l10n-exempt: протокольный термин, латиница во всех локалях (как VLESS/Hy2).
       'urltest' => 'Auto',

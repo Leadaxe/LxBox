@@ -1,4 +1,8 @@
 import '../../../controllers/subscription_controller.dart';
+import '../../../models/codec/node_link_record.dart';
+import '../../../models/node_link.dart';
+import '../../../models/server_list.dart';
+import '../../node_link_address.dart';
 import '../../../models/node_spec.dart';
 import '../../../models/template_vars.dart';
 import '../../contract/body_sanitizer.dart' show carriesPrivateKeyByRegistry;
@@ -7,6 +11,7 @@ import '../context.dart';
 import '../contract/errors.dart';
 import '../transport/request.dart';
 import '../transport/response.dart';
+import '_shared.dart';
 
 /// `/nodes/*` — Фича 478. Узел глазами ЭМИТТЕРА, а не хранения.
 ///
@@ -17,7 +22,20 @@ import '../transport/response.dart';
 ///
 /// Routes:
 /// - `GET /nodes/link?tag=<tag>` → ссылка узла (тот же emit, что у Copy link)
+/// - `PATCH /nodes/{tag}[?rebuild=true]` → `{"detour": <tag | {folder_id?,
+///   tag} | null>}` — §762: личный detour узла по тегу (одиночный сервер —
+///   `override_detour` записи, член папки — `detour` члена)
 Future<DebugResponse> nodesHandler(DebugRequest req, DebugContext ctx) async {
+  final s = req.uri.pathSegments;
+  // Чтения узла по тегу нет: прочие методы на `/nodes/{tag}` — 404, как
+  // любой чужой путь.
+  if (req.method == 'PATCH' &&
+      s.length == 2 &&
+      s[0] == 'nodes' &&
+      s[1] != 'link' &&
+      s[1].isNotEmpty) {
+    return _setDetour(s[1], req, ctx);
+  }
   if (req.path != '/nodes/link') throw NotFound('nodes path: ${req.path}');
   if (req.method != 'GET') {
     throw BadRequest('method ${req.method} not allowed on /nodes/link');
@@ -89,4 +107,63 @@ NodeSpec? _findByTag(String tag, SubscriptionController sub) {
     }
   }
   return null;
+}
+
+/// §762 — `PATCH /nodes/{tag}`: detour узла по его тегу, тем же путём, что
+/// экран узла (§237): одиночный сервер — `override_detour` записи, член
+/// папки — `setMemberDetour` (отказ self/цикла — 400). У узла подписки
+/// своего detour нет — только общий у подписки (`PATCH /subs/{id}`
+/// `override_detour`), поэтому 409 с подсказкой. Тег — как в конфиге или
+/// голый, URL-encoded.
+Future<DebugResponse> _setDetour(
+    String tag, DebugRequest req, DebugContext ctx) async {
+  final body = req.jsonBodyAsMap();
+  if (!body.containsKey('detour')) {
+    throw const BadRequest('field "detour" required (tag, {folder_id?, tag} '
+        'or null)');
+  }
+  final link = fieldNodeLink(body, 'detour')!;
+  final sub = ctx.requireSub();
+  for (var idx = 0; idx < sub.entries.length; idx++) {
+    final e = sub.entries[idx];
+    final base = TagResolver.stripPrefix(tag, e.tagPrefix);
+    bool hit(NodeSpec? n) => n != null && (n.tag == base || n.tag == tag);
+    final list = e.list;
+    if (list is UserServer) {
+      if (!list.nodes.any(hit)) continue;
+      e.overrideDetour = link;
+      await sub.persistSources();
+      return _detourResponse(req, ctx, e, e.overrideDetour, tag);
+    }
+    if (list is FolderServers) {
+      final i = list.members.indexWhere((m) => hit(m.node));
+      if (i < 0) continue;
+      final lifted =
+          liftSiblingLink(link, list.id, containerRawTagSet(list));
+      final err = await sub.setMemberDetour(idx, i, lifted);
+      if (err != null) throw BadRequest('detour rejected: ${err.renderEn()}');
+      final now = (sub.entries[idx].list as FolderServers).members[i].detour;
+      return _detourResponse(req, ctx, sub.entries[idx], now, tag);
+    }
+    if (list.nodes.any(hit)) {
+      throw Conflict('node "$tag" belongs to a subscription: a subscription '
+          'node has no own detour; use PATCH /subs/${e.id} '
+          '{"override_detour": ...} (all its nodes)');
+    }
+  }
+  throw NotFound('node by tag: $tag');
+}
+
+Future<DebugResponse> _detourResponse(DebugRequest req, DebugContext ctx,
+    SubscriptionEntry e, NodeLink detour, String tag) async {
+  final extras = await maybeRebuild(req, ctx);
+  return JsonResponse({
+    'ok': true,
+    'action': 'node-detour',
+    'tag': tag,
+    'entry_id': e.id,
+    'kind': e.list is FolderServers ? 'FolderServers' : 'UserServer',
+    'detour': nodeLinkToRecordOrNull(detour),
+    ...extras,
+  });
 }
