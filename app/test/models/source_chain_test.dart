@@ -150,6 +150,14 @@ void main() {
           contains('repeats'));
     });
 
+    test('§761: rewrite не трогает detour и всегда объект', () {
+      SourceChain c(Map<String, dynamic> rw) => SourceChain(
+          tag: 'c', hops: const [NodeLink(tag: 'a'), NodeLink(tag: 'b')], rewrite: rw);
+      expect(chainEmitError(c({'vless': {'detour': 'x'}})), contains('detour'));
+      expect(chainEmitError(c({'vless': 1})), contains('not an object'));
+      expect(chainEmitError(c({'vless': {'flow': null}})), isEmpty);
+    });
+
     test('§761: ключи strip цепочку не валят — в конфиг не пишутся', () {
       final err = chainEmitError(const SourceChain(
           tag: 'c', hops: [NodeLink(tag: 'a'), NodeLink(tag: 'b')], strip: {'tls.nope': true}));

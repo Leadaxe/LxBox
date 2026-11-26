@@ -7265,5 +7265,20 @@
   },
   "MTU alignment (%s) under %s": {
     "value": "выравнивание MTU (%s) под %s"
+  },
+  "\"%s\" at position %d is already reached at a lower position: one node or group has one path.": {
+    "value": "«%s» на позиции %d уже достижим на позиции ниже: у узла или группы один путь."
+  },
+  "Group \"%s\" at position %d has no nodes left after removing those that stand lower in the chain.": {
+    "value": "В группе «%s» на позиции %d не осталось узлов после снятия тех, что стоят ниже в цепочке."
+  },
+  "Node \"%s\" at position %d is already used by chain \"%s\". It holds its own session and cannot serve two paths.": {
+    "value": "Узел «%s» на позиции %d уже используется цепочкой «%s». У него своя сессия, на два пути её не разделить."
+  },
+  "The detour of \"%s\" at position 1 leads to \"%s\", which this chain takes over higher up: that makes a ring.": {
+    "value": "detour узла «%s» на позиции 1 ведёт в «%s», который эта цепочка берёт выше: получается кольцо."
+  },
+  "The tag \"%s\" is taken by a node or group; the chain needs it for its hop.": {
+    "value": "Тег «%s» занят узлом или группой, а цепочке он нужен для хопа."
   }
 }

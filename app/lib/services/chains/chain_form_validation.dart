@@ -16,6 +16,7 @@ import '../../models/server_list.dart';
 import '../../models/source_chain.dart';
 import '../builder/node_link_pool.dart';
 import '../builder/node_link_resolve.dart';
+import 'chain_takeover.dart';
 import '../l10n/locale_controller.dart';
 import 'chain_hop_candidate.dart';
 
@@ -91,6 +92,12 @@ enum ChainIssueCode {
 
   /// Имя цепочки пустое.
   tagEmpty,
+
+  /// Одному узлу или группе нужен один путь, а сборка не может развести
+  /// цепочку копиями (кольцо, узел с собственной сессией в двух цепочках,
+  /// опустевшая группа, кольцо через detour, занятый тег хопа). Ядро такой
+  /// конфиг не грузит, сборка цепочку выбросит.
+  onePath,
 }
 
 /// Одна находка формы.
@@ -121,7 +128,13 @@ class ChainFormContext {
     this.targetsKnown = false,
     this.takenTags = const {},
     this.originalTag = '',
+    this.bodies = const {},
   });
+
+  /// §761 — узлы, группы и цепочки последнего собранного конфига: по ним
+  /// форма проверяет то же, что сборка (`planChainTakeover`). Пусто —
+  /// проверка не делается.
+  final ChainBodies bodies;
 
   /// Кандидаты по тегу (см. [chainHopLookup]).
   final Map<String, ChainHopCandidate> candidates;
@@ -278,6 +291,10 @@ List<ChainFormIssue> validateChainForm(
     ));
   }
 
+  // §761 — один путь на узел или группу: то, что сборка не разведёт копиями.
+  final onePath = _onePathIssue(state, ctx);
+  if (onePath != null) blocking.add(onePath);
+
   // Имя: пустое или занятое — два outbound'а с одним тегом ядро не принимает.
   final tag = state.tag.trim();
   if (tag.isEmpty) {
@@ -433,3 +450,52 @@ bool chainFormCanSave(List<ChainFormIssue> issues) =>
     !issues.any((i) => i.blocks);
 
 String _list(List<String> tags) => tags.join(', ');
+
+/// §761 — проверка сборки по последнему собранному конфигу: правленая
+/// цепочка встаёт последней, прочие цепочки конфига держат свои узлы.
+ChainFormIssue? _onePathIssue(ChainFormState state, ChainFormContext ctx) {
+  if (ctx.bodies.isEmpty || state.hops.length < 2) return null;
+  final tag = state.tag.trim().isEmpty ? ctx.originalTag : state.tag.trim();
+  final bodies = <String, ({String section, Map<String, dynamic> body})>{
+    for (final e in ctx.bodies.entries)
+      if (e.key != ctx.originalTag && e.key != tag) e.key: e.value,
+  };
+  bodies[tag] = (
+    section: 'outbounds',
+    body: {'tag': tag, 'type': 'chain', 'outbounds': [...state.hops]},
+  );
+  final others = [
+    for (final e in bodies.entries)
+      if (e.value.body['type'] == 'chain' && e.key != tag) e.key,
+  ];
+  final result = planChainTakeover(bodies, [...others, tag]);
+  final f = result.failures.where((f) => f.chain == tag).firstOrNull;
+  if (f == null) return null;
+  final pos = f.position + 1;
+  final message = switch (f.fault) {
+    ChainTakeoverFault.positionBelow => getLocalText.s(
+        "\"%s\" at position %d is already reached at a lower position: one node or group has one path.",
+        f.tag, pos),
+    ChainTakeoverFault.groupEmptied => getLocalText.s(
+        "Group \"%s\" at position %d has no nodes left after removing those that stand lower in the chain.",
+        f.tag, pos),
+    ChainTakeoverFault.sessionShared => getLocalText.s(
+        "Node \"%s\" at position %d is already used by chain \"%s\". It holds its own session and cannot serve two paths.",
+        f.tag, pos, f.other),
+    ChainTakeoverFault.detourRing => getLocalText.s(
+        "The detour of \"%s\" at position 1 leads to \"%s\", which this chain takes over higher up: that makes a ring.",
+        f.tag, f.other),
+    ChainTakeoverFault.hopTagTaken => getLocalText.s(
+        "The tag \"%s\" is taken by a node or group; the chain needs it for its hop.",
+        f.tag),
+    // Повтор и вложенную цепочку форма называет своими находками выше.
+    ChainTakeoverFault.duplicate || ChainTakeoverFault.nestedChain => null,
+  };
+  if (message == null) return null;
+  return ChainFormIssue(
+    code: ChainIssueCode.onePath,
+    level: ChainIssueLevel.blocking,
+    message: message,
+    hops: [if (state.hops.contains(f.tag)) f.tag],
+  );
+}

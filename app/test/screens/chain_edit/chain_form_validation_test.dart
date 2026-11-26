@@ -177,6 +177,61 @@ void main() {
     });
   });
 
+  // §761 — один путь на узел: что сборка не разведёт копиями, форма запирает.
+  group('один путь на узел или группу', () {
+    ({String section, Map<String, dynamic> body}) ob(Map<String, dynamic> b) =>
+        (section: 'outbounds', body: b);
+    final bodies = {
+      'home': ob({'tag': 'home', 'type': 'vless'}),
+      'de': ob({'tag': 'de', 'type': 'vless'}),
+      'vpn-1': ob({
+        'tag': 'vpn-1',
+        'type': 'selector',
+        'outbounds': ['home', 'de'],
+      }),
+      'wg': (section: 'endpoints', body: {'tag': 'wg', 'type': 'wireguard'}),
+      'other': ob({
+        'tag': 'other',
+        'type': 'chain',
+        'outbounds': ['de', 'wg'],
+      }),
+    };
+
+    test('WireGuard уже в другой цепочке — блокирует, называет обе', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'mine', hops: ['home', 'wg']),
+        ChainFormContext(bodies: bodies),
+      );
+      final i = _find(issues, ChainIssueCode.onePath)!;
+      expect(i.level, ChainIssueLevel.blocking);
+      expect(i.message, contains('"wg"'));
+      expect(i.message, contains('"other"'));
+    });
+
+    test('[home, vpn-1{home, de}] — сборка разведёт копией, находки нет', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'mine', hops: ['home', 'vpn-1']),
+        ChainFormContext(bodies: bodies),
+      );
+      expect(_codes(issues), isNot(contains(ChainIssueCode.onePath)));
+    });
+
+    test('группа опустела: [home, vpn-2{home}] — блокирует', () {
+      final issues = validateChainForm(
+        const ChainFormState(tag: 'mine', hops: ['home', 'vpn-2']),
+        ChainFormContext(bodies: {
+          ...bodies,
+          'vpn-2': ob({
+            'tag': 'vpn-2',
+            'type': 'selector',
+            'outbounds': ['home'],
+          }),
+        }),
+      );
+      expect(_codes(issues), contains(ChainIssueCode.onePath));
+    });
+  });
+
   // §761 — ключа `strip` у цепочки в конфиге нет (ядро lx.37-rc.2): находки
   // `on_hop_required` форма не выдаёт, сохранённый патч сохранять не мешает.
   test('сохранённый strip tls.utls на reality-звене — находок нет', () {

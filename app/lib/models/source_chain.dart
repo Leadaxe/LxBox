@@ -277,8 +277,14 @@ String chainEmitError(SourceChain c) {
     }
     if (!seen.add(hop)) return 'position ${i + 1} repeats "${hop.tag}"';
   }
-  for (final typeName in c.rewrite.keys) {
-    if (typeName.trim().isEmpty) return 'rewrite: empty outbound type name';
+  for (final e in c.rewrite.entries) {
+    if (e.key.trim().isEmpty) return 'rewrite: empty outbound type name';
+    // §761 — ядро v1.14.4-lx.37-rc.2 отвергает патч, который не объект или
+    // трогает `detour`: путь узла на позиции задаёт цепочка, не патч.
+    if (e.value is! Map) return 'rewrite: "${e.key}" is not an object';
+    if ((e.value as Map).containsKey('detour')) {
+      return 'rewrite: "${e.key}" changes detour — the chain sets it';
+    }
   }
   // §761 — `strip` в конфиг не пишется, его ключи цепочку не валят.
   return '';

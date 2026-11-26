@@ -6977,5 +6977,20 @@
   },
   "MTU alignment (%s) under %s": {
     "value": "MTU 对齐（%s），下层 %s"
+  },
+  "\"%s\" at position %d is already reached at a lower position: one node or group has one path.": {
+    "value": "“%s”（位置 %d）已在更低的位置可达：一个节点或组只有一条路径。"
+  },
+  "Group \"%s\" at position %d has no nodes left after removing those that stand lower in the chain.": {
+    "value": "组“%s”（位置 %d）去掉链中更低位置的节点后已没有节点。"
+  },
+  "Node \"%s\" at position %d is already used by chain \"%s\". It holds its own session and cannot serve two paths.": {
+    "value": "节点“%s”（位置 %d）已被链“%s”使用。它持有自己的会话，不能用于两条路径。"
+  },
+  "The detour of \"%s\" at position 1 leads to \"%s\", which this chain takes over higher up: that makes a ring.": {
+    "value": "“%s”（位置 1）的 detour 指向“%s”，而该链在更高位置接管了它：形成环。"
+  },
+  "The tag \"%s\" is taken by a node or group; the chain needs it for its hop.": {
+    "value": "标签“%s”已被节点或组占用，而链的跃点需要它。"
   }
 }
