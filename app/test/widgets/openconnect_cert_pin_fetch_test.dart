@@ -11,7 +11,9 @@ import '../contract_paths.dart';
 /// Кнопка «Fetch from server» варианта «Pinned fingerprint»: диалог с
 /// данными сертификата, «Use» пишет отпечаток в `tls.peer_fingerprint`.
 class _FakeFetcher implements CertPinFetcher {
-  Completer<CertPinInfo> next = Completer();
+  // Создаётся в теле testWidgets: Completer из setUp живёт в настоящей зоне,
+  // и его завершение не доходит до кадров FakeAsync.
+  late Completer<CertPinInfo> next;
   final calls = <(String, String?)>[];
 
   @override
@@ -68,14 +70,6 @@ void main() {
     },
   };
 
-  // pumpAndSettle не годится: при открытом диалоге что-то анимируется
-  // бесконечно (курсор/индикатор); хватает конечной серии кадров.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-  }
-
   setUp(() {
     fetcher = _FakeFetcher();
     emitted = [];
@@ -95,6 +89,7 @@ void main() {
   testWidgets('диалог с данными → Use → отпечаток в tls.peer_fingerprint', (
     tester,
   ) async {
+    fetcher.next = Completer();
     await pump(tester, body0());
     expect(button(), findsOneWidget);
     await tapButton(tester);
@@ -105,7 +100,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     fetcher.next.complete(_info);
-    await settle(tester);
+    await tester.pumpAndSettle();
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('Pin this certificate?'), findsOneWidget);
     expect(find.text('fw.example.com'), findsOneWidget);
@@ -114,7 +109,7 @@ void main() {
     expect(find.text(_pin), findsWidgets);
 
     await tester.tap(find.widgetWithText(TextButton, 'Use'));
-    await settle(tester);
+    await tester.pumpAndSettle();
     expect(emitted, isNotEmpty);
     final last = emitted.last;
     expect(formValueAt(last, 'tls.peer_fingerprint'), [_pin]);
@@ -132,21 +127,25 @@ void main() {
   });
 
   testWidgets('Cancel — тело не меняется', (tester) async {
+    fetcher.next = Completer();
     await pump(tester, body0());
     fetcher.next.complete(_info);
     await tapButton(tester);
-    await settle(tester);
+    await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-    await settle(tester);
+    await tester.pumpAndSettle();
     expect(emitted, isEmpty);
     expect(find.text('Pin this certificate?'), findsNothing);
   });
 
   testWidgets('ошибка fetcher — текст у кнопки, диалога нет', (tester) async {
+    fetcher.next = Completer();
     await pump(tester, body0());
-    fetcher.next.completeError(const CertPinException(CertPinError.timeout));
+    // Ошибка — после нажатия: у Future уже есть слушатель.
     await tapButton(tester);
-    await settle(tester);
+    await tester.pump();
+    fetcher.next.completeError(const CertPinException(CertPinError.timeout));
+    await tester.pumpAndSettle();
     expect(find.text('No response from the server'), findsOneWidget);
     expect(find.text('Pin this certificate?'), findsNothing);
     expect(emitted, isEmpty);
@@ -157,7 +156,7 @@ void main() {
     await tester.pump();
     expect(find.text('No response from the server'), findsNothing);
     fetcher.next.completeError(const CertPinException(CertPinError.notTls));
-    await settle(tester);
+    await tester.pumpAndSettle();
     expect(find.text('No TLS on this address'), findsOneWidget);
   });
 }
