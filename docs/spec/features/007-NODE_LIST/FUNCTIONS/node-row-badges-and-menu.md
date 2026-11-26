@@ -109,3 +109,4 @@ ones.
 | 12 | [557](../../../tasks/557-kernel-lx4-wg-endpoint-toggle.md) | — | Turn off / Turn on of a WG node, the `off` state |
 | 13 | [572](../../../tasks/572-notifications-group-by-code.md) | Released v2.25.7 | Node notifications grouped by code |
 | 14 | [715](../../../tasks/715-auto-twin-pool-label-core-delays.md) | Done | Load balance Auto twin shows the pool label; slot names when no badge |
+| 15 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | The JSON tab of View details shows the node from the core |

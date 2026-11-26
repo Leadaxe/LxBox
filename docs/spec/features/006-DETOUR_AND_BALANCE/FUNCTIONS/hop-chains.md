@@ -100,3 +100,4 @@ Direction groups; the chain tag in Direction pools; warnings with codes
 | 7 | [524](../../../tasks/524-unified-source-entries.md) | Released v2.25.3 | A chain is a row of the shared source list |
 | 8 | [594](../../../tasks/594-chain-label-removed-tag-only.md) | Done | The chain name (label) removed again: the tag is the one name |
 | 9 | [609](../../../tasks/609-chain-tag-editable.md) | Done | The tag is editable, like a node's: the place in the list stays, references follow the new tag |
+| 10 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | No `idle_timeout`/`strip_evasion`/`strip` in the config; ports and socket options removed past the first position |

@@ -85,3 +85,4 @@ measurements.
 | 2 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | C6–C7: form checks, chain screen, position picker |
 | 3 | [558](../../../tasks/558-chain-owner-navigation.md) | Done | Navigation to the chain from the node window |
 | 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | The delete confirmation tells the truth: chains using it are rebuilt without it (P10) |
+| 5 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (branch, waits for core rc2) | The Advanced block is gone |

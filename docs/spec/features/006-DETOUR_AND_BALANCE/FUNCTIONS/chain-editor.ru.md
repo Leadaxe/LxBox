@@ -82,3 +82,4 @@
 | 2 | [393F](../../../tasks/393F-directions/spec.md) | released v2.21.0 | C6–C7: проверки формы, экран цепочки, пикер позиций |
 | 3 | [558](../../../tasks/558-chain-owner-navigation.md) | Done | Переход к цепочке из окна узла |
 | 4 | [638](../../../tasks/638-audit-591-four-defects.md) | Done | Подтверждение удаления говорит правду: цепочки с ней пересобираются без неё (P10) |
+| 5 | [761](../../../tasks/761-core-rc2-chain-detour.md) | In progress (ветка, ждёт rc2 ядра) | Блока Advanced нет |
