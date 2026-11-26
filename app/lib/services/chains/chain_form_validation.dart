@@ -470,11 +470,11 @@ String? chainOnePathMessage(ChainTakeoverFailure f) {
         "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.",
         f.tag, op, p, hint.group, f.tag, hint.position + 1),
     ChainTakeoverFault.otherChain => getLocalText.s(
-        "\"%s\" is used in chain \"%s\" (position %d) and here at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.",
-        f.tag, f.otherChain, op, p, f.tag),
+        "\"%s\" is used in chain \"%s\" (position %d) and here (\"%s\") at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.",
+        f.tag, f.otherChain, op, f.chain, p, f.tag),
     ChainTakeoverFault.detourRing => getLocalText.s(
-        "The detour of \"%s\" at the entry leads to \"%s\", which this chain takes over higher up — remove that detour or take \"%s\" out of this chain.",
-        f.tag, f.via, f.via),
+        "The detour of \"%s\" at the entry leads to \"%s\", which this chain (\"%s\") takes over higher up — remove that detour or take \"%s\" out of this chain.",
+        f.tag, f.via, f.chain, f.via),
     ChainTakeoverFault.hopTagTaken => getLocalText.s(
         "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.",
         f.tag),

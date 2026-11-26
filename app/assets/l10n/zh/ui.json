@@ -6981,11 +6981,11 @@
   "\"%s\" is at positions %d and %d — make a copy of \"%s\" without \"%s\" for position %d.": {
     "value": "“%s”同时位于位置 %d 和 %d——请为位置 %6$d 复制一份不含“%5$s”的“%4$s”。"
   },
-  "\"%s\" is used in chain \"%s\" (position %d) and here at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
-    "value": "“%s”已在链“%s”（位置 %d）中使用，这里又在位置 %d——请为其中之一复制“%s”（及其节点；WireGuard 副本需要其他密钥）。"
+  "\"%s\" is used in chain \"%s\" (position %d) and here (\"%s\") at position %d — make a copy of \"%s\" (and its nodes; WireGuard copies need other keys) for one of them.": {
+    "value": "“%s”已在链“%s”（位置 %d）中使用，这里（“%s”）又在位置 %d——请为其中之一复制“%s”（及其节点；WireGuard 副本需要其他密钥）。"
   },
-  "The detour of \"%s\" at the entry leads to \"%s\", which this chain takes over higher up — remove that detour or take \"%s\" out of this chain.": {
-    "value": "入口处“%s”的 detour 指向“%s”，而该链在更高位置接管了它——请删除该 detour，或把“%s”移出此链。"
+  "The detour of \"%s\" at the entry leads to \"%s\", which this chain (\"%s\") takes over higher up — remove that detour or take \"%s\" out of this chain.": {
+    "value": "入口处“%s”的 detour 指向“%s”，而该链（“%s”）在更高位置接管了它——请删除该 detour，或把“%s”移出此链。"
   },
   "The tag \"%s\" is taken by a node or group; the chain needs it for its hop — rename that node.": {
     "value": "标签“%s”已被节点或组占用，而链的跃点需要它——请重命名该节点。"

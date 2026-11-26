@@ -347,7 +347,7 @@ core: …», свой конфиг не подставляется. Кнопки
   блок «Changed by the core»: `detour — → "chain-1#0" · chain chain-1,
   position 2`; переключатель Original работает.
 - Вторая цепочка с MASQUE на входе: ошибка в редакторе «… is used in chain
-  "chain-1" (position 2) and here at position 1 — make a copy …», кнопка
+  "chain-1" (position 2) and here ("<цепочка>") at position 1 — make a copy …», кнопка
   сохранения неактивна.
 - Кольцо `[A, Направление{A}]` в UI не собрать: выбор позиции на стенде
   предлагает только раздел Servers. Покрыто юнит-тестами.
