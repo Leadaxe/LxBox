@@ -15,6 +15,7 @@ List<String> _strings(Object? e) => [for (final s in _list(e)) '$s'];
 
 /// Состояния endpoint'а словами ядра (строки, enum нет).
 abstract final class CcOpenConnectState {
+  static const connecting = 'connecting';
   static const authPending = 'auth-pending';
   static const connected = 'connected';
   static const error = 'error';
