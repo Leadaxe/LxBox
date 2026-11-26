@@ -1338,8 +1338,8 @@ curl -s -H "$HDR" "$BASE/pool?tag=vpn-1-auto" | jq '{tag,count,slots}'
 
 ## Impair — `/impair/*`
 
-§762: управление тестовым outbound ядра `impair` на лету (ядро с
-`v1.14.4-lx.37-rc3`). Что это и какие у него ключи —
+[Задача 762](../spec/tasks/762-debug-api-impair.md): управление тестовым outbound ядра `impair`
+([SPEC 164 ядра](https://github.com/Leadaxe/sing-box-lx/blob/lx/SPECS/TASKS/164-IMPAIR_OUTBOUND/SPEC.md)) на лету (ядро с `v1.14.4-lx.37-rc3`). Что это и какие у него ключи —
 [документация ядра `lx-impair`](https://github.com/Leadaxe/sing-box-lx/blob/lx/docs-lx/lx-impair.md)
 (Keys, Sublinks, Schedule, рецепты). В интерфейсе LxBox его нет; узел
 `impair` добавляется как любой сервер — `POST /subs` с JSON outbound.
