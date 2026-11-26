@@ -122,7 +122,7 @@ class ParamsTab extends StatelessWidget {
             ],
           ),
         ),
-        const Divider(),
+        // Под переключателем черты нет: рамки условий начинаются сразу.
         // §225 — json-режим: только тело правила, остальные секции скрыты.
         if (c.kind == CustomRuleKind.json)
           JsonSection(
