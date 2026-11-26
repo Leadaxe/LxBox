@@ -670,7 +670,7 @@ cc_channel.dart              # §122 CcChannel.instance — the Dart client of t
                              #   a broadcast (ONE native sink per channel, the §122 sink-leak guard)
 cc_channel/method_names.dart # part (§740): _CcMethods — the 57 native method names CcChannel calls
 cc_channel/models_*.dart     # parts (§740): the DTOs — tailscale · status · traffic · probe
-cc_openconnect.dart          # §654 C the models of the lxbox/cc/openconnect stream (endpoints, pending challenge)
+cc_openconnect.dart          # §654 C the models of the lxbox/cc/openconnect stream (endpoints, pending challenge, tunnel)
 platform_channels.dart       # §141 PlatformChannels — every MethodChannel/EventChannel name plus the Sora
                              #   editor viewType and channel prefix (§740: moved here from services/)
 pprof_profile.dart           # §207 PprofProfile — one pprof profile: native pathAndQuery, file name, UI label

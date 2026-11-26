@@ -14,6 +14,15 @@
   Under Pinned fingerprint, Fetch from server connects to the server, shows
   the certificate (issued to, issued by, valid until, fingerprint) and on Use
   writes the `pin-sha256:` fingerprint of its public key into the node.
+- **OpenConnect server: Network tab ([details](docs/spec/tasks/764-openconnect-status-tab.md)).**
+  While the VPN is on, the tab shows the connection to the gateway: state and
+  since when, gateway and flavor, transport (DTLS or TLS), the address and DNS
+  servers the gateway gave, MTU. A failed connection shows the core's error.
+  Tap a row to copy its value.
+  (RU: вкладка Network у сервера OpenConnect — при включённом VPN видно
+  подключение к шлюзу: состояние и время, шлюз и вид протокола, транспорт,
+  адрес и DNS-серверы от шлюза, MTU; при неудаче — текст ошибки ядра. Тап по
+  строке копирует значение.)
 
 ## [2.26.0] — 2026-11-26
 

@@ -32,6 +32,7 @@ import '../widgets/node_diagnostics_tab.dart';
 import '../widgets/openconnect_form.dart';
 import '../services/contract/form_source_sync.dart';
 import '../widgets/tailscale_network_tab.dart';
+import '../widgets/openconnect_status_tab.dart';
 import '../services/tailscale_network.dart';
 import '../services/l10n/locale_controller.dart';
 import '../services/probe/probe_detour.dart';
@@ -84,8 +85,8 @@ class NodeSettingsScreen extends StatefulWidget {
   final int initialTab;
 
   /// Индекс вкладки Diagnostics: Settings, Source, JSON, Diagnostics. У узла
-  /// Tailscale перед Diagnostics стоит Network (§581), у WireGuard/AmneziaWG
-  /// — INI (§686 п. 9): экран сдвигает индекс сам.
+  /// Tailscale и OpenConnect перед Diagnostics стоит Network (§581, §764), у
+  /// WireGuard/AmneziaWG — INI (§686 п. 9): экран сдвигает индекс сам.
   static const diagnosticsTabIndex = 3;
 
   @override
@@ -156,6 +157,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
   /// §581 — узел Tailscale: есть вкладка Network.
   bool _isTailscale = false;
 
+  /// §764 — узел OpenConnect: есть вкладка Network (состояние шлюза).
+  bool _isOpenConnect = false;
+
   /// §686 п. 9 — узел WireGuard/AmneziaWG: есть вкладка INI.
   bool _isWireguard = false;
 
@@ -179,7 +183,12 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     _isTailscale = first is TailscaleSpec;
     // §686 п. 9 — у WireGuard/AmneziaWG вкладка INI после JSON.
     _isWireguard = first is WireguardSpec;
-    final count = 4 + (_isTailscale ? 1 : 0) + (_isWireguard ? 1 : 0);
+    // §764 — у OpenConnect вкладка Network перед Diagnostics.
+    _isOpenConnect = first?.protocol == kOpenConnectScheme;
+    final count = 4 +
+        (_isTailscale ? 1 : 0) +
+        (_isWireguard ? 1 : 0) +
+        (_isOpenConnect ? 1 : 0);
     var initial = widget.initialTab.clamp(0, 3);
     if (initial == NodeSettingsScreen.diagnosticsTabIndex) {
       initial = count - 1;
@@ -920,7 +929,8 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
               const Tab(text: 'JSON'),
               // l10n-exempt: format name, locale-invariant
               if (_isWireguard) const Tab(text: 'INI'),
-              if (_isTailscale) Tab(text: getLocalText.s("Network")),
+              if (_isTailscale || _isOpenConnect)
+                Tab(text: getLocalText.s("Network")),
               NodeDiagnosticsTabLabel(warnings: _notifications),
             ],
           ),
@@ -951,6 +961,11 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
                             _recordFlag(NodeRecordFlag.disableTaildropAutosave),
                       ),
                       onSaveRecordFlag: _saveTaildropFlag,
+                    ),
+                  if (_isOpenConnect)
+                    OpenConnectStatusTab(
+                      liveTag: TagResolver.displayTag(
+                          widget.entry.list.tagPrefix, _originalTag),
                     ),
                   // §392/§501 — диагностика + уведомления узла.
                   NodeDiagnosticsTab(

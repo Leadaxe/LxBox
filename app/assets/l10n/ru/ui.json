@@ -1862,6 +1862,15 @@
   "Connected": {
     "value": "Подключено"
   },
+  "Connected · since %s": {
+    "value": "Подключено · с %s"
+  },
+  "Transport": {
+    "value": "Транспорт"
+  },
+  "MTU": {
+    "value": "MTU"
+  },
   "Connected to %s from inside the tunnel": {
     "value": "Соединение изнутри туннеля — с %s"
   },

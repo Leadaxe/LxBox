@@ -1640,6 +1640,15 @@
   "Connected": {
     "value": "已连接"
   },
+  "Connected · since %s": {
+    "value": "已连接 · 自 %s 起"
+  },
+  "Transport": {
+    "value": "传输"
+  },
+  "MTU": {
+    "value": "MTU"
+  },
   "Connected to %s from inside the tunnel": {
     "value": "已在隧道内连接到 %s"
   },

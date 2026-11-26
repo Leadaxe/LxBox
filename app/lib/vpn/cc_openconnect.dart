@@ -132,6 +132,49 @@ class CcOpenConnectChallenge {
   }
 }
 
+/// Туннель endpoint'а (карта `tunnel`): что выдал шлюз. Адреса, DNS и
+/// шлюз — данные пользователя (см. шапку файла).
+class CcOpenConnectTunnel {
+  const CcOpenConnectTunnel({
+    this.server = '',
+    this.flavor = '',
+    this.transport = '',
+    this.mtu = 0,
+    this.connectedSince = 0,
+    this.ipv4 = const [],
+    this.ipv6 = const [],
+    this.dns = const [],
+  });
+
+  /// Поле `server` узла как записано (хост, хост:порт или URL).
+  final String server;
+  final String flavor;
+  final String transport;
+  final int mtu;
+
+  /// Секунды Unix; `0` — время не задано.
+  final int connectedSince;
+
+  /// Префиксы (`10.0.0.5/32`); у карты без списков (натив до §764) — пусто.
+  final List<String> ipv4;
+  final List<String> ipv6;
+  final List<String> dns;
+
+  static int _int(Object? v) => v is num ? v.toInt() : 0;
+
+  factory CcOpenConnectTunnel.fromMap(Map<String, dynamic> m) =>
+      CcOpenConnectTunnel(
+        server: '${m['server'] ?? ''}',
+        flavor: '${m['flavor'] ?? ''}',
+        transport: '${m['transport'] ?? ''}',
+        mtu: _int(m['mtu']),
+        connectedSince: _int(m['connected_since']),
+        ipv4: _strings(m['ipv4']),
+        ipv6: _strings(m['ipv6']),
+        dns: _strings(m['dns']),
+      );
+}
+
 /// Состояние одного endpoint'а openconnect.
 class CcOpenConnectStatus {
   const CcOpenConnectStatus({
@@ -140,6 +183,7 @@ class CcOpenConnectStatus {
     this.stateText = '',
     this.error = '',
     this.challenge,
+    this.tunnel,
   });
 
   final String tag;
@@ -150,11 +194,15 @@ class CcOpenConnectStatus {
   /// Висящий челлендж; `null` — нет (пустой id тоже считается «нет»).
   final CcOpenConnectChallenge? challenge;
 
+  /// §764 — туннель (карта `tunnel`); `null` — ключа нет.
+  final CcOpenConnectTunnel? tunnel;
+
   /// id висящего челленджа; пусто — нет.
   String get pendingChallengeId => challenge?.id ?? '';
 
   factory CcOpenConnectStatus.fromMap(Map<String, dynamic> m) {
     final ch = m['challenge'];
+    final t = m['tunnel'];
     final challenge = ch is Map
         ? CcOpenConnectChallenge.fromMap(_map(ch))
         : null;
@@ -166,6 +214,7 @@ class CcOpenConnectStatus {
       challenge: challenge != null && challenge.id.isNotEmpty
           ? challenge
           : null,
+      tunnel: t is Map ? CcOpenConnectTunnel.fromMap(_map(t)) : null,
     );
   }
 }

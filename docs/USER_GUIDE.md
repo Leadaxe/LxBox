@@ -331,7 +331,12 @@ On OpenConnect the protocol tab holds the connection form (server
 certificate and the rest) above the source text. Under **Pinned
 fingerprint**, **Fetch from server** connects to the server address, shows
 who the certificate is issued to, who issued it, the expiry date and the
-fingerprint; **Use** puts that fingerprint into the field.
+fingerprint; **Use** puts that fingerprint into the field. An OpenConnect server
+also has a **Network** tab before Diagnostics: while the VPN is on it shows
+the connection to the gateway: state and since when, gateway and protocol
+flavor, transport (DTLS or TLS), the address and DNS servers the gateway
+gave, MTU. If the connection failed, the tab shows the core's error. Tap a
+row to copy its value.
 
 The protocol tab of your own server and of a folder's server shows the
 text it came from: a link, a `.conf` or JSON. Comments in JSON — `//`,

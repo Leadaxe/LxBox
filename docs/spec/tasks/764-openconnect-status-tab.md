@@ -10,7 +10,7 @@
 ## Docs to update
 
 - `docs/USER_GUIDE.md` / `.ru.md` — абзац о вкладках экрана сервера.
-- `docs/ARCHITECTURE.md` — строка о новом виджете рядом с `tailscale_network_tab.dart`.
+- `docs/ARCHITECTURE.md` — строка `cc_openconnect.dart` (модель туннеля).
 - `CHANGELOG.md` — Unreleased.
 
 ## Problem

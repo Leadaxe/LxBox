@@ -395,6 +395,9 @@ class ServiceCommandClient(private val host: Host) : OpenConnectControl {
                 "transport" to (t.transport ?: ""),
                 "mtu" to t.mtu,
                 "connected_since" to t.connectedSince,
+                "ipv4" to stringList(t.iPv4()),
+                "ipv6" to stringList(t.iPv6()),
+                "dns" to stringList(t.dns()),
             )
         }
         return m
