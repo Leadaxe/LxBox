@@ -10739,3 +10739,44 @@ UI лаунчера: галка «Block HTTPS/SVCB records (no ECH)» в DNS-в�
 **Корпус `rule_tree/`.** Ожидания всех кейсов со ссылками переписаны; `derived_tag_collision` (правило `X` со ссылкой `…/ads.srs` рядом с правилом `X:ads` → `X:ads (2)`), `disabled_derived_stable` (выключенное правило держит `Video:news:eu`, соседу — `Video:news:eu (2)`) и `h8_collision` (одинаковый stem `pair` и одинаковые h8 → 16 hex) пересобраны под норму; новые: `stem_ai_example`, `stem_shapes` (query, без расширения, `geo.tar.srs`, `list.txt`, `LIST.SRS` рядом с `list.srs`), `stem_empty`, `stem_collision`, `stem_file_percent` (`%20`, `%2F` внутри сегмента).
 
 Задачи вам: синк 1.1.182; новая раздача тегов ссылок и inline-набора корня; автоматическая перезапись рукописных ссылок при первой загрузке; прогон `rule_tree/`; ответ с sha и состоянием корпуса.
+
+## 186. Контракт 1.1.183 — ядро 1.14.4-lx.36: `lx.wg.idle`, `lx.wg.buffers`, `lx.wg.connected_socket` (24.11.2026)
+
+Ядро `v1.14.4-lx.36` (SPEC 098, 158 §9, 160 форка). Лаунчер поднимает пин до `1.14.4-lx.36`.
+
+**Что меняется.**
+
+1. **Ключи сна WireGuard переехали в подблок `lx.wg.idle`**, периода совместимости нет — старое плоское имя с lx.36 (и с `-rc.1`) даёт ошибку загрузки конфига с подсказкой нового: `idle_suspend` → `idle.suspend`, `idle_suspend_reachable` → `idle.suspend_reachable`, `idle_teardown` → `idle.teardown`, `lazy_build` → `idle.lazy_build`, `build_max` → `idle.build_max`, `build_overflow` → `idle.build_overflow`. Переменные (`wg_idle_suspend`, `wg_idle_suspend_reachable`, `wg_lazy_build`, `wg_build_max`) и их значения не меняются — меняется только место эмиссии в шаблоне. Сохранённое состояние переносить не нужно: в нём хранятся значения переменных, а не ключи ядра. Блок `idle` по-прежнему пишет только mobile (сборка с `with_lx_idle_suspend`).
+2. **Три новые переменные, `in: both`, раздел `wireguard`** (общий id обеих сторон, `TEMPLATE_LANG` §2.3). Норма эмиссии: ключ пишется только при значении, отличном от дефолта ядра; пустые `buffers` и `wg` не пишутся.
+   - `wg_read_datagram_count` — int с options `128 / 32 / 8 / 2 / 1`, дефолт `128` (ключа нет) → `lx.wg.buffers.read_datagram_count: <N>` числом. Дефолты сторон разные (решения владельца 24.11.2026): у LxBox — `8` (ваш f0b20830), у лаунчера по цели — удалённая Linux-машина (роутер) `8`, прочие `128`. Переменная `portable: false`, значение между сторонами не переносится. Действует на Linux и Android (на Android — выведено из кода, на устройстве не замерено). Ориентиры: `8` — слабые машины и роутеры, `1`–`2` — десятки и сотни туннелей.
+   - `wg_send_by_mtu` — bool, дефолт `true` (ключа нет) → при `false` `lx.wg.buffers.send_by_mtu: false`. Диагностический переключатель, место — расширенные настройки.
+   - `wg_connected_socket` — bool, дефолт `false` (ключа нет) → при `true` `lx.wg.connected_socket: true`. Linux и Android, туннель с одним пиром, фиксированным адресом, без `listen_port` и `detour`. Не проверено ядром: телефон при переходе Wi-Fi ↔ LTE — поэтому выключено по умолчанию.
+   - Все три работают в любой сборке ядра: отказ сборки без `with_lx_idle_suspend` относится только к `idle`.
+3. **`registry/core_config.json`**: `lx.wg.idle`, `lx.wg.buffers`, `lx.wg.connected_socket` — `min_core 1.14.4-lx.36-rc.1`. LxBox с ядром, равным пину, таблицу не исполняет.
+
+Шаблон лаунчера — образец: `bin/wizard_template.json`, раздел `wireguard` и ветка `"#if wg"` в `config.lx`; тест `core/template` `TestBundledTemplate_WGBlock`.
+
+Задачи вам: синк 1.1.183; эмиссия ключей сна в `lx.wg.idle.*` одним шагом с пином lx.36; три переменные в разделе `wireguard`; ответ с sha.
+
+## 187. Контракт 1.1.184 — ядро с SPEC 165: цепочка как перезапись `detour`, `lx.detour`, `max_core` (26.11.2026)
+
+Ядро `v1.14.4-lx.37-rc.2` (SPEC 165 форка, ещё не вышло; ветка `lx-spec165-chain-detour`). Узлу на позиции ≥ 1 цепочки ядро при загрузке ставит `detour` на внутренний хоп `<цепочка>#<i>` (тип `chain-hop`); копий-звеньев больше нет. Лаунчер — SPEC 189, ветка `spec189-chain-detour-rewrite`, вливается с пином rc2.
+
+**Что меняется.**
+
+1. **Тело цепочки без `idle_timeout`, `strip_evasion`, `strip`.** Ядро rc2 отвергает их загрузкой всего конфига. Импорт бэкапа снимает их (бэкапы 0.12 и 1.0 с этими ключами читаются), экспорт не пишет. Ожидания корпуса `backup/chains_roundtrip`, `backup/v10_*` (`.expected.lxbox.json` тоже) — без ключей; `direction/chain_strip_and_timeout` — ключи во входе, в конфиге их нет. Из `registry/protocols/chain.json` сняты поля `idle_timeout`, `strip_evasion`, `strip` и `__dialer`. Код `chain_strip_utls_on_reality` снят вместе с каталогом `strip`.
+2. **`registry/core_config.json`: атрибут `max_core`.** Первая версия ядра, в которой ключа уже нет: исполнитель снимает ключ у ядра этой версии и новее и при неизвестной версии. `lx.mtu_align` получил `max_core 1.14.4-lx.37-rc.2`, новая запись `lx.detour` — `min_core 1.14.4-lx.37-rc.2`. LxBox с ядром, равным пину, таблицу не исполняет: при пине rc2 писать только `lx.detour.mtu_align` (var `mtu_align`, при значении, отличном от `clamp`); `lx.detour.strip` и `except_outbounds` не писать — без ключа ядро включает весь каталог фильтров.
+3. **Решение владельца 26.11.2026: клиент не допускает колец и конфликтов цепочек** — ядро понятных сообщений не даёт (кольцо — апстримное `circular outbound dependency: … c#0 …`, конфликт — короткая техническая строка). Сторона снимает цепочку на сборке с кодом и показывает причину в редакторе цепочки до сохранения. Проверки (сверены с ядром d9fc75468):
+   - **одно место на тег** — узел или группа, достижимые с позиций цепочек (все члены групп любой вложенности, выбор не важен; `direct`/`block` не считаются), не нужны двум местам, из которых хотя бы одно — позиция ≥ 1: другой цепочке или второй позиции ≥ 1 той же → `chain_detour_conflict` (params `chain`, `node`, `other`), снимается поздняя. **Общий вход двух цепочек (узел или группа на позиции 0 обеих) — не конфликт** (решение владельца 26.11, ядро правится так же);
+   - **кольцо через группу** — узел входа достижим и с позиции ≥ 1 той же цепочки (`[A, Группа{A, X}]`) → `chain_detour_ring` (`chain`, `node`, `group`, `position`);
+   - **кольцо через detour** — собственный detour узла нижней позиции ведёт в узел позиции выше → `chain_detour_ring_detour` (`chain`, `node`, `position`);
+   - **локальный порт** у узла позиции ≥ 1 (WireGuard/AWG `listen_port`, Tailscale `listen_port` / `relay_server_port`, OpenConnect `dtls_local_port`) → `chain_hop_local_port` (`chain`, `node`, `position`, `fields`); порт не снимается;
+   - **тег хопа** `<цепочка>#<i>` занят → `chain_hop_tag_taken` (`chain`, `tag`);
+   - **rewrite с detour** → `chain_rewrite_detour` (`chain`, `type`).
+   Вложенная цепочка — только позиция 0 (как раньше). Поля привязки сокета (`tcp_fast_open`, `routing_mark`, `bind_interface` …) под detour — не ошибка: ядро показывает их в `GetOutboundConfig` записями `lx.detour`.
+4. **Копии узлов и групп сторона сама НЕ собирает** (решение владельца 26.11, одинаково для лаунчера и LxBox). Кольцо или конфликт — ошибка в редакторе цепочки (сохранить нельзя) с подсказкой, что скопировать: «узел A стоит на входе и внутри группы X на позиции 2 — сделайте копию группы без A для этой позиции», «группа X используется в цепочках C1 и C2 — сделайте копию группы (и узлов; WireGuard — с другими ключами) для одной из цепочек». Тексты — в `warnings.json` у кодов п. 3.
+5. **RPC:** `GetChains`, `GetChainCloneConfig` удалены; `GetChainStatus(tag)`, `GetOutboundConfig(tag)` (JSON `tag` / `original` / `effective` / `changes`), `GetEffectiveConfig`; `SetChainPositionEnabled` без `warmupError`; в статусе позиции нет полей звеньев. Исходящие типа `chain-hop` в списках не показывать.
+
+Образец у лаунчера: проверка `core/config/chain_validate.go` (`ChainDetourProblems`, её же зовёт редактор через `ChainEditProblems`), санитайзер графа `core/build/outbound_graph_chain_detour.go` (тест `TestSanitizeChainDetourRewrite`), гейт `core/config/nodeflow/config_gate.go`, нормализация тела `core/state/sources_v7.go` (`chainBodyRemovedKeys`).
+
+Задачи вам: синк 1.1.184 одним шагом с пином rc2; снятие трёх ключей из формы цепочки, состояния и импорта; `lx.detour.mtu_align` вместо `lx.mtu_align`; проверки п. 3 на сборке и в редакторе цепочки; ответ с sha.

@@ -64,23 +64,27 @@ const _autoDefaultKeys = {'url', 'interval', 'tolerance', 'idle_timeout'};
 /// как у Направления (§570).
 const Map<String, String> _skipFold = {};
 
-/// §761 — ядро v1.14.4-lx.37-rc.2 отвергает `idle_timeout`, `strip_evasion`,
-/// `strip` цепочки (SPEC 165 форка); сборка LxBox их больше не пишет, а
-/// ожидание корпуса — пишет. Снять скип, когда лаунчер обновит кейс.
+/// §761 — кейсы, где корпус и сборка LxBox судят разные слои. Раннер
+/// лаунчера (`core/config/contract_direction_test.go`) проверяет генерацию
+/// (`GenerateOutboundsFromParserConfig`), до проверки перезаписи цепочек;
+/// его сборка (`applyChainDetourRules`) снимает те же цепочки кодами
+/// `chain_detour_ring` / `chain_detour_conflict`. Раннер LxBox гоняет всю
+/// сборку, где эта проверка есть (`applyChainTakeover`). По ядру
+/// v1.14.4-lx.37-rc.2 (SPEC 165 ALGORITHM К1, `placesConflict` в
+/// `protocol/chain/rewrite.go`) конфиг кейса не грузится: цепочку надо снять.
 const Map<String, String> _skipChainRc2 = {
-  'chain_strip_and_timeout':
-      '§761: chain idle_timeout/strip_evasion/strip are not emitted for core '
-          'lx.37-rc.2; waits for the launcher contract update',
-  // Один узел или группа — один путь: `[proxy-out, NL]` при proxy-out со
-  // всеми узлами — кольцо, цепочка выпадает; вторая цепочка над теми же
-  // узлами (`[F, A]` и `[A, F]`) — конфликт, выпадает. Ожидание корпуса
-  // держит обе цепочки.
+  // `[proxy-out, NL]`, NL внутри proxy-out: NL на позиции 0 и 1 одной
+  // цепочки — кольцо (К1, апстримное `circular outbound dependency`).
   'chain_cycle_excluded_from_direction':
       '§761: ring (the exit node is also inside the entry Direction), the '
-          'chain drops; waits for the launcher contract update',
+          'core rejects the config and the build drops the chain; the corpus '
+          'checks the generation layer before the chain check',
+  // `[F, A]` и `[A, F]`: F на входе одной и на позиции 2 другой — конфликт
+  // (К1, Т11 ALGORITHM).
   'chain_interrupt_connections':
-      '§761: the second chain over the same nodes conflicts and drops; waits '
-          'for the launcher contract update',
+      '§761: the second chain over the same nodes conflicts (core: one node '
+          'or group has one path) and the build drops it; the corpus checks '
+          'the generation layer before the chain check',
 };
 
 /// Коды предупреждений корпуса → как их опознать в `emitWarnings` LxBox.
