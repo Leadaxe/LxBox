@@ -797,6 +797,11 @@ class SoraEditorPlatformView(
                 val line = ((call.argument<Int>("line") ?: 1) - 1).coerceIn(0, maxOf(count - 1, 0))
                 withoutFocusSteal { editor.setSelection(line, 0) }
                 editor.ensurePositionVisible(line, 0)
+                // Переход — чтобы посмотреть строку: клавиатуру прячем (владелец
+                // 28.11). Фокус после закрытия диалога Flutter возвращает чуть
+                // позже — прячем и после этого; тап по тексту её откроет.
+                editor.hideSoftInput()
+                main.postDelayed({ if (!editor.isReleased) editor.hideSoftInput() }, 250L)
                 result.success(null)
             }
             "setLineNumbers" -> {
