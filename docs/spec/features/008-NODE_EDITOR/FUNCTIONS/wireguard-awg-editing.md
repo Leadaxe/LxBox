@@ -24,8 +24,8 @@ edited. The exception is masquerade: the Masquerade section on Settings writes
 | Node source | Where it is edited | How the tag is stored |
 |---|---|---|
 | `.conf` (wg-quick INI) | Source, as INI text | as a record field; INI byte for byte |
-| link `wireguard://`, `wg://`, `awg://`, `amneziawg://` | Source, as link text | in the `#…` fragment |
-| sing-box body `type: wireguard` | Source, as JSON text | in `tag` |
+| link `wireguard://`, `wg://`, `awg://`, `amneziawg://` | Source, as link text | as a record field |
+| sing-box body `type: wireguard` | Source, as JSON text | as a record field |
 
 AmneziaWG obfuscation fields are edited only as text — as INI/link keys or as
 JSON keys of the `wireguard` endpoint:
@@ -106,7 +106,7 @@ suffix for masquerade) is visible in the node row on the main screen
 - The INI is saved as is; the `DNS` line from `[Interface]` does not go into
   the body ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)). The tag on
   Save — as a record field, not into the text.
-- A link is saved with the tag in the fragment; parameters the link does not
+- A link is saved as is, the tag as a record field; parameters the link does not
   carry are lost in the link → model transition
   ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)).
 - A sing-box body is checked by the core on save and goes into the config

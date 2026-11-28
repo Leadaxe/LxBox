@@ -427,17 +427,17 @@ void main() {
       expect((read.value! as SubscriptionServers).updateIntervalHours, 6);
     });
 
-    test('тег записи разошёлся с текстом — побеждает текст, отметка в notes',
-        () {
+    test('тег записи разошёлся с текстом — побеждает тег записи (§456)', () {
       final notes = <String>[];
       final u = sourceFromRecord({
         'kind': 'server',
         'id': 'u',
-        'tag': 'Stale',
+        'tag': 'Mine',
         'origin': {'kind': 'uri', 'raw': _uriAlpha},
-      }, notes: notes).value!;
-      expect(u.nodes.single.tag, 'Alpha');
-      expect(notes.single, contains('Stale'));
+      }, notes: notes).value! as UserServer;
+      expect(u.nodes.single.tag, 'Mine');
+      expect(u.rawBody, _uriAlpha);
+      expect(notes, isEmpty);
     });
 
     test('запись без исходника: body с тегом записи становится JSON-текстом',

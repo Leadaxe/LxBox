@@ -196,8 +196,8 @@ input is not kept.", "The core rejected the node:
 wizard: form ─► sing-box body with tag ──┐
         link/JSON ─► parsing (002) ──────┼─► auto emoji ─► "custom server" record ─► rebuild
 node screen: Source ─► text kind?
-   JSON  ─► body only + tag from Tag ─► core CheckConfig ─► write
-   link  ─► tag into the fragment ──────────────────────► write
+   JSON  ─► body only, tag as a record field ─► core CheckConfig ─► write
+   link  ─► as is, tag as a record field ───────────────► write
    INI   ─► as is, tag as a record field ───────────────► write
    write ─► re-read: model for the form, list, diagnostics
           ─► core verdict cleared if the body changed; references rewritten
@@ -284,8 +284,8 @@ build: custom JSON source ─► body verbatim (without detour) ; otherwise ─�
   node is saved, the record stays without a node. Any new write point must
   decide this explicitly.
 - **Save writes the text of the Source tab.** Editing just the Tag re-saves
-  the source; for a link the tag goes into the `#…` fragment, for JSON — into
-  `tag`, for INI — into a record field. Leaving the screen without Save
+  the source unchanged and writes the tag as a record field, for every kind.
+  The record's tag beats the name inside the text. Leaving the screen without Save
   silently loses the edit.
 - **The core check is for JSON only.** Links and INI go through the model and
   its gates; if the bridge to the core is unavailable, saving is not

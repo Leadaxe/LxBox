@@ -547,6 +547,7 @@ BackupServerMerge mergeBackupServers(
         origin: UserSource.manual,
         rawBody: body,
         dialect: srv.dialect, // §722; `null` — 0.x, вид от движка
+        nodes: _namedNodes(body, srv.name), // §456
         // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
         warnings: srv.warnings,
         // §578/§656 — поля записи из файла.
@@ -784,6 +785,17 @@ Set<String> _fileFinalForms(String prefix, String raw) => {
       if (prefix.isNotEmpty) '$prefix$raw',
     };
 
+/// §456 — узлы нового своего сервера из файла: имя первого — `tag` записи.
+List<NodeSpec> _namedNodes(String body, String name) {
+  try {
+    final nodes = [...parseAll(decode(body), own: true)];
+    if (nodes.isNotEmpty) nodes.first.applyRecordName(name);
+    return nodes;
+  } catch (_) {
+    return <NodeSpec>[];
+  }
+}
+
 /// Член папки [folderAt]: дедуп по канону тела в пределах этой папки, новые
 /// в конец. Возвращает, сколько применилось (0 — узнан, применять нечего).
 int _mergeFolderMember(
@@ -834,6 +846,7 @@ int _mergeFolderMember(
   final member = FolderMember(
     raw: body,
     dialect: srv.dialect, // §722; `null` — 0.x, вид от движка
+    nameHint: srv.name, // §456 — имя записи главнее имени из текста
     enabled: srv.enabled,
     // Фича 478 — прочие warnings записи; вердикт страховки срезан (§489).
     warnings: srv.warnings,

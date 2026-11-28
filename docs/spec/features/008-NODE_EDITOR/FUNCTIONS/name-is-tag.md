@@ -27,7 +27,7 @@ changes.
 | link | the `#…` fragment; parsing — [002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md) |
 | sing-box JSON | the `tag` field |
 | WireGuard `.conf` from a file | the file name without the extension, if the INI has no name of its own ([002-NODE_IMPORT](../../002-NODE_IMPORT/FEATURE.md)) |
-| the node screen's Tag field | on Save it is written into the source according to its kind |
+| the node screen's Tag field | on Save it is written as the record's tag; the source does not change. The record's tag beats the name inside the source |
 
 Auto emoji on record creation, if the tag has no emoji:
 

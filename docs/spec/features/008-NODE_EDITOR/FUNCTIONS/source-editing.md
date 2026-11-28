@@ -22,8 +22,8 @@ core sees is derived from it and is not stored.
 
 | Source kind (by text) | Caption on the Source tab | What Save does |
 |---|---|---|
-| JSON (starts with `{` or `[`) | "sing-box JSON: sent to the core as is. The core checks it on save." | node body only, tag from Tag into `tag`, core check, write |
-| link (one line with `://`) | "Link: the tag goes into its fragment on save." | tag into the `#…` fragment, write |
+| JSON (starts with `{` or `[`) | "sing-box JSON: sent to the core as is. The core checks it on save." | node body only, text as typed, tag as a record field, core check, write |
+| link (one line with `://`) | "Link: saved as is. The tag is stored separately." | link as is, tag as a record field |
 | WireGuard INI | "WireGuard config: saved as is. The tag is stored separately." | text as is, tag as a record field |
 
 The **Edit JSON** button is on the JSON tab; **Edit INI** — on the INI tab

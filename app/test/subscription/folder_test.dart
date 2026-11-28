@@ -1,5 +1,6 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -216,6 +217,67 @@ void main() {
       expect(err2, isNull);
       final folder2 = c.entries.single.list as FolderServers;
       expect(folder2.members[2].node!.tag, 'Alpha');
+    });
+
+    // §456 — переименование пишет `tag` записи; ссылка `vpn://` остаётся
+    // как пришла (жалоба: Save отвечал «Could not parse server config»).
+    test('vpn://: Save и переименование не меняют источник, имя переживает '
+        'перезагрузку', () async {
+      final key = base64.encode(List<int>.filled(32, 7));
+      final ini = '[Interface]\nPrivateKey = $key\nAddress = 10.8.1.4/32\n\n'
+          '[Peer]\nPublicKey = $key\nAllowedIPs = 0.0.0.0/0\n'
+          'Endpoint = example.com:666\n';
+      final raw =
+          'vpn://${base64Url.encode(utf8.encode(ini)).replaceAll('=', '')}';
+      final c = await makeController();
+      await c.addFromInput(raw);
+      UserServer server(SubscriptionController c) =>
+          c.entries.single.list as UserServer;
+
+      expect(await c.updateConnectionAt(0, [raw]), isNull);
+      expect(server(c).nodes.single.tag, 'WireGuard');
+
+      expect(await c.updateConnectionAt(0, [raw], nameHint: 'Kazan'), isNull);
+      expect(await c.updateConnectionAt(0, [raw]), isNull);
+      expect(server(c).rawBody, raw);
+
+      final reloaded = await makeController();
+      expect(server(reloaded).nodes.single.tag, 'Kazan');
+      expect(server(reloaded).rawBody, raw);
+    });
+
+    // §456 — у профиля из нескольких контейнеров `tag` записи называет только
+    // первый узел.
+    test('vpn:// с двумя контейнерами: имя записи — только у первого',
+        () async {
+      final key = base64.encode(List<int>.filled(32, 7));
+      Map<String, Object> container(String name, String host) => {
+            'container': name,
+            'awg': {
+              'last_config': jsonEncode({
+                'config': '[Interface]\nPrivateKey = $key\n'
+                    'Address = 10.8.1.4/32\n\n[Peer]\nPublicKey = $key\n'
+                    'AllowedIPs = 0.0.0.0/0\nEndpoint = $host:666\n',
+              }),
+            },
+          };
+      final json = jsonEncode({
+        'containers': [
+          container('amnezia-awg', 'a.example.com'),
+          container('amnezia-awg2', 'b.example.com'),
+        ],
+      });
+      final raw = 'vpn://${base64Url.encode(utf8.encode(json))}';
+      final c = await makeController();
+      await c.addFromInput(raw);
+      List<String> tags(SubscriptionController c) =>
+          [for (final n in (c.entries.single.list as UserServer).nodes) n.tag];
+      final before = tags(c);
+      expect(before, hasLength(2));
+
+      expect(await c.updateConnectionAt(0, [raw], nameHint: 'Kazan'), isNull);
+      expect(tags(c), ['Kazan', before[1]]);
+      expect(tags(await makeController()), ['Kazan', before[1]]);
     });
 
     test('toggleMemberAt выключает ноду члена из nodes', () async {

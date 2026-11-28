@@ -87,8 +87,10 @@ Object? integralDoublesToInt(Object? value) {
 
 sealed class NodeSpec {
   final String id;
-  final String tag;
-  final String label;
+  String _tag;
+  String _label;
+  String get tag => _tag;
+  String get label => _label;
   final String server;
   final int port;
 
@@ -147,17 +149,29 @@ sealed class NodeSpec {
   /// Гейт для подписей `server:port`, пробы и операций, требующих адреса.
   bool get isAddressless => false;
 
+  /// §456 (28.11.2026) — имя из `tag` записи: оно главнее любого имени из
+  /// текста источника. [rawSource] не меняется. Звать сразу после разбора,
+  /// до того как узел попал в множество или карту ([hashCode] берёт тег).
+  /// Пустое имя и группа — no-op.
+  void applyRecordName(String name) {
+    if (name.isEmpty || name == _tag || isGroup) return;
+    _tag = name;
+    _label = name;
+  }
+
   NodeSpec({
     required this.id,
-    required this.tag,
-    required this.label,
+    required String tag,
+    required String label,
     required this.server,
     required this.port,
     required this.rawSource,
     this.chained,
     this.tcpKeepAlive,
     List<NodeWarning>? warnings,
-  }) : warnings = warnings ?? <NodeWarning>[];
+  })  : _tag = tag,
+        _label = label,
+        warnings = warnings ?? <NodeWarning>[];
 
   /// Чистая функция spec → sing-box entry. Не применяет prefix, не знает
   /// про подписку или детур-политику. Используется round-trip тестами,

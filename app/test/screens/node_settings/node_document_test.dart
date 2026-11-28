@@ -77,16 +77,15 @@ void main() {
   });
 
   group('голое тело sing-box', () {
-    test('объект с type → тег подмешан в корень, вид singbox', () {
-      final p = readyOf(prepareNodeDocumentForSave(
-          '{"type":"socks","tag":"old","server":"h","server_port":1080}',
-          'new-tag'));
-      final m = jsonDecode(p.text) as Map<String, dynamic>;
+    test('переименование: текст не меняется, имя — nameHint (§456)', () {
+      const text =
+          '{"type":"socks","tag":"old","server":"h","server_port":1080}';
+      final p = readyOf(prepareNodeDocumentForSave(text, 'new-tag'));
+      expect(p.text, text);
+      expect(p.nameHint, 'new-tag');
       expect(p.dialect, SourceDialect.singbox);
       expect(p.isDocument, isFalse);
       expect(p.droppedExtras, isFalse);
-      expect(m['tag'], 'new-tag');
-      expect(m['type'], 'socks');
     });
 
     test('пустой Tag → тег тела не трогается', () {
@@ -123,25 +122,17 @@ void main() {
       expect(p.droppedExtras, isFalse);
     });
 
-    test('тег из поля вставляется правкой текста, комментарии на месте', () {
+    test('переименование комментарии и текст не трогает', () {
       final p = readyOf(prepareNodeDocumentForSave(body, 'n1'));
-      expect(p.text, contains('// пометка автора'));
-      expect(p.text, contains('/* "блок" */'));
-      expect(p.text, contains('# хост'));
-      expect(p.text, contains('"tag": "n1",'));
-      // Повторное сохранение с тем же тегом — текст не меняется.
-      expect(readyOf(prepareNodeDocumentForSave(p.text, 'n1')).text, p.text);
-      // Переименование — меняется только значение тега.
-      final r = readyOf(prepareNodeDocumentForSave(p.text, 'n2'));
-      expect(r.text, p.text.replaceFirst('"tag": "n1"', '"tag": "n2"'));
+      expect(p.text, body);
+      expect(p.nameHint, 'n1');
     });
 
-    test('поле Tag не трогали, тега в тексте нет — тег вставлен, пометки целы',
-        () {
+    test('поле Tag не трогали — переименования нет, текст как набран', () {
       final p = readyOf(prepareNodeDocumentForSave(body, 'auto-tag',
           tagTouched: false));
-      expect(p.text, contains('// пометка автора'));
-      expect(p.text, contains('"tag": "auto-tag"'));
+      expect(p.text, body);
+      expect(p.nameHint, isNull);
     });
 
     test('документ без лишнего — как набран; с dns — пересобран без них', () {
@@ -172,13 +163,11 @@ void main() {
   });
 
   group('§722 Xray (#209)', () {
-    test('outbound: смена тега → Ready, текст Xray, вид xray', () {
+    test('outbound: переименование → текст Xray как есть, вид xray', () {
       final p = readyOf(prepareNodeDocumentForSave(xrayOut, 'renamed'));
       expect(p.dialect, SourceDialect.xray);
-      final m = jsonDecode(p.text) as Map<String, dynamic>;
-      expect(m['protocol'], 'vless');
-      expect(m['tag'], 'renamed');
-      expect(m.containsKey('type'), isFalse);
+      expect(p.text, xrayOut);
+      expect(p.nameHint, 'renamed');
       expect(p.droppedExtras, isFalse);
     });
 
@@ -193,22 +182,16 @@ void main() {
       expect((m['outbounds'] as List), hasLength(3));
     });
 
-    test('переименование владельца переписывает dialerProxy звена', () {
-      final p = readyOf(prepareNodeDocumentForSave(
-          xrayChain, 'relay-new', oldTag: 'relay'));
-      final obs = (ready(p)['outbounds'] as List).cast<Map>();
+    test('переименование звена переписывает dialerProxy', () {
+      final base = readyOf(prepareNodeDocumentForSave(xrayChain, ''));
+      final obs = (ready(renameRecordNode(base, 'relay', 'relay-new'))[
+              'outbounds'] as List)
+          .cast<Map>();
+      expect(obs[0]['tag'], 'main');
       expect(obs[1]['tag'], 'relay-new');
       expect(
           ((obs[0]['streamSettings'] as Map)['sockopt'] as Map)['dialerProxy'],
           'relay-new');
-    });
-
-    test('без oldTag переименовывается владелец, не звено', () {
-      final obs = (ready(prepareNodeDocumentForSave(xrayChain, 'owner'))[
-              'outbounds'] as List)
-          .cast<Map>();
-      expect(obs[0]['tag'], 'owner');
-      expect(obs[1]['tag'], 'relay');
     });
 
     test('вставка sing-box в Xray-запись → вид singbox (вид меняется)', () {
@@ -244,21 +227,19 @@ void main() {
       expect(p.droppedExtras, isFalse);
     });
 
-    test('переименование: первый узел, ссылки detour переписаны', () {
+    test('переименование не-первого узла: ссылки detour переписаны', () {
       const doc = '{"outbounds":[{"type":"direct","tag":"direct"},'
           '{"type":"socks","tag":"s","server":"h","server_port":1,'
           '"detour":"hop"},'
           '{"type":"socks","tag":"hop","server":"h","server_port":2}]}';
-      final obs = (ready(prepareNodeDocumentForSave(doc, 'hop2',
-              oldTag: 'hop'))['outbounds'] as List)
-          .cast<Map>();
+      final base = readyOf(prepareNodeDocumentForSave(doc, 'main'));
+      expect(base.text, doc);
+      expect(base.nameHint, 'main');
+      final next = readyOf(renameRecordNode(base, 'hop', 'hop2'));
+      expect(next.nameHint, 'main');
+      final obs = (ready(next)['outbounds'] as List).cast<Map>();
       expect(obs[2]['tag'], 'hop2');
       expect(obs[1]['detour'], 'hop2');
-      final own = (ready(prepareNodeDocumentForSave(doc, 'main'))['outbounds']
-              as List)
-          .cast<Map>();
-      expect(own[1]['tag'], 'main');
-      expect(own[2]['tag'], 'hop');
     });
 
     test('подходящего узла нет → отказ', () {
@@ -286,7 +267,8 @@ void main() {
           '{"type":"socks","tag":"b","server":"h","server_port":2}]',
           't'));
       final m = jsonDecode(p.text) as Map<String, dynamic>;
-      expect(m['tag'], 't');
+      expect(m['tag'], 'a');
+      expect(p.nameHint, 't');
       expect(m['server_port'], 1);
       expect(p.droppedExtras, isTrue);
       expect(p.text, contains('\n  "type"'), reason: 'отступ два пробела');
@@ -306,10 +288,11 @@ void main() {
   });
 
   group('ссылка и INI', () {
-    test('ссылка → вид uri, тег во фрагмент', () {
+    test('ссылка → вид uri, ссылка не меняется', () {
       final p = readyOf(prepareNodeDocumentForSave('trojan://p@h:443#t', 'n'));
       expect(p.dialect, SourceDialect.uri);
-      expect(p.text, 'trojan://p@h:443#n');
+      expect(p.text, 'trojan://p@h:443#t');
+      expect(p.nameHint, 'n');
     });
 
     test('INI → вид wg_ini, текст как есть, тег — nameHint', () {
@@ -325,73 +308,22 @@ void main() {
     });
   });
 
-  // §722 — «побеждает тот, кого трогали»: поле Tag не меняли (tagTouched:
-  // false) — тег, исправленный в самом тексте Source, не затирается полем.
-  group('поле Tag не трогали — тег из текста остаётся', () {
-    test('Xray outbound: тег исправлен в тексте (#209)', () {
-      final text = xrayOut.replaceFirst(
-          RegExp(r'"tag"\s*:\s*"[^"]*"'), '"tag":"edited-in-text"');
-      expect(text, contains('edited-in-text'));
-      final p = readyOf(prepareNodeDocumentForSave(text, 'field-old',
-          oldTag: 'field-old', tagTouched: false));
-      expect(p.dialect, SourceDialect.xray);
-      expect(p.text, text, reason: 'текст байт в байт');
-    });
-
-    test('sing-box тело: тег из текста; поле трогали — поле', () {
-      const text = '{"type":"socks","tag":"in-text","server":"h","server_port":1}';
-      expect(
-          ready(prepareNodeDocumentForSave(text, 'field',
-              oldTag: 'field', tagTouched: false))['tag'],
-          'in-text');
-      expect(ready(prepareNodeDocumentForSave(text, 'field'))['tag'], 'field');
-    });
-
-    test('в тексте тега нет → берётся поле', () {
-      const text = '{"type":"socks","server":"h","server_port":1}';
-      expect(
-          ready(prepareNodeDocumentForSave(text, 'field',
-              tagTouched: false))['tag'],
-          'field');
-      expect(
-          readyOf(prepareNodeDocumentForSave('trojan://p@h:443', 'field',
-                  tagTouched: false))
-              .text,
-          'trojan://p@h:443#field');
-    });
-
-    test('ссылка: фрагмент исправлен в тексте', () {
-      final p = readyOf(prepareNodeDocumentForSave(
-          'trojan://p@h:443#in-text', 'field',
-          tagTouched: false));
-      expect(p.text, 'trojan://p@h:443#in-text');
-    });
-
-    test('документ: владелец переименован в тексте — первый узел не затёрт',
-        () {
-      final text = xrayChain.replaceFirst('"tag":"main"', '"tag":"main-x"');
-      expect(text, contains('main-x'));
-      final p = readyOf(prepareNodeDocumentForSave(text, 'main',
-          oldTag: 'main', tagTouched: false));
-      final tags = [
-        for (final o in (jsonDecode(p.text) as Map)['outbounds'] as List)
-          (o as Map)['tag']
-      ];
-      expect(tags, contains('main-x'));
-      expect(tags, isNot(contains('main')));
-    });
-
-    test('INI: тега в тексте нет — имя всегда из поля', () {
-      const ini = '[Interface]\nPrivateKey = '
-          'yAnz5TF+lXXJte14tji3zlMNq+hd2rYUIgJBgB3fBmk=\n'
-          'Address = 10.0.0.2/32\n\n[Peer]\nPublicKey = '
-          'xTIBA5rboUvnH4htodjb6e697QjLERt1NAB4mZqp8Dg=\n'
-          'Endpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0';
-      expect(
-          readyOf(prepareNodeDocumentForSave(ini, 'home', tagTouched: false))
-              .nameHint,
-          'home');
-    });
+  // §456 — поле Tag не меняли: переименования нет, имя решает контроллер
+  // (изменённое в тексте, иначе прежнее).
+  group('поле Tag не трогали', () {
+    for (final text in [
+      xrayOut,
+      '{"type":"socks","server":"h","server_port":1}',
+      'trojan://p@h:443',
+      'trojan://p@h:443#in-text',
+    ]) {
+      test('текст как есть, nameHint нет: $text', () {
+        final p = readyOf(prepareNodeDocumentForSave(text, 'field',
+            tagTouched: false));
+        expect(p.text, text);
+        expect(p.nameHint, isNull);
+      });
+    }
   });
 
   group('отказы', () {

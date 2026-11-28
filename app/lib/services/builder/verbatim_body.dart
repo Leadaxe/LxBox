@@ -26,8 +26,8 @@ import '../../models/node_spec.dart';
 /// `null` — узел идёт через модель.
 ///
 /// `detour` тела снимается: detour решает сборка (политика, личный detour
-/// члена, родная цепочка) — так же, как у модельного узла. `tag` без тела —
-/// тег модели; дальше префикс контейнера и `allocateTag`, как у всех.
+/// члена, родная цепочка) — так же, как у модельного узла. `tag` — имя узла
+/// (§456); дальше префикс контейнера и `allocateTag`, как у всех.
 Map<String, dynamic>? verbatimBodyOf(SourceDialect dialect, NodeSpec node) {
   if (node is AutoSelectSpec) return null;
   if (dialect != SourceDialect.singbox) return null;
@@ -45,7 +45,7 @@ Map<String, dynamic>? verbatimBodyOf(SourceDialect dialect, NodeSpec node) {
   final body = Map<String, dynamic>.from(
       integralDoublesToInt(decoded) as Map<dynamic, dynamic>);
   body.remove('detour');
-  final tag = body['tag'];
-  if (tag is! String || tag.isEmpty) body['tag'] = node.tag;
+  // §456 — имя узла (`tag` записи) главнее `tag` в тексте источника.
+  if (node.tag.isNotEmpty) body['tag'] = node.tag;
   return body;
 }

@@ -22,8 +22,8 @@ WireGuard INI или тело sing-box — и сохранить его так, 
 
 | Вид источника (по тексту) | Подпись на вкладке Source | Что делает Save |
 |---|---|---|
-| JSON (начинается с `{` или `[`) | «sing-box JSON: sent to the core as is. The core checks it on save.» | только тело узла, тег из Tag в `tag`, проверка ядром, запись |
-| ссылка (одна строка с `://`) | «Link: the tag goes into its fragment on save.» | тег во фрагмент `#…`, запись |
+| JSON (начинается с `{` или `[`) | «sing-box JSON: sent to the core as is. The core checks it on save.» | только тело узла, текст как набран, тег — полем записи, проверка ядром, запись |
+| ссылка (одна строка с `://`) | «Link: saved as is. The tag is stored separately.» | ссылка как есть, тег — полем записи |
 | WireGuard INI | «WireGuard config: saved as is. The tag is stored separately.» | текст как есть, тег — полем записи |
 
 Кнопка **Edit JSON** на вкладке JSON; **Edit INI** — на вкладке INI узла

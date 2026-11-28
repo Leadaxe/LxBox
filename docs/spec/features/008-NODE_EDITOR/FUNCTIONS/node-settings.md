@@ -80,8 +80,9 @@ valid JSON object." This holds for every way the screen is opened.
   Source, the core rejects the node — the screen stays open with the
   message); Discard — leave without saving; Keep or dismiss — stay. No edit or
   still loading — leave without the dialog.
-- Save re-saves the Source text with the tag from the Tag field: a link —
-  into the fragment, JSON — into the `tag` field, INI — into a record field.
+- The tag from the Tag field is written as a record field and beats the name
+  inside the text; the Source text does not change. A name changed in the text
+  itself (the Tag field untouched) becomes the record's tag.
 - An emoji is not substituted into the tag automatically on edit; it is
   added via the palette. There is no separate "detour server mark" (a ⚙
   toggle): ⚙ is an ordinary palette emoji.

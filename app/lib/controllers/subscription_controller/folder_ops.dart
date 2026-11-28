@@ -24,10 +24,9 @@ mixin _FolderOpsMixin on ChangeNotifier {
 
   // ──────────────────────── §234 — Server folders ────────────────────────
 
-  /// §456 — имя члена папки, хранимое полем записи: у INI-источника тег в
-  /// тексте не лежит, у ссылки и JSON — лежит (пусто).
-  static String memberNameHintFor(NodeSpec n) =>
-      sourceDialectOf(n.rawSource) == SourceDialect.wgIni ? n.tag : '';
+  /// §456 — имя члена папки, хранимое полем записи: имя узла у любого вида
+  /// источника (у группы — пусто, её запись пишется отдельно).
+  static String memberNameHintFor(NodeSpec n) => n.isGroup ? '' : n.tag;
 
   /// §439 — члены-группы разобранного входа (sing-box-конфиг с
   /// `urltest`/`selector`) → члены `kind: auto` папки [folderId]. [added]
@@ -383,6 +382,7 @@ mixin _FolderOpsMixin on ChangeNotifier {
       // через `nameHint`, JSON — в теле. Фолбэк имени файла — только ссылке
       // без своего фрагмента. §439 — группе имя не раздаётся (`kind: auto`).
       var raw = n.rawSource;
+      var name = memberNameHintFor(n);
       if (!n.isGroup &&
           nameFallback != null &&
           nameFallback.isNotEmpty &&
@@ -394,8 +394,9 @@ mixin _FolderOpsMixin on ChangeNotifier {
           candidate = '$nameFallback ${i++}';
         }
         raw = rawWithName(raw, candidate);
+        name = candidate;
       }
-      added.add(FolderMember(raw: raw, nameHint: memberNameHintFor(n)));
+      added.add(FolderMember(raw: raw, nameHint: name));
     }
     added.setAll(0, _bindAutoMembers(added, nodes, folder.id));
     entry._replaceList(folder.copyWith(members: [...folder.members, ...added]));
@@ -601,7 +602,13 @@ mixin _FolderOpsMixin on ChangeNotifier {
     // вид записи.
     final trimmed = newRaw.trim();
     final kind = dialect ?? sourceDialectOf(trimmed);
-    final hint = nameHint ?? folder.members[memberIndex].nameHint;
+    final previousMember = folder.members[memberIndex];
+    // §456 — имя записи: явное переименование, иначе новое имя из текста,
+    // иначе прежнее.
+    final hint = nameHint ??
+        nameWrittenByEdit(previousMember.raw, trimmed) ??
+        previousMember.node?.tag ??
+        previousMember.nameHint;
     final probe = FolderMember(raw: trimmed, nameHint: hint, dialect: kind);
     if (probe.node == null) {
       return const ErrMsg(ErrKey.memberParseKeepCurrent);

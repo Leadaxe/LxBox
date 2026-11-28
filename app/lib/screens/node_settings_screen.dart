@@ -350,10 +350,17 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     final raw = _containerRaw;
     _sourceCtrl.text = raw;
     _dialect = _containerDialect;
-    Object? bodyOf(NodeSpec n) => _dialect == SourceDialect.singbox &&
-            n.rawSource.trimLeft().startsWith('{')
-        ? jsonDecode(n.rawSource)
-        : n.emit(TemplateVars.empty).map;
+    Object? bodyOf(NodeSpec n) {
+      if (_dialect != SourceDialect.singbox ||
+          !n.rawSource.trimLeft().startsWith('{')) {
+        return n.emit(TemplateVars.empty).map;
+      }
+      final body = jsonDecode(n.rawSource);
+      // §456 — имя узла главнее `tag` в тексте.
+      if (body is Map && n.tag.isNotEmpty) body['tag'] = n.tag;
+      return body;
+    }
+
     final Object? preview = node is AutoSelectSpec && member != null
         ? autoGroupJsonPreview(node) // §686
         : bodyOf(node);
@@ -559,10 +566,9 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
     // §722 — Save на Source — вход текста: вид определяет движок, вставка
     // другого диалекта меняет вид записи. Тег — по правилу вида
     // (`prepareNodeDocumentForSave`); §575 — кроме узлов ничего не хранится.
-    // Побеждает тот, кого трогали: поле Tag не меняли — тег, исправленный в
-    // самом тексте, остаётся; меняли — поле вписывается в текст.
+    // §456 — поле Tag меняли: имя уходит в `tag` записи, текст не меняется.
+    // Не меняли: имя решает контроллер.
     final prep = prepareNodeDocumentForSave(text, _tagCtrl.text,
-        oldTag: _originalTag,
         tagTouched: _tagCtrl.text.trim() != _originalTag);
     if (prep is NodeDocumentRejected) {
       _snack(prep.message);
@@ -1452,7 +1458,7 @@ class _NodeSettingsScreenState extends State<NodeSettingsScreen>
       SourceDialect.wgIni => getLocalText.s(
           "WireGuard config: saved as is. The tag is stored separately."),
       SourceDialect.uri =>
-        getLocalText.s("Link: the tag goes into its fragment on save."),
+        getLocalText.s("Link: saved as is. The tag is stored separately."),
     };
     return ListView(
       padding:

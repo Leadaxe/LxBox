@@ -498,8 +498,8 @@ The discriminator is `kind`. The record is read by `sourceFromRecord` /
 `chainFromRecord` (`lib/models/codec/`). Reading is tolerant: a link given as a
 string is a root link, a record with `body` and no `origin` (the launcher's form) is
 read as a JSON outbound with the record's `tag`, unknown keys are collected by path,
-and anything read not verbatim (a record `tag` that differs from the parsed text, a
-dropped member or section record) is a note in AppLog. A record without `kind` or
+and anything read not verbatim (a dropped member or section record) is a note in
+AppLog. A record without `kind` or
 `id` is skipped.
 
 The repositories: `settings_storage/sources_rules.dart` rewrites the part without
@@ -637,13 +637,11 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
     { "code": "core_rejected",                // next to `enabled: false`. Not written when empty.
       "params": { "reason": "…" } }           // See "warnings (shared)" below
   ],
-  "tag":           "Tokyo",                   // the tag of the parsed node (the first one, when the
-                                              // text holds several — records before §368). Written for
-                                              // the contract. For uri and json it is NOT applied on read:
-                                              // the node is re-parsed from origin.raw and the text wins,
-                                              // a mismatch is a note. For wg_ini it IS applied (§456):
-                                              // an INI carries no tag, so the node is parsed with the
-                                              // record tag as its name.
+  "tag":           "Tokyo",                   // the node's name (the first node, when the text holds
+                                              // several). It beats whatever name origin.raw carries,
+                                              // for every origin.kind. A rename
+                                              // writes only this field and leaves origin.raw as it
+                                              // arrived. No tag — the name comes from the text.
   "enabled":       true,
   "origin":        { "kind": "uri", "raw": "vless://…#Tokyo" },
                                               // the original input, byte for byte. kind is derived from
@@ -669,8 +667,8 @@ The `nodes` of a subscription are **not stored**: they are re-parsed from `sub_c
 
 **`origin.kind: wg_ini` (§456).** A WireGuard `.conf` is stored as the file
 text byte for byte, comments included — the source is the file, not a link made
-out of it. The INI carries no tag, so the tag lives in the record's `tag` and is
-applied on read (the node is parsed with it as its name). Records made before
+out of it. The name lives in the record's `tag` and is applied on read, as for
+every other kind (it also beats a `[Peer]` comment). Records made before
 §456 hold the synthetic `wg://…#name` link (kind `uri`) and keep reading as
 such; there is no migration, since the original file was never stored for them.
 
@@ -834,7 +832,7 @@ the global value is used. The “WARP GENERATOR” folder puts an IP URL here
 A member's `origin.raw` is a self-contained parseable fragment (a URI, a WG INI or an
 outbound JSON); the nodes are reconstructed by re-parsing each text on load, as for a
 server. On read the member `kind` does not decide anything (`server` and `unsupported`
-read the same way: the text wins). In memory `nodes` holds only the enabled members, so
+read the same way); a member's non-empty `tag` names its node. In memory `nodes` holds only the enabled members, so
 the builder needs no folder-specific branching.
 
 **`kind: auto`** (§322, §439 track N2) — an autoselect node inside the folder.

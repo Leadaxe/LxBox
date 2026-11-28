@@ -266,23 +266,20 @@ String _firstNodeTag(List<NodeSpec> nodes, String raw) {
   return parsed.isEmpty ? '' : parsed.first.tag;
 }
 
-List<NodeSpec> _parseNodes(String raw, {String? nameHint}) {
+List<NodeSpec> _parseNodes(String raw) {
   if (raw.trim().isEmpty) return const [];
   try {
-    return parseAll(decode(raw), nameHint: nameHint, own: true);
+    return parseAll(decode(raw), own: true);
   } catch (_) {
     return const [];
   }
 }
 
-/// §456 — у `origin.kind: wg_ini` тег записи ПРИМЕНЯЕТСЯ: INI тега не
-/// несёт, узел разбирается с ним как с `nameHint`. У ссылки и JSON тег лежит
-/// в тексте, и текст побеждает (`_checkTag`). `null` — не INI или тега нет.
-/// §722 — по хранимому виду записи, не по тексту.
-String? _iniTagHint(Map<String, dynamic> j, SourceDialect dialect) {
+/// §456 (28.11.2026) — непустой `tag` записи главнее имени из `origin` у
+/// любого вида. `null` — тега нет, имя даёт текст.
+String? _recordTag(Map<String, dynamic> j) {
   final tag = j['tag'];
-  if (tag is! String || tag.isEmpty) return null;
-  return dialect == SourceDialect.wgIni ? tag : null;
+  return tag is String && tag.isNotEmpty ? tag : null;
 }
 
 // ─── чтение ─────────────────────────────────────────────────────────────────
@@ -423,8 +420,8 @@ Map<String, String> _groupDefaultsFromRecord(Object? raw) {
   return out;
 }
 
-/// §439 п. 1 — узлы перечитываются из текста; `tag` записи на чтении не
-/// применяется, расхождение с текстом называется в [notes].
+/// §439 п. 1 — узлы перечитываются из текста; имя первого — `tag` записи
+/// (§456).
 UserServer _serverFromRecord(
   Map<String, dynamic> j,
   String id,
@@ -437,11 +434,11 @@ UserServer _serverFromRecord(
   // документом, §11 п.6: обрезка на входе текста, не при чтении).
   final raw = _rawOf(j, '', unknown);
   final dialect = dialectFromRecord(j, raw);
-  final hint = _iniTagHint(j, dialect);
-  final nodes = _parseNodes(raw, nameHint: hint);
-  if (hint == null) {
-    _checkTag(j, nodes.isEmpty ? null : nodes.first.tag, where, notes);
-  }
+  final tag = _recordTag(j);
+  // Подсказкой разбора [tag] не идёт: контейнеры `vpn://` раздали бы её всем
+  // узлам, а имя записи — только у первого.
+  final nodes = _parseNodes(raw);
+  if (tag != null && nodes.isNotEmpty) nodes.first.applyRecordName(tag);
   _noteSectionsDropped(j['sections'], where, notes);
   return UserServer(
     id: id,
@@ -502,7 +499,7 @@ FolderServers _folderFromRecord(
   );
 }
 
-/// Член папки. Вид записи на чтении не решает (текст побеждает): `server`
+/// Член папки. Вид записи (`kind`) на чтении не решает: `server`
 /// и `unsupported` читаются одинаково, запись без вида — тоже. `auto` —
 /// член-группа; `chain` папка LxBox не держит — отброс с строкой в [notes].
 FolderMember? _memberFromRecord(
@@ -540,7 +537,7 @@ FolderMember? _memberFromRecord(
   // §722 — источник члена в своём диалекте как есть.
   final text = _rawOf(j, path, unknown);
   final dialect = dialectFromRecord(j, text);
-  final hint = _iniTagHint(j, dialect);
+  final hint = _recordTag(j);
   _noteSectionsDropped(j['sections'], where, notes);
   final member = FolderMember(
     raw: text,
@@ -559,7 +556,6 @@ FolderMember? _memberFromRecord(
     stateDirId: stateDirIdOf(j['state_dir_id']),
     tls: TlsPolicy.fromJson(j['tls']),
   );
-  if (hint == null) _checkTag(j, member.node?.tag, where, notes);
   return member;
 }
 
@@ -580,20 +576,6 @@ String _rawOf(Map<String, dynamic> j, String path, List<String> unknown) {
     for (final e in body.entries)
       if (e.key != 'tag' && e.key != 'detour') '${e.key}': e.value,
   });
-}
-
-void _checkTag(
-  Map<String, dynamic> j,
-  String? parsedTag,
-  String where,
-  List<String>? notes,
-) {
-  final tag = j['tag'];
-  if (tag is! String || tag.isEmpty || parsedTag == null) return;
-  if (tag != parsedTag) {
-    notes?.add('$where: record tag "$tag" differs from the parsed node tag '
-        '"$parsedTag", the text wins');
-  }
 }
 
 /// §439 п. 9 — снимается ровно один хвостовой пробел (не `trimRight`):

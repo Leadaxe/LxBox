@@ -3243,8 +3243,8 @@
   "Link contains a private key": {
     "value": "В ссылке закрытый ключ"
   },
-  "Link: the tag goes into its fragment on save.": {
-    "value": "Ссылка: тег при сохранении попадает в её фрагмент."
+  "Link: saved as is. The tag is stored separately.": {
+    "value": "Ссылка: сохраняется как есть. Тег хранится отдельно."
   },
   "List %d": {
     "value": "Список %d"

@@ -110,7 +110,7 @@ Future<String?> storeTailscaleFields(SubscriptionController sub,
     return getLocalText.s("Invalid JSON: %s", e.message);
   }
   final prep =
-      prepareNodeDocumentForSave(text, target.node.tag, oldTag: target.node.tag);
+      prepareNodeDocumentForSave(text, target.node.tag);
   if (prep is NodeDocumentRejected) return prep.message;
   final ready = prep as NodeDocumentReady;
   final toStore = ready.text;

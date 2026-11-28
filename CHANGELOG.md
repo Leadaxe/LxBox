@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **A node added from a `vpn://` link can be saved and renamed ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
+  Save in the node editor answered "Could not parse server config", because the
+  name was appended to the packed link. The name of your own server or folder
+  node is now kept next to the source and wins over any name inside it, for
+  links, JSON and `.conf` alike. Renaming leaves the source text unchanged.
+  (RU: узел из ссылки `vpn://` снова сохраняется и переименовывается; Save
+  отвечал «Could not parse server config», потому что имя дописывалось в
+  упакованную ссылку. Имя своего сервера и узла папки хранится рядом с
+  источником и главнее имени внутри него — у ссылок, JSON и `.conf`.
+  Переименование текст источника не меняет.)
+
 ### Added
 
 - **OpenConnect: the certificate fingerprint is taken from the server ([details](docs/spec/tasks/763-openconnect-fetch-cert-pin.md)).**

@@ -17,19 +17,13 @@
 /// Было во входе что-то кроме сохранённого — [NodeDocumentReady.droppedExtras],
 /// экран говорит одно сообщение.
 ///
-/// Тег из поля Tag ставится по виду (одно место — [_withTag]):
-///
-/// | Вид | Куда |
-/// |---|---|
-/// | `singbox` | `tag` узла; в документе — `detour` ссылки на старый тег |
-/// | `xray` | `tag` outbound'а; в документе — `streamSettings.sockopt.dialerProxy` |
-/// | `uri` | фрагмент `#…` ([SubscriptionController.rawWithName]) |
-/// | `wg_ini` | поле записи `nameHint` (§456) |
+/// §456 — поле Tag переименовывает узел записью (`tag`), а не текстом:
+/// [NodeDocumentReady.nameHint]. Текст правится только для имён не-первых
+/// узлов JSON-документа ([renameRecordNode]).
 library;
 
 import 'dart:convert';
 
-import '../../controllers/subscription_controller.dart' show SubscriptionController;
 import '../../models/node_spec.dart';
 import '../../models/singbox_entry.dart';
 import '../../models/source_dialect.dart';
@@ -65,8 +59,8 @@ final class NodeDocumentReady extends NodeDocumentPrep {
   /// массивов, элементы массива после первого): оно не сохранено.
   final bool droppedExtras;
 
-  /// §456 — у `wg_ini` имя узла: поле записи (в тексте его нет). Иначе
-  /// `null`.
+  /// §456 — переименование из поля Tag: уходит в `tag` записи. `null` —
+  /// поле не трогали (или пусто).
   final String? nameHint;
 }
 
@@ -79,17 +73,12 @@ final class NodeDocumentRejected extends NodeDocumentPrep {
 String get _notANodeMessage => getLocalText.s(
     "JSON must be a sing-box or Xray outbound, or a document with outbounds/endpoints");
 
-/// §722 — [text] вкладки Source → текст и вид записи. [tag] — поле Tag
-/// (пусто — тег не трогается); [oldTag] — тег узла, который переименовывается
-/// (у документа: узел с этим тегом, не найден или `null` — владелец, первый
-/// узел записи).
+/// §722 — [text] вкладки Source → текст и вид записи. [tag] — поле Tag.
 ///
-/// [tagTouched] — поле Tag меняли на экране. `false` — «побеждает тот, кого
-/// трогали»: тег, написанный в самом тексте (`tag` узла, фрагмент ссылки),
-/// остаётся как набран, поле его не затирает; в тексте тега нет — берётся
-/// [tag]. У `wg_ini` тега в тексте нет — имя всегда из поля.
+/// [tagTouched] — поле Tag меняли на экране. `false` — переименования нет:
+/// имя решает контроллер (изменённое в тексте, иначе прежнее — §456).
 NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
-    {String? oldTag, bool tagTouched = true}) {
+    {bool tagTouched = true}) {
   final c = classifySource(text);
   if (c.jsonError != null) {
     return NodeDocumentRejected(
@@ -104,33 +93,11 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
   }
   final item = c.items.first;
   final dropped = item.extrasDropped || c.items.length > 1;
-  final newTag = !tagTouched && _textHasOwnTag(item.text, item.dialect)
-      ? ''
-      : tag.trim();
+  // §456 — переименование пишется в `tag` записи ([NodeDocumentReady.nameHint]),
+  // текст источника не меняется.
+  final rename = tagTouched ? tag.trim() : '';
 
-  switch (item.dialect) {
-    case SourceDialect.uri:
-      final t = item.text;
-      final single = !t.contains('\n') && t.contains('://');
-      return NodeDocumentReady(
-        single && newTag.isNotEmpty
-            ? SubscriptionController.rawWithName(t, newTag)
-            : t,
-        dialect: SourceDialect.uri,
-        isDocument: false,
-      );
-    case SourceDialect.wgIni:
-      return NodeDocumentReady(item.text,
-          dialect: SourceDialect.wgIni,
-          isDocument: false,
-          nameHint: newTag.isEmpty ? null : newTag);
-    case SourceDialect.singbox:
-    case SourceDialect.xray:
-      break;
-  }
-
-  final isDocument = item.isDocument;
-  if (isDocument) {
+  if (item.isDocument) {
     final List<NodeSpec> nodes;
     try {
       nodes = parseAll(decode(item.text), own: true);
@@ -143,13 +110,12 @@ NodeDocumentPrep prepareNodeDocumentForSave(String text, String tag,
           getLocalText.s("The document has no node to save."));
     }
   }
-  final out = _withTag(item.text, item.dialect, newTag,
-      oldTag: oldTag, reencode: c.wasArray);
   return NodeDocumentReady(
-    out,
+    item.text,
     dialect: item.dialect,
-    isDocument: isDocument,
+    isDocument: item.isDocument,
     droppedExtras: dropped,
+    nameHint: rename.isEmpty ? null : rename,
   );
 }
 
@@ -164,12 +130,11 @@ NodeDocumentPrep renameRecordNode(
   final t = newTag.trim();
   if (!base.dialect.isJson || t.isEmpty || t == oldTag) return base;
   if (!documentHasNodeTag(base.text, base.dialect, oldTag)) return base;
-  final next = prepareNodeDocumentForSave(base.text, t, oldTag: oldTag);
-  if (next is! NodeDocumentReady) return next;
-  return NodeDocumentReady(next.text,
-      dialect: next.dialect,
-      isDocument: next.isDocument,
-      droppedExtras: base.droppedExtras || next.droppedExtras,
+  return NodeDocumentReady(
+      _withTag(base.text, base.dialect, t, oldTag: oldTag),
+      dialect: base.dialect,
+      isDocument: base.isDocument,
+      droppedExtras: base.droppedExtras,
       nameHint: base.nameHint);
 }
 
@@ -193,40 +158,6 @@ bool documentHasNodeTag(String text, SourceDialect dialect, String tag) {
   return false;
 }
 
-/// В тексте источника есть свой тег: фрагмент одиночной ссылки, `tag` голого
-/// тела, `tag` хотя бы одного узла документа. У `wg_ini` — никогда.
-bool _textHasOwnTag(String text, SourceDialect dialect) {
-  switch (dialect) {
-    case SourceDialect.wgIni:
-      return false;
-    case SourceDialect.uri:
-      if (text.contains('\n') || !text.contains('://')) return true;
-      final i = text.indexOf('#');
-      return i >= 0 && text.substring(i + 1).trim().isNotEmpty;
-    case SourceDialect.singbox:
-    case SourceDialect.xray:
-      break;
-  }
-  final Object? v;
-  try {
-    v = jsonDecode(jsonSourceText(text));
-  } catch (_) {
-    return false;
-  }
-  if (v is! Map) return false;
-  bool tagged(Object? e) {
-    final t = e is Map ? e['tag'] : null;
-    return t is String && t.trim().isNotEmpty;
-  }
-
-  if (tagged(v)) return true;
-  for (final k in nodeArrayKeysOf(dialect)) {
-    final arr = v[k];
-    if (arr is List && arr.any(tagged)) return true;
-  }
-  return false;
-}
-
 bool _isEmptyArray(String text) {
   try {
     final v = jsonDecode(jsonSourceText(text.trim()));
@@ -237,14 +168,14 @@ bool _isEmptyArray(String text) {
 }
 
 /// Правило тега по виду для JSON-диалектов. Тег не меняется — [text] как
-/// есть (байт в байт); [reencode] — элемент массива (JSON с отступом).
+/// есть (байт в байт).
 ///
 /// §741 — голое тело с комментариями получает тег правкой текста
 /// ([withJsonTag]): пометки автора остаются. Документ с комментариями при
 /// смене тега пересобирается (комментарии теряются — известное ограничение,
 /// как у правки формой).
 String _withTag(String text, SourceDialect dialect, String newTag,
-    {String? oldTag, bool reencode = false}) {
+    {String? oldTag}) {
   if (newTag.isEmpty) return text;
   final plain = uncommentedJson(text);
   final Object? parsed;
@@ -260,14 +191,12 @@ String _withTag(String text, SourceDialect dialect, String newTag,
       map[dialect == SourceDialect.singbox ? 'type' : 'protocol'] == null;
   if (!isDocument) {
     if (map['tag'] == newTag) return text;
-    if (plain != null && !reencode) {
+    if (plain != null) {
       final edited = withJsonTag(text, newTag);
       if (edited != null) return edited;
     }
     map['tag'] = newTag;
-    return reencode
-        ? const JsonEncoder.withIndent('  ').convert(map)
-        : jsonEncode(map);
+    return jsonEncode(map);
   }
   final changed = renameNodeInDocument(map, dialect, newTag, oldTag: oldTag);
   return changed ? const JsonEncoder.withIndent('  ').convert(map) : text;

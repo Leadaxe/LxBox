@@ -2997,8 +2997,8 @@
   "Link contains a private key": {
     "value": "链接中包含私钥"
   },
-  "Link: the tag goes into its fragment on save.": {
-    "value": "链接：保存时标签会写入其片段。"
+  "Link: saved as is. The tag is stored separately.": {
+    "value": "链接：按原样保存。标签单独存储。"
   },
   "List %d": {
     "value": "列表 %d"

@@ -637,8 +637,8 @@ final class FolderMember {
   /// записи члена). В бэкап вердикт страховки не едет (§489).
   final List<StoredWarning> warnings;
 
-  /// §456 — имя члена, хранимое полем записи (`tag`): у INI-источника тега в
-  /// тексте нет, и узел разбирается с этим hint'ом. У ссылки/JSON пусто.
+  /// §456 — имя члена, хранимое полем записи (`tag`): оно главнее имени из
+  /// [raw] у любого вида. Пусто — имя даёт текст.
   final String nameHint;
 
   /// §237 — личный detour члена: ссылка на узел (D-112; [NodeLink.none] —
@@ -709,10 +709,9 @@ final class FolderMember {
   static NodeSpec? _parseFirst(String raw, String nameHint) {
     if (raw.trim().isEmpty) return null;
     try {
-      final nodes =
-          parseAll(decode(raw),
-          nameHint: nameHint.isEmpty ? null : nameHint, own: true);
-      return nodes.isEmpty ? null : nodes.first;
+      final nodes = parseAll(decode(raw), own: true);
+      if (nodes.isEmpty) return null;
+      return nodes.first..applyRecordName(nameHint);
     } catch (_) {
       return null;
     }
@@ -768,7 +767,7 @@ final class FolderMember {
           enabled == other.enabled &&
           _eq.equals(warnings, other.warnings) &&
           detour == other.detour &&
-          nameHint == other.nameHint &&
+          _name == other._name &&
           skipTailscalePresets == other.skipTailscalePresets &&
           allowLocal == other.allowLocal &&
           allowLan == other.allowLan &&
@@ -779,6 +778,12 @@ final class FolderMember {
           stateDirId == other.stateDirId &&
           tls == other.tls &&
           _sameGroup(node, other.node));
+
+  /// §456 — имя для равенства: имя разобранного узла, без узла — [nameHint].
+  /// Заданное в конструкторе и взятое из текста имя неразличимы. Группу
+  /// сравнивает [_sameGroup].
+  String get _name =>
+      node is AutoSelectSpec ? '' : (node?.tag ?? nameHint);
 
   static bool _sameGroup(NodeSpec? a, NodeSpec? b) => a is AutoSelectSpec
       ? b is AutoSelectSpec && a.sameGroupAs(b)
@@ -791,7 +796,7 @@ final class FolderMember {
       enabled,
       _eq.hash(warnings),
       detour,
-      nameHint,
+      _name,
       skipTailscalePresets,
       allowLocal,
       allowLan,
