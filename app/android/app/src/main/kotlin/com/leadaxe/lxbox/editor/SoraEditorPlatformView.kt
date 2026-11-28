@@ -5,12 +5,17 @@ import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
 import android.view.ContextThemeWrapper
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageButton
+import android.widget.LinearLayout
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -33,10 +38,13 @@ import io.github.rosemoe.sora.langs.textmate.registry.model.ThemeModel
 import io.github.rosemoe.sora.langs.textmate.registry.provider.AssetsFileResolver
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
+import io.github.rosemoe.sora.widget.component.EditorTextActionWindow
 import io.github.rosemoe.sora.widget.component.Magnifier
 import io.github.rosemoe.sora.widget.schemes.EditorColorScheme
 import org.eclipse.tm4e.core.registry.IThemeSource
 import java.util.Locale
+import com.leadaxe.lxbox.R as AppR
+import io.github.rosemoe.sora.R as SoraR
 
 /// §624 — нативный редактор JSON-полей на sora-editor (Rosemoe, LGPL-2.1)
 /// через platform view (hybrid composition). Dart-сторона —
@@ -142,6 +150,65 @@ private fun localized(context: Context, tag: String?): Context {
     config.setLocale(Locale.forLanguageTag(tag))
     return ContextThemeWrapper(context, context.theme).apply {
         applyOverrideConfiguration(config)
+    }
+}
+
+/// §766 — меню над выделением (панель sora `EditorTextActionWindow`, не
+/// системное `ActionMode`) с кнопкой Delete после Cut: стирает выделение без
+/// копирования в буфер обмена. Видна при тех же условиях, что Cut (есть
+/// выделение, редактор не только для чтения). Правка через `deleteText()`
+/// идёт в undo-историю и отдаёт `changed`, как Cut. Если макет библиотеки
+/// при бампе изменится (`panel_hv`), кнопки не будет — панель штатная.
+private class LxTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(editor) {
+    /// Не трогать в [applyColorScheme] до конца конструктора: базовый
+    /// конструктор зовёт его раньше, чем создано поле.
+    private var deleteBtn: ImageButton? = null
+
+    init {
+        val row = (view.findViewById<View>(SoraR.id.panel_hv) as? ViewGroup)
+            ?.getChildAt(0) as? ViewGroup
+        val cut = view.findViewById<View>(SoraR.id.panel_btn_cut)
+        if (row != null && cut != null) {
+            val ctx = row.context
+            val btn = ImageButton(ctx)
+            btn.layoutParams = LinearLayout.LayoutParams(cut.layoutParams)
+            btn.setImageResource(AppR.drawable.lx_editor_delete_20)
+            val bg = TypedValue()
+            if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, bg, true)) {
+                btn.setBackgroundResource(bg.resourceId)
+            }
+            btn.contentDescription = "Delete"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) btn.tooltipText = "Delete"
+            btn.setOnClickListener(this)
+            row.addView(btn, row.indexOfChild(cut) + 1)
+            deleteBtn = btn
+            applyColorScheme()
+        }
+    }
+
+    override fun applyColorScheme() {
+        super.applyColorScheme()
+        val btn = deleteBtn ?: return
+        applyColorFilter(btn, editor.colorScheme.getColor(EditorColorScheme.TEXT_ACTION_WINDOW_ICON_COLOR))
+    }
+
+    /// Видимость — до `super`: там `updateBtnState` меряет ширину панели.
+    override fun displayWindow() {
+        deleteBtn?.visibility =
+            if (editor.cursor.isSelected && editor.isEditable) View.VISIBLE else View.GONE
+        super.displayWindow()
+    }
+
+    override fun onClick(v: View) {
+        if (v !== deleteBtn) {
+            super.onClick(v)
+            return
+        }
+        if (editor.cursor.isSelected && editor.isEditable) {
+            editor.deleteText()
+            editor.notifyIMEExternalCursorChange()
+        }
+        dismiss()
     }
 }
 
@@ -298,6 +365,10 @@ class SoraEditorPlatformView(
         // `getLocationInWindow()` редактора; под hybrid composition Flutter
         // координаты врут — лупа белая или со строками не из-под пальца
         // (форум 13.10). Рисуем её из самого редактора.
+        editor.replaceComponent(
+            EditorTextActionWindow::class.java,
+            LxTextActionWindow(editor),
+        )
         editor.getComponent(Magnifier::class.java).isWithinEditorForcibly = true
         // Лупу можно выключить (настройка приложения, §660).
         editor.getComponent(Magnifier::class.java).isEnabled =

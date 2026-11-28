@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`vpn://` links take a name after `#`, like `awg://` ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
+  `vpn://<base64>#name` used to give no node at all. A node added from a
+  `vpn://` link now also gets the default emoji, kept next to the link.
+  (RU: `vpn://<base64>#имя` читается так же, как `awg://`; раньше такая ссылка
+  не давала узла. Узел из `vpn://` получает эмодзи по умолчанию, ссылка не
+  меняется.)
+
 ### Fixed
 
 - **A node added from a `vpn://` link can be saved and renamed ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
@@ -43,6 +52,13 @@
   (RU: URL Check помнит последние проверки — ▾ в конце поля URL показывает 20
   последних адресов с итогом и временем; нажатие проверяет адрес снова без
   ввода. Список только в памяти, после перезапуска приложения пуст.)
+- **Delete in the text editor's selection menu ([details](docs/spec/tasks/766-editor-delete-selection.md)).**
+  The bin icon after Cut erases the selected text without putting it on the
+  clipboard, so long fields such as `i1` of an AmneziaWG node go away while
+  the clipboard keeps what you copied. Undo brings the text back.
+  (RU: в меню выделения редактора текста есть Delete — значок корзины после
+  Cut стирает выделенное, не кладя его в буфер обмена; отмена правки
+  возвращает текст.)
 
 ## [2.26.0] — 2026-11-26
 
