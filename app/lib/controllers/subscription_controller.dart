@@ -113,7 +113,9 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   /// асинхронные проходы (fetch, регидрация) могли выйти рано, не дожидаясь
   /// собственного `_persist`.
   bool get stale =>
-      _disposed || WorkspaceController.I.generation != _bornGeneration;
+      _disposed ||
+      WorkspaceController.I.generation != _bornGeneration ||
+      WorkspaceController.I.switching;
 
   @override
   void dispose() {
@@ -2127,7 +2129,11 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
       final generation = SettingsStorage.configDirtyGeneration;
       // Записи самой сборки (сиды, DNS-листы, generatedVars) — в зоне «своих»
       // записей: поколение они не двигают.
-      final config = await SettingsStorage.withoutDirtyBump(_generate);
+      // §515 — сборка пишет от имени владельца сцены: после смены слота её
+      // первое же чтение хранилища обрывается, чужие DNS-листы и сиды в
+      // кэш цели не попадают.
+      final config = await SettingsStorage.runAsSceneOwner(() => !stale,
+          () => SettingsStorage.withoutDirtyBump(_generate));
       _lastGeneratedConfig = config;
       // §707 итер. 9 — итоговые теги узлов с полями Taildrop: теги этой
       // сборки (с суффиксом дедупа), в зеркало boxvpn_boot.
@@ -2140,6 +2146,10 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
             '§360: settings changed during rebuild — configDirty kept');
       }
       return config;
+    } on StaleSceneOwnerError {
+      AppLog.I.warning('workspaces: config build dropped — controller from '
+          'generation $_bornGeneration');
+      return null;
     } catch (e) {
       _lastError = humanizeError(e);
       // §254 — сохранить структуру fatal-issues для UI (DetourCycle → sheet).

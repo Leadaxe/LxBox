@@ -121,6 +121,50 @@ class SettingsStorage {
   static Future<T> withoutDirtyBump<T>(Future<T> Function() body) =>
       runZoned(body, zoneValues: {_selfWriteZoneKey: true});
 
+  // ---------------------------------------------------------------------------
+  // §515 — окно смены слота Workspaces
+  // ---------------------------------------------------------------------------
+  static const _sceneOwnerZoneKey = #lxboxSceneOwner;
+  static bool _writesHeld = false;
+
+  /// §515 — [body] пишет от имени владельца сцены (`HomeScreen` и его
+  /// контроллеры). Как только [isLive] вернёт `false` (слот сменился или
+  /// идёт смена), любое чтение хранилища внутри [body] и всей его
+  /// async-цепочки бросает [StaleSceneOwnerError] — до мутации `_cache`.
+  /// Код вне зоны (импорт бэкапа, Debug API, тапы UI) не затронут.
+  static Future<T> runAsSceneOwner<T>(
+          bool Function() isLive, Future<T> Function() body) =>
+      runZoned(body, zoneValues: {_sceneOwnerZoneKey: isLive});
+
+  static bool get _sceneOwnerRetired {
+    final isLive = Zone.current[_sceneOwnerZoneKey];
+    return isLive is bool Function() && !isLive();
+  }
+
+  /// §515 — на время копирования файлов слота `_save()` не пишет: `_cache`
+  /// держит прежний слот, и запись легла бы поверх файлов цели. Дожидается
+  /// записей, начатых раньше (`unawaited`), — иначе их rename пришёлся бы
+  /// на сцену уже после копирования.
+  static Future<void> holdWritesForSceneSwap() async {
+    _writesHeld = true;
+    while (_savesInFlight.isNotEmpty) {
+      try {
+        await Future.wait(_savesInFlight.toList());
+      } catch (_) {
+        // Ошибку записи получает тот, кто её начал; здесь важно, что она
+        // закончилась.
+      }
+    }
+  }
+
+  /// §515 — снять удержание. [dropCache] — сцена сменилась (или копирование
+  /// оборвалось): снимок прежнего слота в памяти выбрасывается, следующее
+  /// чтение идёт с диска. Снимать до шагов перечитывания: они пишут законно.
+  static void releaseWritesAfterSceneSwap({required bool dropCache}) {
+    if (dropCache) _cache = null;
+    _writesHeld = false;
+  }
+
   /// §338 (инспекция) — переход false→true логируется с caller-фреймами:
   /// 25+ сайтов поднимают флаг, и «кто зажёг синюю плашку» иначе не выяснить
   /// на устройстве. Только переход (не каждый повторный set) и только на
@@ -1455,4 +1499,14 @@ class SettingsStorage {
   static Future<void> setMasqueAccount(MasqueAccount? account,
           {bool flush = true}) =>
       _setMasqueAccount(account, flush: flush);
+}
+
+/// §515 — чтение хранилища из зоны [SettingsStorage.runAsSceneOwner], чей
+/// владелец уже не владеет сценой (слот сменился или идёт смена).
+class StaleSceneOwnerError implements Exception {
+  const StaleSceneOwnerError();
+
+  @override
+  String toString() => 'StaleSceneOwnerError: workspace changed under the '
+      'writer, settings access dropped';
 }

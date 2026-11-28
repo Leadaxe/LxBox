@@ -1,6 +1,7 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import 'package:lxbox/services/config_dirty_check.dart';
 import 'package:lxbox/services/settings_storage.dart';
 import 'package:lxbox/services/subscription/auto_updater.dart';
 import 'package:lxbox/services/workspaces/workspace_controller.dart';
+import 'package:lxbox/services/workspaces/workspace_store.dart';
 
 import '../parser/engine_test_setup.dart';
 
@@ -243,6 +245,125 @@ void main() {
       await updater.maybeUpdateAll(UpdateTrigger.manual, force: true);
 
       expect(hits, 0, reason: 'halt закрывает и unawaited-триггеры из resumed');
+    });
+  });
+  // ---------------------------------------------------------------------------
+  // §515 доработка 28.11 — окно переключения и доводка recover()
+  // ---------------------------------------------------------------------------
+  group('§515 окно переключения', () {
+    final store = WorkspaceStore.I;
+
+    tearDown(store.resetForTesting);
+
+    Future<String> slotSettings(String name) async =>
+        File('${(await store.slotDirForTesting(name)).path}'
+                '/lxbox_settings.json')
+            .readAsString();
+
+    test('РЕГРЕСС (г): recover после подмены настроек не трогает прежний слот',
+        () async {
+      await setUpTwoSlots();
+      // Сцена WiFi правится после сохранения слота — эта правка должна
+      // доехать в папку WiFi при загрузке.
+      await SettingsStorage.setNodeSort('latency', const []);
+      // Процесс «убит», когда настройки Cell уже на сцене, а справочник —
+      // ещё нет.
+      store.debugAfterSlotToScene = () async => throw StateError('killed');
+      await expectLater(ws.load('Cell', stopVpn: () async => false),
+          throwsStateError);
+      store.debugAfterSlotToScene = null;
+      final wifiBefore = await slotSettings('WiFi');
+      expect(wifiBefore, contains(urlWifi));
+
+      expect(await store.recover(), isTrue);
+
+      expect(await slotSettings('WiFi'), wifiBefore,
+          reason: 'папка прежнего слота не перезаписана сценой цели');
+      expect(await store.currentName(), 'Cell');
+      expect(await sceneUrls(), [urlCell]);
+    });
+
+    test('журнал без scene_saved (прежняя сборка) — копия сцены повторяется',
+        () async {
+      await setUpTwoSlots();
+      await SettingsStorage.saveServerLists([sub(urlWifi), sub(urlCell)]);
+      final manifest = File('${docs.path}/${WorkspaceStore.manifestFileName}');
+      final m = await store.readManifest();
+      await manifest.writeAsString(jsonEncode(m
+          .copyWith(pending: const WorkspacePending.load('Cell'))
+          .toJson()));
+
+      expect(await store.recover(), isTrue);
+
+      expect(await slotSettings('WiFi'), contains(urlCell),
+          reason: 'несохранённая сцена WiFi ушла в свой слот');
+      expect(await sceneUrls(), [urlCell]);
+    });
+
+    test('РЕГРЕСС (д): во время копирования не пишут ни прежний контроллер, '
+        'ни кэш прежнего слота', () async {
+      final cWifi = await setUpTwoSlots();
+      store.debugAfterSlotToScene = () async {
+        expect(ws.switching, isTrue);
+        expect(cWifi.stale, isTrue);
+        await cWifi.toggleAt(0);
+        // Запись вне контроллеров (кэш — снимок WiFi) удерживается.
+        await SettingsStorage.setNodeSort('latency', const ['x']);
+      };
+
+      await ws.load('Cell', stopVpn: () async => false);
+
+      expect(await sceneUrls(), [urlCell],
+          reason: 'подписки WiFi не легли поверх Cell');
+      final lists = await SettingsStorage.getServerLists();
+      expect(lists.single.enabled, isTrue);
+      expect((await SettingsStorage.getNodeSort()).order, isEmpty,
+          reason: 'кэш прежнего слота не записан на сцену');
+      expect(ws.switching, isFalse);
+    });
+
+    test('смена не состоялась — флаг снят, живой контроллер пишет', () async {
+      final c = await setUpTwoSlots();
+      await expectLater(ws.load('Nope', stopVpn: () async => false),
+          throwsA(isA<WorkspaceError>()));
+      expect(ws.switching, isFalse);
+      expect(c.stale, isFalse);
+
+      await c.toggleAt(0);
+
+      final lists = await SettingsStorage.getServerLists();
+      expect(lists.single.enabled, isFalse,
+          reason: 'после отказа экран снова владелец сцены');
+    });
+
+    test('удержание дожидается записи, начатой раньше', () async {
+      await SettingsStorage.setNodeSort('name', const []);
+      final early = SettingsStorage.setNodeSort('latency', const ['a']);
+      // Запись дошла до `_save()` и ждёт диска.
+      await Future<void>.delayed(Duration.zero);
+      await SettingsStorage.holdWritesForSceneSwap();
+      await SettingsStorage.setNodeSort('name', const ['held']);
+      SettingsStorage.releaseWritesAfterSceneSwap(dropCache: true);
+      await early;
+
+      final sort = await SettingsStorage.getNodeSort();
+      expect(sort.order, ['a'],
+          reason: 'ранняя запись на диске, удержанная — нет');
+    });
+
+    test('РЕГРЕСС (е): устаревший владелец сцены не мутирует кэш', () async {
+      await SettingsStorage.setNodeSort('name', const ['keep']);
+
+      await expectLater(
+          SettingsStorage.runAsSceneOwner(() => false,
+              () => SettingsStorage.setNodeSort('latency', const ['old'])),
+          throwsA(isA<StaleSceneOwnerError>()));
+      expect((await SettingsStorage.getNodeSort()).order, ['keep']);
+
+      await SettingsStorage.runAsSceneOwner(
+          () => true, () => SettingsStorage.setNodeSort('name', const ['new']));
+      expect((await SettingsStorage.getNodeSort()).order, ['new'],
+          reason: 'живой владелец пишет как обычно');
     });
   });
 }

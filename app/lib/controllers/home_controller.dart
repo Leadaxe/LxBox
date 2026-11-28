@@ -18,6 +18,7 @@ import '../services/probe/probe_lifecycle.dart';
 import '../services/rule_name_resolver.dart';
 import '../services/selector_info.dart';
 import '../services/settings_storage.dart';
+import '../services/workspaces/workspace_controller.dart';
 import '../services/support/support_message.dart';
 import '../services/template_loader.dart';
 import '../services/haptic_service.dart';
@@ -122,6 +123,23 @@ class HomeController extends ChangeNotifier
   /// «Bad state: cannot notify listeners after dispose» на hot-reload /
   /// быстрой навигации.
   bool _disposed = false;
+
+  /// §515 — поколение Workspaces, в котором создан контроллер.
+  final int _bornGeneration = WorkspaceController.I.generation;
+
+  /// §515 — контроллер больше не владеет сценой: disposed, слот сменился
+  /// или идёт смена. Его записи в хранилище отбрасываются.
+  bool get stale =>
+      _disposed ||
+      WorkspaceController.I.generation != _bornGeneration ||
+      WorkspaceController.I.switching;
+
+  /// §515 — запись от имени владельца сцены: после смены слота не пишет.
+  Future<void> _persistOwned(String what, Future<void> Function() write) =>
+      SettingsStorage.runAsSceneOwner(() => !stale, write)
+          .catchError((Object e) {
+        _addDebug(DebugSource.app, '$what save failed: $e');
+      });
 
   /// UI-only override: при `true` `HomeScreen` рендерит empty-state как
   /// при чистой инсталляции, **не трогая** реальные данные `_state`.
@@ -1892,9 +1910,8 @@ class HomeController extends ChangeNotifier
     // поэтому запасное «первое в списке» само себя не запоминает.
     if (group != null && group != _savedDirection) {
       _savedDirection = group;
-      unawaited(SettingsStorage.setHomeDirection(group).catchError((Object e) {
-        _addDebug(DebugSource.app, 'home direction save failed: $e');
-      }));
+      unawaited(_persistOwned(
+          'home direction', () => SettingsStorage.setHomeDirection(group)));
     }
   }
 
@@ -1920,8 +1937,10 @@ class HomeController extends ChangeNotifier
 
   /// §100 — персист текущего режима + manual-порядка в `lxbox_settings.json`.
   void _persistSort() {
-    unawaited(
-        SettingsStorage.setNodeSort(_state.sortMode.name, _state.manualOrder));
+    final mode = _state.sortMode.name;
+    final order = _state.manualOrder;
+    unawaited(_persistOwned(
+        'node sort', () => SettingsStorage.setNodeSort(mode, order)));
   }
 
   // §070 — sort options setters (per-session toggle'ы).

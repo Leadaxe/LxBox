@@ -113,6 +113,10 @@ Future<Map<String, dynamic>>? _loadInFlight;
 /// до записи в `_cache`: единственная точка, через которую идут старт,
 /// загрузка слота Workspaces (`clearCache` → `_load`) и тесты.
 Future<Map<String, dynamic>> _load() {
+  // §515 — устаревший владелец сцены не читает и, значит, не мутирует кэш.
+  if (SettingsStorage._sceneOwnerRetired) {
+    return Future.error(const StaleSceneOwnerError());
+  }
   final cached = SettingsStorage._cache;
   if (cached != null) return Future.value(cached);
   return _loadInFlight ??=
@@ -339,6 +343,12 @@ Future<void> _save() async {
   // чистки мусора — allowlist на ВХОДЕ (`replaceRaw`): неизвестный ключ туда не
   // попадает. Уже лежащий на диске мусор безвреден (никем не читается) и уйдёт
   // при первом же импорте бэкапа.
+  // §515 — идёт копирование файлов слота: `_cache` — прежний слот.
+  if (SettingsStorage._writesHeld) {
+    AppLog.I.warning('workspaces: settings write dropped — slot files are '
+        'being swapped');
+    return;
+  }
   final data = Map<String, dynamic>.from(SettingsStorage._cache ?? {});
 
   // §751 — запись считается начатой с первого `await` (путь к файлам), а не

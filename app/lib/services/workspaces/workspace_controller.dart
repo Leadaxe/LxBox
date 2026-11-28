@@ -46,6 +46,14 @@ class WorkspaceController extends ChangeNotifier {
   bool _busy = false;
   bool get busy => _busy;
 
+  bool _switching = false;
+
+  /// §515 — идёт смена сцены: от остановки VPN до [generation]++ (или до
+  /// отказа). Контроллеры прежнего `HomeScreen` считают себя `stale` уже
+  /// с этого момента, а не только после инкремента. Снимается на всех
+  /// ветках, в том числе без смены слота: живой экран снова пишет.
+  bool get switching => _switching;
+
   String? _loadingName;
 
   /// Имя загружаемого слота на время операции (для прогресса в UI).
@@ -65,6 +73,7 @@ class WorkspaceController extends ChangeNotifier {
     _manifest = WorkspaceManifest.initial();
     _generation = 0;
     _busy = false;
+    _switching = false;
     _loadingName = null;
     _pendingAutoConnect = false;
   }
@@ -95,8 +104,20 @@ class WorkspaceController extends ChangeNotifier {
       final before = await _store.readManifest();
       if (before.current == target) return WorkspaceLoadOutcome.alreadyCurrent;
       final wasUp = await stopVpn();
+      _switching = true;
       await SettingsStorage.flushToDisk();
-      final changed = await _store.load(target);
+      // §515 — на время копирования `_save()` не пишет: в `_cache` прежний
+      // слот. Удержание снимается до перечитывания — его шаги пишут законно.
+      await SettingsStorage.holdWritesForSceneSwap();
+      var changed = false;
+      var copied = false;
+      try {
+        changed = await _store.load(target);
+        copied = true;
+      } finally {
+        SettingsStorage.releaseWritesAfterSceneSwap(
+            dropCache: changed || !copied);
+      }
       if (!changed) return WorkspaceLoadOutcome.alreadyCurrent;
       // §447 — на сцене настройки другого слота, конфиг от прежнего: флаг
       // поднимается явно, ДО перечитывания. Одного mtime-признака (шаг 8)
@@ -111,6 +132,7 @@ class WorkspaceController extends ChangeNotifier {
       return WorkspaceLoadOutcome.loaded;
     } finally {
       _busy = false;
+      _switching = false;
       _loadingName = null;
       // Один notify: новый generation и снятый busy приходят вместе —
       // пересозданный HomeScreen сразу без индикатора загрузки.
@@ -133,11 +155,17 @@ class WorkspaceController extends ChangeNotifier {
   /// закрывает [onExternalRemount]. У загрузки слота хука нет: она идёт с
   /// главного экрана и сама закрывает свой диалог прогресса.
   Future<void> remountAfterExternalWrite() async {
-    await SettingsStorage.flushToDisk();
-    SettingsStorage.markConfigDirty();
-    await _reloadStateFromDisk();
-    onExternalRemount?.call();
-    _generation++;
+    // §515 — прежние контроллеры не пишут уже во время перечитывания.
+    _switching = true;
+    try {
+      await SettingsStorage.flushToDisk();
+      SettingsStorage.markConfigDirty();
+      await _reloadStateFromDisk();
+      onExternalRemount?.call();
+      _generation++;
+    } finally {
+      _switching = false;
+    }
     notifyListeners();
   }
 

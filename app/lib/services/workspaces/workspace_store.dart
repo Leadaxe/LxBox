@@ -73,7 +73,15 @@ class WorkspaceStore {
   /// Сброс замка: операция прошлого теста (fake-async зона) могла его не
   /// отпустить — следующая ждала бы вечно.
   @visibleForTesting
-  void resetForTesting() => _lock = Future<void>.value();
+  void resetForTesting() {
+    _lock = Future<void>.value();
+    debugAfterSlotToScene = null;
+  }
+
+  /// §515 — тестам: шаг загрузки, когда файлы цели уже на сцене, а
+  /// справочник ещё нет. Бросок здесь = процесс убит в этой точке.
+  @visibleForTesting
+  Future<void> Function()? debugAfterSlotToScene;
 
   // ---------------------------------------------------------------------------
   // Имена
@@ -204,14 +212,26 @@ class WorkspaceStore {
   /// Шаги 5–7 спеки: сцена → слот `current`, слот цели → сцена,
   /// `current` = цель, журнал снят. Идемпотентны: [recover] повторяет их
   /// целиком.
+  ///
+  /// §515 — после копии сцены журнал получает `scene_saved`: дальше на
+  /// сцену ложатся файлы цели, и [recover] не должен копировать их в папку
+  /// прежнего слота. Журнал без отметки (убит до неё или записан прежней
+  /// сборкой) повторяет копию сцены.
   Future<void> _performLoad(WorkspaceManifest m) async {
-    final target = m.pending!.target;
-    final now = DateTime.now();
-    await _copySceneToSlot(m.current);
-    var next = m.withSlotSaved(m.current, now);
+    final pending = m.pending!;
+    final target = pending.target;
+    var next = m;
+    if (!pending.sceneSaved) {
+      await _copySceneToSlot(m.current);
+      next = m
+          .withSlotSaved(m.current, DateTime.now())
+          .copyWith(pending: pending.withSceneSaved());
+      await _writeManifest(next);
+    }
     await _keepLegacySettingsCopy(target);
     await _copySlotToScene(target);
     await _touchSettings();
+    await debugAfterSlotToScene?.call();
     next = next.copyWith(current: target, clearPending: true);
     await _writeManifest(next);
     AppLog.I.info('workspaces: loaded "$target" (previous "${m.current}" saved)');
@@ -472,7 +492,7 @@ class WorkspaceSlot {
 
 /// Журнал незавершённой операции. v1 — только `load`.
 class WorkspacePending {
-  const WorkspacePending(this.op, this.target);
+  const WorkspacePending(this.op, this.target, {this.sceneSaved = false});
   const WorkspacePending.load(String target) : this(opLoad, target);
 
   static const opLoad = 'load';
@@ -480,14 +500,26 @@ class WorkspacePending {
   final String op;
   final String target;
 
-  Map<String, dynamic> toJson() => {'op': op, 'target': target};
+  /// §515 — сцена уже скопирована в слот `current`; на сцене могут лежать
+  /// файлы цели. Поле необязательное: без него — `false`.
+  final bool sceneSaved;
+
+  WorkspacePending withSceneSaved() =>
+      WorkspacePending(op, target, sceneSaved: true);
+
+  Map<String, dynamic> toJson() => {
+        'op': op,
+        'target': target,
+        if (sceneSaved) 'scene_saved': true,
+      };
 
   static WorkspacePending? fromJson(dynamic j) {
     if (j is! Map) return null;
     final op = j['op'];
     final target = j['target'];
     if (op is! String || target is! String || target.isEmpty) return null;
-    return WorkspacePending(op, target);
+    return WorkspacePending(op, target,
+        sceneSaved: j['scene_saved'] == true);
   }
 }
 
