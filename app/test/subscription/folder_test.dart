@@ -16,6 +16,7 @@ import 'package:lxbox/models/server_list.dart';
 import 'package:lxbox/services/builder/build_config.dart';
 import 'package:lxbox/services/parser/uri_parsers.dart';
 import 'package:lxbox/services/settings_storage.dart';
+import 'package:lxbox/services/subscription/input_helpers.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -234,8 +235,10 @@ void main() {
       UserServer server(SubscriptionController c) =>
           c.entries.single.list as UserServer;
 
+      // Эмодзи по умолчанию — имя записи, ссылка не меняется.
+      expect(server(c).rawBody, raw);
       expect(await c.updateConnectionAt(0, [raw]), isNull);
-      expect(server(c).nodes.single.tag, 'WireGuard');
+      expect(server(c).nodes.single.tag, '🏠 WireGuard');
 
       expect(await c.updateConnectionAt(0, [raw], nameHint: 'Kazan'), isNull);
       expect(await c.updateConnectionAt(0, [raw]), isNull);
@@ -278,6 +281,28 @@ void main() {
       expect(await c.updateConnectionAt(0, [raw], nameHint: 'Kazan'), isNull);
       expect(tags(c), ['Kazan', before[1]]);
       expect(tags(await makeController()), ['Kazan', before[1]]);
+    });
+
+    // Путь пользователя: ссылка из буфера (`addFromInput`), в том числе с
+    // `#именем`.
+    test('vpn://…#имя из буфера: имя доходит до узла и переживает '
+        'перезагрузку', () async {
+      final key = base64.encode(List<int>.filled(32, 7));
+      final ini = '[Interface]\nPrivateKey = $key\nAddress = 10.8.1.4/32\n\n'
+          '[Peer]\nPublicKey = $key\nAllowedIPs = 0.0.0.0/0\n'
+          'Endpoint = example.com:666\n';
+      final raw =
+          'vpn://${base64Url.encode(utf8.encode(ini)).replaceAll('=', '')}'
+          '#%F0%9F%8F%A0%20Kazan';
+      expect(isAmneziaVpnLink(raw), isTrue);
+      final c = await makeController();
+      await c.addFromInput(raw);
+      final server = c.entries.single.list as UserServer;
+      expect(server.nodes.single.tag, '🏠 Kazan');
+      expect(server.rawBody, raw);
+      final reloaded = await makeController();
+      expect((reloaded.entries.single.list as UserServer).nodes.single.tag,
+          '🏠 Kazan');
     });
 
     test('toggleMemberAt выключает ноду члена из nodes', () async {

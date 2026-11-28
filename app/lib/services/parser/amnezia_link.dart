@@ -18,20 +18,23 @@ import 'uri_utils.dart';
 /// `last_config.config` (готовый INI). Остальные протоколы Amnezia
 /// (openvpn/xray/…) скипаются. Не throws.
 DecodedBody decodeAmneziaLink(String link) {
-  final t = link.trim();
-  if (!t.startsWith('vpn://')) {
+  final full = link.trim();
+  if (!full.startsWith('vpn://')) {
     return const DecodeFailure('not a vpn:// link');
   }
-  if (t.length > maxAmneziaLinkLength) {
+  if (full.length > maxAmneziaLinkLength) {
     return const DecodeFailure('vpn://: link too long');
   }
+  final (link: t, name: name) = _splitName(full);
 
   // §506 — payload бывает ГОЛЫМ `.conf`: экспорт wg-quick/AWG, завёрнутый в
   // `vpn://` без JSON-обёртки профиля. Тело поддержано полностью (те же
   // AWG3-поля), недостижимо было только через обёртку — проверяем ДО
   // JSON-ветки, потому что признак взаимоисключающий (`[` против `{`).
   final bareIni = _decodeBareIni(t);
-  if (bareIni != null) return AmneziaConfig([bareIni]);
+  if (bareIni != null) {
+    return AmneziaConfig([bareIni], names: name == null ? null : [name]);
+  }
 
   final root = _decodeAmneziaRoot(t);
   if (root == null) {
@@ -43,18 +46,66 @@ DecodedBody decodeAmneziaLink(String link) {
     return const DecodeFailure('vpn://: no containers[]');
   }
 
-  final inis = <String>[];
+  final entries = _wgEntries(containers, root);
+  if (entries.isEmpty) {
+    return const DecodeFailure('vpn://: no WireGuard/AmneziaWG containers');
+  }
+  return AmneziaConfig(
+    [for (final e in entries) e.ini],
+    names: name == null
+        ? null
+        : _containerLabels(entries, root['defaultContainer'], name),
+  );
+}
+
+/// Ссылка и имя после `#` — та же схема, что у `awg://<base64>#имя`:
+/// в base64 символа `#` нет, всё после первого `#` — имя (percent-encoded;
+/// битая кодировка остаётся как есть). Пустое имя — `null`.
+({String link, String? name}) _splitName(String link) {
+  final i = link.indexOf('#');
+  if (i < 0) return (link: link, name: null);
+  var name = link.substring(i + 1);
+  try {
+    name = Uri.decodeComponent(name);
+  } catch (_) {}
+  name = name.trim();
+  return (
+    link: link.substring(0, i).trimRight(),
+    name: name.isEmpty ? null : name,
+  );
+}
+
+List<({Map c, String ini})> _wgEntries(List containers, Map<String, dynamic> root) {
+  final entries = <({Map c, String ini})>[];
   for (final c in containers) {
     if (c is! Map) continue;
     for (final proto in const ['awg', 'wireguard']) {
       final ini = _extractIni(c[proto]);
-      if (ini != null) inis.add(_substituteDns(ini, root));
+      if (ini != null) entries.add((c: c, ini: _substituteDns(ini, root)));
     }
   }
-  if (inis.isEmpty) {
-    return const DecodeFailure('vpn://: no WireGuard/AmneziaWG containers');
-  }
-  return AmneziaConfig(inis);
+  return entries;
+}
+
+/// Имена узлов профиля с именем [profile]: у контейнера по умолчанию (нет
+/// такого — у первого) — само имя, у прочих — `<имя> <имя контейнера>`.
+/// Без [profile] — имя контейнера.
+List<String?> _containerLabels(
+    List<({Map c, String ini})> entries, Object? defaultContainer,
+    String? profile) {
+  var chosen = entries.indexWhere((e) =>
+      defaultContainer is String && e.c['container'] == defaultContainer);
+  if (chosen < 0) chosen = 0;
+  return [
+    for (var i = 0; i < entries.length; i++)
+      () {
+        final raw = entries[i].c['container'];
+        final container = raw is String && raw.isNotEmpty ? raw : null;
+        if (i == chosen) return profile ?? container;
+        if (profile != null && container != null) return '$profile $container';
+        return profile ?? container;
+      }(),
+  ];
 }
 
 /// §103 §9.B12 — `vpn://` строкой ВНУТРИ построчного URI-списка подписки
@@ -70,15 +121,20 @@ DecodedBody decodeAmneziaLink(String link) {
 /// `hostName` → имя контейнера (Go-порядок; отличается от body-пути, где
 /// Dart берёт nameHint файла — здесь такого контекста нет).
 WireguardSpec? parseAmneziaVpnUri(String link, {XrayDropVerdict? dropped}) {
-  final t = link.trim();
-  if (!t.startsWith('vpn://')) return null;
+  final full = link.trim();
+  if (!full.startsWith('vpn://')) return null;
+  final (link: t, name: name) = _splitName(full);
   // §110 — cap 512 KiB общий с Go (maxAmneziaLinkLength): профиль с
   // сертификатами штатно больше maxURILength, и общий лимит его терял.
 
   // §506 — голый `.conf` под обёрткой `vpn://` (см. [decodeAmneziaLink]).
   // Имени у такой ссылки нет: тег даст сам INI (комментарий под `[Peer]`).
   final bareIni = _decodeBareIni(t);
-  if (bareIni != null) return parseWireguardIni(bareIni, dropped: dropped);
+  if (bareIni != null) {
+    final n = parseWireguardIni(bareIni, dropped: dropped);
+    if (name != null) n?.applyRecordName(name);
+    return n;
+  }
 
   final root = _decodeAmneziaRoot(t);
   if (root == null) return null;
@@ -130,7 +186,11 @@ WireguardSpec? parseAmneziaVpnUri(String link, {XrayDropVerdict? dropped}) {
               ? containerName
               : null;
 
-  return parseWireguardIni(ini, nameHint: label, dropped: dropped);
+  final node =
+      parseWireguardIni(ini, nameHint: name ?? label, dropped: dropped);
+  // Имя ссылки сильнее комментария под `[Peer]`.
+  if (name != null) node?.applyRecordName(name);
+  return node;
 }
 
 /// §570 / контракт 1.1.80 (§77 п.1) — строка `vpn://` ВНУТРИ списка ссылок
@@ -147,13 +207,15 @@ WireguardSpec? parseAmneziaVpnUri(String link, {XrayDropVerdict? dropped}) {
 /// и отбраковывает строку на её позиции.
 List<WireguardSpec>? parseAmneziaVpnUriAll(String link,
     {List<XrayDropVerdict>? verdicts}) {
-  final t = link.trim();
-  if (!t.startsWith('vpn://')) return null;
+  final full = link.trim();
+  if (!full.startsWith('vpn://')) return null;
+  final (link: t, name: name) = _splitName(full);
   final bareIni = _decodeBareIni(t);
   if (bareIni != null) {
     final v = XrayDropVerdict();
     verdicts?.add(v);
     final n = parseWireguardIni(bareIni, dropped: v);
+    if (name != null) n?.applyRecordName(name);
     return n == null ? const [] : [n];
   }
   final root = _decodeAmneziaRoot(t);
@@ -161,44 +223,27 @@ List<WireguardSpec>? parseAmneziaVpnUriAll(String link,
   final containers = root['containers'];
   if (containers is! List || containers.isEmpty) return null;
 
-  final entries = <({Map c, String ini})>[];
-  for (final c in containers) {
-    if (c is! Map) continue;
-    for (final proto in const ['awg', 'wireguard']) {
-      final ini = _extractIni(c[proto]);
-      if (ini != null) entries.add((c: c, ini: _substituteDns(ini, root)));
-    }
-  }
+  final entries = _wgEntries(containers, root);
   if (entries.isEmpty) return null;
-
-  final defaultContainer = root['defaultContainer'];
-  var chosen = entries.indexWhere((e) =>
-      defaultContainer is String && e.c['container'] == defaultContainer);
-  if (chosen < 0) chosen = 0;
 
   final description = root['description'];
   final hostName = root['hostName'];
-  final profile = (description is String && description.isNotEmpty)
-      ? description
-      : (hostName is String && hostName.isNotEmpty)
-          ? hostName
-          : null;
+  // Имя после `#` заменяет имя профиля.
+  final profile = name ??
+      ((description is String && description.isNotEmpty)
+          ? description
+          : (hostName is String && hostName.isNotEmpty)
+              ? hostName
+              : null);
+  final labels = _containerLabels(entries, root['defaultContainer'], profile);
 
   final out = <WireguardSpec>[];
   for (var i = 0; i < entries.length; i++) {
-    final name = entries[i].c['container'];
-    final containerName = name is String && name.isNotEmpty ? name : null;
-    final String? label;
-    if (i == chosen) {
-      label = profile ?? containerName;
-    } else if (profile != null && containerName != null) {
-      label = '$profile $containerName';
-    } else {
-      label = profile ?? containerName;
-    }
     final v = XrayDropVerdict();
     verdicts?.add(v);
-    final n = parseWireguardIni(entries[i].ini, nameHint: label, dropped: v);
+    final n = parseWireguardIni(entries[i].ini, nameHint: labels[i], dropped: v);
+    final label = labels[i];
+    if (name != null && label != null) n?.applyRecordName(label);
     if (n != null) out.add(n);
   }
   return out;

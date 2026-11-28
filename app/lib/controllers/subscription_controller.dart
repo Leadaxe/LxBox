@@ -957,6 +957,15 @@ class SubscriptionController extends ChangeNotifier with _FolderOpsMixin {
   UserServer _autoEmoji(UserServer us) {
     if (us.nodes.isEmpty || us.rawBody.isEmpty) return us;
     if (keepsTagAsWritten(us.nodes.first)) return us; // §762 — impair
+    // `vpn://`: эмодзи — имя первого узла (`tag` записи), ссылка не меняется:
+    // фрагмент переименовал бы и прочие контейнеры профиля.
+    if (us.rawBody.startsWith('vpn://')) {
+      final first = us.nodes.first;
+      if (!hasEmoji(first.tag)) {
+        first.applyRecordName('${defaultEmojiFor(first)} ${first.tag}');
+      }
+      return us;
+    }
     final newRaw = _isJsonDocument(us.rawBody, us.dialect)
         ? _documentWithDefaultEmoji(us.rawBody, us.dialect, us.nodes.first)
         : withDefaultEmoji(us.rawBody, us.nodes.first);

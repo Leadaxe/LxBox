@@ -33,7 +33,12 @@ final class IniConfig extends DecodedBody {
 /// контейнер (см. `amnezia_link.dart`).
 final class AmneziaConfig extends DecodedBody {
   final List<String> iniTexts;
-  const AmneziaConfig(this.iniTexts);
+
+  /// Имена узлов из `#имя` ссылки, по одному на [iniTexts]; они сильнее
+  /// имён внутри `.conf`. `null` — имени у ссылки нет.
+  final List<String?>? names;
+
+  const AmneziaConfig(this.iniTexts, {this.names});
 }
 
 final class JsonConfig extends DecodedBody {

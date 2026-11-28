@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`vpn://` links take a name after `#`, like `awg://` ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
+  `vpn://<base64>#name` used to give no node at all. A node added from a
+  `vpn://` link now also gets the default emoji, kept next to the link.
+  (RU: `vpn://<base64>#имя` читается так же, как `awg://`; раньше такая ссылка
+  не давала узла. Узел из `vpn://` получает эмодзи по умолчанию, ссылка не
+  меняется.)
+
 ### Fixed
 
 - **A node added from a `vpn://` link can be saved and renamed ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**

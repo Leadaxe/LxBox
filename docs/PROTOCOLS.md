@@ -1048,6 +1048,51 @@ Every field is **config-only** — nothing is negotiated over the wire, and the 
 awg://PRIVATE_KEY@host:port?publickey=...&address=...&jc=4&jmin=40&jmax=70&s1=0&s2=0&h1=...&i1=...#label
 ```
 
+### For subscription authors
+
+One node per line; the whole body may additionally be base64-encoded. Two forms
+work for AmneziaWG. The keys below are placeholders of the right shape —
+replace them with real ones.
+
+**A whole `.conf` in base64** — every key is written as in the file. Strip
+`#` comment lines from the file first and put the name after `#` in the link: the
+desktop launcher currently gives no node for such a link when there is a `#`
+comment under `[Peer]`.
+
+```
+awg://<base64 of the whole .conf>#My%20node
+```
+
+**Parameters in the query** (here one line, an AWG 2.0 node):
+
+```
+awg://QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE%3D@vpn.example.com:51820?publickey=QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI%3D&address=10.8.1.2%2F32&jc=4&jmin=40&jmax=70&s1=20&s2=30&s3=15&s4=12&h1=100000-200000&h2=300000-400000&h3=500000-600000&h4=700000-800000&i1=%3Cr%2064%3E#My%20node
+```
+
+Rules for the query form:
+
+- `publickey` and `address` are required: without either one there is no node.
+  The port defaults to 51820.
+- Parameter names are the ones in the table below, without underscores
+  (`headerprotectionkey`, not `header_protection_key` — an unknown name is
+  ignored with a warning).
+- Percent-encode the values (`i1`, the keys) and the name after `#`.
+- `jmin` needs `jmax`: without it `jmin` is dropped.
+- `i1` and the masquerade trio `id` / `ip` / `ib` exclude each other: with `i1`
+  present the trio is not carried into the node, and no warning says so.
+- `ip` is `quic`, `dns`, `stun` or `sip`; `ib` is `chrome`, `firefox` or
+  `curl`; `ip=quic` needs `id`.
+- `headerprotectionkey` needs each of `s1`–`s4` to be at least 12, otherwise the
+  node is dropped.
+- Of the node's `mtu`, at most 1280 is used (see “MTU clamp” below).
+
+**The node name** is taken from the first source that has one: the fragment
+`#name` → the first comment under `[Peer]` without `=` (the base64 `.conf` and
+`vpn://` forms) → a fallback. `vpn://<base64 of the whole .conf>#name` is read
+the same way as the `awg://` base64 form ([section 9.2](#92-amnezia-vpn-link));
+LxBox versions up to 2.26.0 do not accept a `#name` on `vpn://`, so prefer
+`awg://`.
+
 `awg://` and its full-name form `amneziawg://` are scheme aliases for the same endpoint logic as `wireguard://` / `wg://` (section 8). AWG fields are recognised in the query of **any** of the four schemes: with at least one field present the node is AmneziaWG (`WireguardSpec.awg != null`), and with none it is ordinary WG (backward compatible, with unchanged behaviour).
 
 AmneziaWG 3.x panels more often hand out the other form — `awg://<base64 of the whole .conf>#label`, with the AWG 3.x fields written as INI keys rather than query keys. The shape, how the form is told apart and where the label comes from are in [section 8](#8-wireguard) under “Second form”; the field spellings are the same as for a pasted `.conf` (section 9).
@@ -1056,12 +1101,12 @@ AmneziaWG 3.x panels more often hand out the other form — `awg://<base64 of th
 
 | Key | Type | Purpose | Level |
 |------|-----|-----------|--------|
-| `jc`, `jmin`, `jmax` | int | Junk packets before the handshake: the count and the size bounds | AWG 1.0 |
+| `jc`, `jmin`, `jmax` | int | Junk packets before the handshake: the count and the size bounds. `jmin` without `jmax` is dropped | AWG 1.0 |
 | `s1`, `s2` | int | A junk prefix on the init and response handshake packets | AWG 1.0 |
 | `s3`, `s4` | int | A junk prefix on the cookie reply (`s3`) and on transport/data packets (`s4`) | AWG 2.0 |
 | `h1`–`h4` | int \| `"N-M"` | Magic headers — substituting the packet types. A single `N` is 1.0; a range `N-M` is ranged headers (§112) | AWG 1.0 / 2.0 |
 | `i1`–`i5` | string | CPS decoy packets, in the tag format `<b 0xHEX><r N>…` | AWG 1.5 |
-| `id`, `ip`, `ib` | string | Masquerade sugar (WireSock-style) over `i1` — the core expands it into an `i1` CPS packet itself. **Mutually exclusive with an explicit `i1`** (both at once is a core startup error). §143 | AWG 1.5 |
+| `id`, `ip`, `ib` | string | Masquerade sugar (WireSock-style) over `i1` — the core expands it into an `i1` CPS packet itself. **Mutually exclusive with an explicit `i1`**: in a link `i1` wins and the trio is not carried; in a sing-box body both at once is a core startup error. `ip` is `quic` / `dns` / `stun` / `sip`, `ib` is `chrome` / `firefox` / `curl`, `ip=quic` needs `id`. §143 | AWG 1.5 |
 | `headerprotectionkey` | base64, 32 bytes | Header protection key (`HeaderProtectionKey`, `awg genkey` on the server) → `header_protection_key`. Copied verbatim (url-safe/unpadded forms are normalised to std base64). With it set, each of `s1`–`s4` must be ≥ 12: the padding carries the header-cipher nonce. §421 | AWG 3.0 |
 | `contentpaddingaddition`, `rekeyaftertime`, `rekeytimeout`, `rejectaftertime`, `keepalivetimeout`, `maxhandshakeattempts` | int \| `"N-M"` | Content padding and client-side timings → `content_padding_addition`, `rekey_after_time`, `rekey_timeout`, `reject_after_time`, `keepalive_timeout`, `max_handshake_attempts`. A single `N` is a JSON number, a range `N-M` a JSON string. §421 | AWG 3.0 |
 | `randomtrailers`, `disablecookies` | `on`/`off` | Random trailers on data packets and cookie suppression → `random_trailers`, `disable_cookies`. `on`/`true`/`1` emits `true`; `off`/empty emits **nothing** (never `false`). §421 | AWG 3.1 |
@@ -1069,7 +1114,7 @@ AmneziaWG 3.x panels more often hand out the other form — `awg://<base64 of th
 - The numeric fields are uint32 and are emitted as a JSON **number**.
 - `h1`–`h4` (§112): a value of `N` becomes an `int` (the numeric string `"5"` is normalised to `int 5`), while a range `N-M` becomes a `String` and is emitted as a JSON **string** (the core contract from `lx.6` onwards). We do not validate further (start ≤ end, uint32, non-overlapping ranges) — the core does that with an explicit startup error, and dropping silently here would produce a quietly broken handshake.
 - `i1`–`i5` are strings and **case is preserved** exactly (they are case-sensitive and must not be altered).
-- A malformed number in the query means the field is skipped silently (forward compatibility, as with `mtu` and `keepalive`) and parsing the node does not fail. For `h*`, “malformed” means it fits neither `N` nor `N-M`.
+- A malformed number in the query means the field is dropped with a warning on the node (as with `mtu`) and parsing the node does not fail. For `h*`, “malformed” means it fits neither `N` nor `N-M`.
 - AWG 3.x error policy (§421, mirrors the launcher's SPEC 123): a timing/padding value that is not a uint32 nor an **ordered** `N-M` range (`120-100` is not swapped, unlike `h1`–`h4` — a reversed timing is a typo the user must see), or a boolean that is not on/off, **drops the field** with the `awg3_field_invalid` warning; the node lives on the core defaults. A header protection key that is not base64 / not 32 bytes / all zeros, or a key with any of `s1`–`s4` below 12, **drops the node** (`awg3_header_key_invalid`, `awg3_padding_too_short`): the handshake cannot work and the core would reject the whole config. `random_trailers` together with a ranged `h1`–`h4` at least 65536 wide only earns the info `awg3_random_trailers_wide_headers` (the server's reference receiver may mistake upload packets for handshakes).
 - The URI/`.conf` name of an AWG 3.x key is its JSON key lower-cased without underscores (`ContentPaddingAddition` / `contentpaddingaddition` ↔ `content_padding_addition`), the same rule as `Jc` ↔ `jc`. The share-URI emitter writes the booleans back as `on`. `H1`–`H4` equal to `1..4` are normal in AWG 3.x exports (the message type is masked by the header protection) and are not “fixed”.
 
@@ -1254,7 +1299,15 @@ Added in §110 (the task spec [`110`](./spec/tasks/110-amnezia-vpn-link-import.m
 ```
 vpn://<base64url( qCompress(JSON, 8) )>   # a profile bundle
 vpn://<base64url( bare wg-quick / AWG .conf )>   # a bare .conf (contract 1.1.48)
+vpn://<either payload>#<name>                    # with a node name
 ```
+
+- **`#name`** is read as in `awg://<base64>#name`: everything after the first `#`
+  (percent-encoded) is the name, and only the part before it is decoded. It beats
+  the `[Peer]` comment and the profile name. In a profile with several containers
+  it replaces the profile name: the default container (or the first) gets the name
+  itself, the others `<name> <container name>`. LxBox versions up to 2.26.0 give
+  no node for a link with `#name`.
 
 - base64url **without padding** (the `-_` alphabet, `Base64UrlEncoding | OmitTrailingEquals`); the padded and standard variants are accepted too (`decodeBase64Safe`).
 - `qCompress` is 4 big-endian bytes (the uncompressed length) followed by a standard zlib stream. An uncompressed payload (bare base64 JSON) is the fallback, matching Amnezia's `importController`.

@@ -335,11 +335,12 @@ List<NodeSpec> _parseAll(
     // §243 — hint с индексным суффиксом (`hint`, `hint 2`, …): фрагмент
     // теперь «собственное имя» raw, суффикс-логика addMembersToFolder до
     // таких нод не дойдёт — разводим коллизии здесь.
-    AmneziaConfig(iniTexts: final ts) => _parseIniConfigs(
+    AmneziaConfig(iniTexts: final ts, names: final names) => _parseIniConfigs(
         ts,
         nameHint: nameHint,
         dropped: dropped,
         indexedHint: true,
+        names: names,
       ),
     JsonConfig() => _parseJson(decoded, dropped),
     // §506 — тело не опознано ВОВСЕ: раньше ветка отдавала пустой список и
@@ -414,13 +415,16 @@ List<NodeSpec> _parseIniConfigs(
   String? nameHint,
   List<NodeWarning>? dropped,
   bool indexedHint = false,
+  List<String?>? names,
 }) {
   final nodes = <NodeSpec>[];
   for (var i = 0; i < texts.length; i++) {
-    final hint = indexedHint ? _indexedHint(nameHint, i) : nameHint;
+    final name = names?[i];
+    final hint = name ?? (indexedHint ? _indexedHint(nameHint, i) : nameHint);
     final verdict = XrayDropVerdict();
     final n = parseWireguardIni(texts[i], nameHint: hint, dropped: verdict);
     if (n != null) {
+      if (name != null) n.applyRecordName(name);
       nodes.add(n);
     } else if (verdict.reason != null) {
       // §570 — запись отбраковки называет запись источника: имя контейнера
