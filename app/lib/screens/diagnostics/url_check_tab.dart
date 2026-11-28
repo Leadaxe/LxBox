@@ -231,7 +231,8 @@ class _UrlCheckTabState extends State<UrlCheckTab>
                   maxLines: 1,
                 ),
                 Text(
-                  '${r.summary} · $hh:$mm',
+                  // Время первым: длинный текст ошибки режется с конца.
+                  '$hh:$mm · ${r.summary}',
                   style: theme.textTheme.bodySmall?.copyWith(color: color),
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
