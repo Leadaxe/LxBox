@@ -156,14 +156,12 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       _urlError = null;
       _resetResult();
     });
-    if (_tunnelUp && !_running) {
-      _run();
-    } else {
-      // Меню возвращает фокус полю; печатать нечего — клавиатуру не поднимаем.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) FocusScope.of(context).unfocus();
-      });
-    }
+    if (_tunnelUp && !_running) _run();
+    // Закрытие меню возвращает фокус полю и поднимает клавиатуру; печатать
+    // нечего — снимаем фокус следующим кадром (как у полей с подсказками).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusScope.of(context).unfocus();
+    });
   }
 
   Widget? _urlSuffix() {
