@@ -36,6 +36,13 @@
   подключение к шлюзу: состояние и время, шлюз и вид протокола, транспорт,
   адрес и DNS-серверы от шлюза, MTU; при неудаче — текст ошибки ядра. Тап по
   строке копирует значение.)
+- **URL Check remembers recent checks ([details](docs/spec/tasks/765-url-check-history.md)).**
+  The ▾ at the end of the URL field lists the last 20 checked addresses with
+  their result and time. Tap one to check it again without typing it. The list
+  is kept in memory only and is empty after the app restarts.
+  (RU: URL Check помнит последние проверки — ▾ в конце поля URL показывает 20
+  последних адресов с итогом и временем; нажатие проверяет адрес снова без
+  ввода. Список только в памяти, после перезапуска приложения пуст.)
 
 ## [2.26.0] — 2026-11-26
 

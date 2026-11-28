@@ -7058,5 +7058,8 @@
   },
   "Source — the node's original text. Save writes it as is.": {
     "value": "Source — 节点的原始文本。Save 会按原样写入。"
+  },
+  "Recent checks": {
+    "value": "最近的检查"
   }
 }

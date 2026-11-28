@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../controllers/home_controller.dart';
 import '../../services/app_info_cache.dart';
 import '../../services/diagnostics/connection_test.dart';
+import '../../services/diagnostics/url_check_history.dart';
 import '../../services/l10n/locale_controller.dart';
 import '../../widgets/ui_helpers.dart';
 import '../../vpn/cc_channel.dart';
@@ -98,7 +99,10 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         trace.apply(e);
         if (trace.finished) _running = false;
       });
-      if (trace.finished) _sub?.cancel();
+      if (trace.finished) {
+        _sub?.cancel();
+        _record(trace);
+      }
     });
     final ok = await _cc.startConnectionTest(
       link: link,
@@ -112,6 +116,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         _running = false;
       });
       _sub?.cancel();
+      _record(trace);
     }
   }
 
@@ -121,7 +126,124 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     if (_running) {
       _cc.stopConnectionTest();
       _running = false;
+      final t = _trace;
+      if (t != null) _record(t);
     }
+  }
+
+  /// Закончившаяся проверка — в историю (только память процесса).
+  void _record(ConnectionTestTrace t) {
+    final (sev, text) = _summaryOf(t);
+    UrlCheckHistory.instance.add(UrlCheckRecord(
+      link: _runLink,
+      depth: _runDepth,
+      outcome: switch (sev) {
+        BannerSeverity.success => UrlCheckOutcome.success,
+        BannerSeverity.warning => UrlCheckOutcome.warning,
+        BannerSeverity.error => UrlCheckOutcome.error,
+        BannerSeverity.info => UrlCheckOutcome.stopped,
+      },
+      summary: text,
+      at: DateTime.now(),
+    ));
+  }
+
+  /// Адрес из истории: в поле и сразу в проверку с текущими параметрами.
+  void _rerun(String link) {
+    setState(() {
+      _urlCtrl.text = link;
+      _urlCtrl.selection = TextSelection.collapsed(offset: link.length);
+      _urlError = null;
+      _resetResult();
+    });
+    if (_tunnelUp && !_running) {
+      _run();
+    } else {
+      // Меню возвращает фокус полю; печатать нечего — клавиатуру не поднимаем.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) FocusScope.of(context).unfocus();
+      });
+    }
+  }
+
+  Widget? _urlSuffix() {
+    final clear = _urlCtrl.text.isEmpty
+        ? null
+        : IconButton(
+            tooltip: getLocalText.s("Clear"),
+            icon: const Icon(Icons.clear),
+            onPressed: () => setState(() {
+              _urlCtrl.clear();
+              _resetResult();
+            }),
+          );
+    final history = UrlCheckHistory.instance;
+    if (history.isEmpty) return clear;
+    final menu = PopupMenuButton<String>(
+      tooltip: getLocalText.s("Recent checks"),
+      icon: const Icon(Icons.arrow_drop_down),
+      enabled: !_running,
+      position: PopupMenuPosition.under,
+      onSelected: _rerun,
+      itemBuilder: (ctx) => [
+        for (final r in history.items) _historyItem(ctx, r),
+      ],
+    );
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [?clear, menu],
+    );
+  }
+
+  PopupMenuItem<String> _historyItem(BuildContext context, UrlCheckRecord r) {
+    final sev = switch (r.outcome) {
+      UrlCheckOutcome.success => BannerSeverity.success,
+      UrlCheckOutcome.warning => BannerSeverity.warning,
+      UrlCheckOutcome.error => BannerSeverity.error,
+      UrlCheckOutcome.stopped => BannerSeverity.info,
+    };
+    final color = bannerIconColor(context, sev);
+    final hh = r.at.hour.toString().padLeft(2, '0');
+    final mm = r.at.minute.toString().padLeft(2, '0');
+    final theme = Theme.of(context);
+    return PopupMenuItem<String>(
+      value: r.link,
+      child: Row(
+        children: [
+          Icon(
+            switch (r.outcome) {
+              UrlCheckOutcome.success => Icons.check_circle,
+              UrlCheckOutcome.warning => Icons.warning_amber_rounded,
+              UrlCheckOutcome.error => Icons.error,
+              UrlCheckOutcome.stopped => Icons.stop_circle_outlined,
+            },
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  r.link,
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+                Text(
+                  '${r.summary} · $hh:$mm',
+                  style: theme.textTheme.bodySmall?.copyWith(color: color),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Результат относится к параметрам своего прогона: смена любого из них
@@ -193,16 +315,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
             _resetResult();
           }),
           decoration: InputDecoration(
-            suffixIcon: _urlCtrl.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: getLocalText.s("Clear"),
-                    icon: const Icon(Icons.clear),
-                    onPressed: () => setState(() {
-                      _urlCtrl.clear();
-                      _resetResult();
-                    }),
-                  ),
+            suffixIcon: _urlSuffix(),
             labelText: getLocalText.s("URL"),
             hintText: getLocalText.s("example.com or https://…"),
             errorText: _urlError,
@@ -317,7 +430,8 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     );
   }
 
-  Widget _summary(BuildContext context, ConnectionTestTrace t) {
+  /// Уровень и текст строки итога; без контекста — пишется и в историю.
+  (BannerSeverity, String) _summaryOf(ConnectionTestTrace t) {
     final r = t.result;
     final root = t.rootStage;
     late final BannerSeverity sev;
@@ -350,6 +464,12 @@ class _UrlCheckTabState extends State<UrlCheckTab>
           ? getLocalText.s("HTTP %d · %d ms", r.httpStatus, r.elapsedMs)
           : getLocalText.s("Completed · %d ms", r.elapsedMs);
     }
+    return (sev, text);
+  }
+
+  Widget _summary(BuildContext context, ConnectionTestTrace t) {
+    final r = t.result;
+    final (sev, text) = _summaryOf(t);
     final truncated = r?.stagesTruncated == true;
     final color = bannerIconColor(context, sev);
     return Row(

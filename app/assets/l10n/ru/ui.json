@@ -7346,5 +7346,8 @@
   },
   "Source — the node's original text. Save writes it as is.": {
     "value": "Source — исходный текст узла. Save записывает его как есть."
+  },
+  "Recent checks": {
+    "value": "Последние проверки"
   }
 }
