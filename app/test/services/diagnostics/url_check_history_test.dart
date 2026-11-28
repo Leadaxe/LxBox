@@ -31,27 +31,32 @@ void main() {
     expect(h.items.any((e) => e.link == 'https://s0.com'), isFalse);
   });
 
-  test('повтор адреса не плодит дубль, а поднимает его наверх со свежим итогом',
-      () {
+  test('повтор адреса — новая запись, старая остаётся', () {
     final h = UrlCheckHistory();
     h.add(rec('https://a.com', summary: 'old'));
     h.add(rec('https://b.com'));
-    h.add(rec('https://c.com'));
     h.add(rec('https://a.com', summary: 'new'));
     expect(h.items.map((e) => e.link),
-        ['https://a.com', 'https://c.com', 'https://b.com']);
-    expect(h.items.first.summary, 'new');
+        ['https://a.com', 'https://b.com', 'https://a.com']);
+    expect(h.items.map((e) => e.summary).toList()..removeAt(1), ['new', 'old']);
   });
 
-  test('повтор при полной истории не вытесняет чужой адрес', () {
+  test('links: адреса без повторов, по последней проверке', () {
     final h = UrlCheckHistory();
+    h.add(rec('https://a.com'));
+    h.add(rec('https://b.com'));
+    h.add(rec('https://a.com'));
+    expect(h.links, ['https://a.com', 'https://b.com']);
+  });
+
+  test('повторы тоже занимают место в лимите', () {
+    final h = UrlCheckHistory();
+    h.add(rec('https://old.com'));
     for (var i = 0; i < 20; i++) {
-      h.add(rec('https://s$i.com'));
+      h.add(rec('https://a.com'));
     }
-    h.add(rec('https://s0.com'));
     expect(h.items, hasLength(20));
-    expect(h.items.first.link, 'https://s0.com');
-    expect(h.items.last.link, 'https://s1.com');
+    expect(h.links, ['https://a.com']);
   });
 
   test('items не даёт править историю снаружи', () {

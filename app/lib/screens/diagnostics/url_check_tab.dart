@@ -224,11 +224,11 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       position: PopupMenuPosition.under,
       onSelected: _pickLink,
       itemBuilder: (ctx) => [
-        for (final r in history.items)
+        for (final link in history.links)
           PopupMenuItem<String>(
-            value: r.link,
+            value: link,
             child: Text(
-              r.link,
+              link,
               style: const TextStyle(fontSize: 13),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,

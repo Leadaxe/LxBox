@@ -16,7 +16,7 @@ class UrlCheckRecord {
     this.trace,
   });
 
-  /// Нормализованный адрес — тот, что ушёл в ядро; ключ дедупа.
+  /// Нормализованный адрес — тот, что ушёл в ядро.
   final String link;
   final ConnectionTestDepth depth;
   final UrlCheckOutcome outcome;
@@ -35,8 +35,8 @@ class UrlCheckRecord {
   final ConnectionTestTrace? trace;
 }
 
-/// История проверок URL Check: последние [limit] адресов, новые первыми,
-/// без дублей. Живёт только в памяти процесса — ни диска, ни бэкапа;
+/// История проверок URL Check: последние [limit] проверок, новые первыми;
+/// каждая проверка — своя запись, и повтор адреса тоже. Живёт только в памяти процесса — ни диска, ни бэкапа;
 /// после перезапуска приложения пустая.
 class UrlCheckHistory {
   UrlCheckHistory({this.limit = 20});
@@ -52,11 +52,13 @@ class UrlCheckHistory {
 
   bool get isEmpty => _items.isEmpty;
 
-  /// Добавляет запись первой. Запись того же адреса убирается — повтор
-  /// поднимает адрес наверх со свежим итогом. Сверх [limit] вытесняются
-  /// самые старые.
+  /// Адреса для подстановки в поле: без повторов, по последней проверке.
+  List<String> get links => [
+        for (final l in {for (final e in _items) e.link}) l,
+      ];
+
+  /// Добавляет запись первой. Сверх [limit] вытесняются самые старые.
   void add(UrlCheckRecord r) {
-    _items.removeWhere((e) => e.link == r.link);
     _items.insert(0, r);
     if (_items.length > limit) _items.removeRange(limit, _items.length);
   }
