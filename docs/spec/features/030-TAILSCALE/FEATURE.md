@@ -340,6 +340,15 @@ Delete node / Workspace delete → index record removed → directory removed wh
   per-device traffic are out of scope. The Android system
   backup includes `files/` with the tailnet keys — stock behaviour, by design
   (see [device identity](FUNCTIONS/device-identity-and-state.md)).
+- Tailscale is the one mesh network built into the client and the priority
+  for this kind of work, together with Headscale as a self-hosted control
+  server (its address goes into `control_url`). Other mesh networks — ZeroTier,
+  NetBird and EasyTier — were checked at the end of 2026 and showed no steady
+  demand: one or two requests each in the support chat and in sing-box
+  itself, none in other popular proxy clients, where people ask for
+  Tailscale instead. None of
+  them is in sing-box, and none is planned as a node type (owner decision
+  2026-11-28).
 - Sign-in with an interactive link, exit node switching, Log out and Ping have
   not been verified on a device with a live tailnet (tasks 445, 449, 578, 579,
   581: DEVICE-PENDING).
