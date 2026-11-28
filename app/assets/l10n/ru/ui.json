@@ -2661,6 +2661,36 @@
   "Magnifier": {
     "value": "Лупа"
   },
+  "Undo": {
+    "value": "Отменить"
+  },
+  "Redo": {
+    "value": "Повторить"
+  },
+  "Go to line": {
+    "value": "Перейти к строке"
+  },
+  "Go": {
+    "value": "Перейти"
+  },
+  "Replace with clipboard": {
+    "value": "Заменить из буфера"
+  },
+  "Line numbers": {
+    "value": "Номера строк"
+  },
+  "Text size": {
+    "value": "Размер текста"
+  },
+  "Smaller text": {
+    "value": "Мельче"
+  },
+  "Larger text": {
+    "value": "Крупнее"
+  },
+  "Lock editing": {
+    "value": "Запретить правку"
+  },
   "Imported: %s": {
     "value": "Импортировано: %s"
   },

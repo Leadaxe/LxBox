@@ -256,6 +256,7 @@ class SettingsStorage {
     'node_manual_order',
     'profiler_retention_sec', // §044/new-profiler — окно хранения Live-журнала
     'editor_magnifier', // §660 — лупа выделения редактора кода
+    'editor_text_size', // §767 — поправка размера текста редактора кода
     'mixin_target_suggestions', // §704 — подсказки поля Target формы миксина
     kNodeBudgetKey, // бюджет узлов приложения
   };
@@ -730,6 +731,22 @@ class SettingsStorage {
   static Future<void> setEditorMagnifier(bool value) async {
     final c = await _load();
     c['editor_magnifier'] = value;
+    SettingsStorage._cache = c;
+    await _save();
+  }
+
+  /// §767 — поправка размера текста редактора кода (логические пиксели,
+  /// от −4 до +8). Одна на всё приложение. Не config-significant.
+  /// Default 0.
+  static Future<int> getEditorTextSize() async {
+    final c = await _load();
+    final v = c['editor_text_size'];
+    return v is num ? v.toInt() : 0;
+  }
+
+  static Future<void> setEditorTextSize(int value) async {
+    final c = await _load();
+    c['editor_text_size'] = value;
     SettingsStorage._cache = c;
     await _save();
   }

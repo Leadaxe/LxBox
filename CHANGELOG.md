@@ -69,6 +69,15 @@
   (RU: в меню выделения редактора текста есть Delete — значок корзины перед
   Cut стирает выделенное, не кладя его в буфер обмена; отмена правки
   возвращает текст.)
+- **Text editor: Undo and Redo, Go to line, text size and more ([details](docs/spec/tasks/767-editor-toolbar-undo-goto-size-lock.md)).**
+  Undo and Redo buttons sit above an editable field. The ⋮ menu adds Go to
+  line, Replace with clipboard (one edit, Undo brings the old text back),
+  Line numbers on or off, Text size − / + (kept for all editors) and Lock
+  editing, which makes the field read-only until you turn it off.
+  (RU: редактор текста — кнопки Undo и Redo над полем; в меню ⋮ Go to line,
+  Replace with clipboard (одна правка, Undo возвращает прежний текст),
+  номера строк вкл/выкл, размер текста − / + (общий для всех редакторов) и
+  Lock editing — поле только для чтения, пока галочку не снимут.)
 
 ## [2.26.0] — 2026-11-26
 

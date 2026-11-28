@@ -114,6 +114,7 @@ lxbox_settings.json                          # SettingsStorage (Dart), the main 
 ├─ node_manual_order[]           list          §100 — the manual order of node tags (for mode=manual)
 ├─ profiler_retention_sec        int           §044 — the profiler's live-journal window, default 600 (10 min); NOT config-significant
 ├─ editor_magnifier              bool          §660 — the code editor's selection magnifier, default true; NOT config-significant
+├─ editor_text_size              int           §767 — the code editor's text size correction, -4..+8 logical px, default 0; NOT config-significant
 ├─ mixin_target_suggestions      bool          §704 — the mixin form's Target autocomplete suggestions, default true; NOT config-significant
 ├─ node_budget                   int           §714 — the app-wide node budget, default 1000 (absent key), min 1, no upper limit
 ├─ warp_account                  object?       §025 — the cached WARP account (see the section below)
@@ -224,6 +225,7 @@ Android SharedPreferences (shared_prefs/):  # three Kotlin files, boxvpn_boot, l
   "node_manual_order":  [ … ],     // §100
   "profiler_retention_sec": 600,   // §044 — the profiler's live-journal window (NOT config-significant)
   "editor_magnifier":   true,      // §660 — the code editor's selection magnifier (NOT config-significant)
+  "editor_text_size":   0,         // §767 — the code editor's text size correction (NOT config-significant)
   "mixin_target_suggestions": true, // §704 — the mixin form's Target suggestions (NOT config-significant)
   "node_budget":        1000,      // §714 — app-wide node budget; absent = 1000
   "warp_account":       { … },     // §025 — the cached WARP account (secrets)
@@ -1795,6 +1797,7 @@ with a warning. A legacy 0.12 file carries a root `chains[]` section (contract 0
 | `node_manual_order` | `List<String>` | §100 — the manual order of node tags (relevant in manual mode). Written together with `node_sort_mode`. |
 | `profiler_retention_sec` | `int` | §044 — the retention window of the profiler's live journal (the rolling buffer), in seconds. Default `600` (10 minutes), the UI offers 60/600/3600, and valid values are `> 0`. **NOT** config-significant. CRUD: `getProfilerRetentionSec` / `setProfilerRetentionSec`. |
 | `editor_magnifier` | `bool` | §660 — the selection magnifier of the code editor (sora), one setting for the whole app; the ⋮ menu of any editor toggles it. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorMagnifier` / `setEditorMagnifier`. |
+| `editor_text_size` | `int` | §767 — text size correction of the code editor (sora) in logical pixels, from −4 to +8, added to the size each screen sets (the result is at least 8); one setting for the whole app, the Text size row in the ⋮ menu of any editor changes it. Default `0` (a missing key reads as `0`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getEditorTextSize` / `setEditorTextSize`. |
 | `node_budget` | `int` | §714 — the app-wide node budget: manual servers, enabled folder members and the nodes of enabled subscriptions together. Manual nodes are taken first and never cut; the rest is shared between enabled subscriptions equally with redistribution, and a subscription above its share keeps its first nodes (referenced nodes first) — the cut happens in the parse worker. Absent key = `1000`; a value below `1` reads as `1`; no upper limit. Changing it re-cuts subscriptions from the body cache. Travels in the backup with the app settings; not in LX Backup (its schema has no app-settings slot). CRUD: `getNodeBudget` / `setNodeBudget(null)` removes the key. |
 | `mixin_target_suggestions` | `bool` | §704 — the autocomplete suggestions under the Target field of the mixin form; the icon at the right of the field toggles them. Default `true` (a missing key reads as `true`). **NOT** config-significant. Travels in the backup with the app settings. CRUD: `getMixinTargetSuggestions` / `setMixinTargetSuggestions`. |
 | `urltest_passive_check` | `bool` | **Retired (§611)** — was §272 passive health checking (`urltest.passive_check`); core lx.12 removed the key. No longer written, emitted or exported to a backup; an old backup's value is skipped silently on import (`retiredTopLevelKeys`). Read once by the §612 migration (`SettingsStorage.migrateUrltestModeIfNeeded`, before the first build), which then deletes it. |

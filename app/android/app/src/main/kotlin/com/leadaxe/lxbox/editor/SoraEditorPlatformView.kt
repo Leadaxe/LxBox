@@ -314,6 +314,10 @@ class SoraEditorPlatformView(
     /// scrollTop = 2, scrollBottom = 4); -1 — ещё не слали.
     private var sentScroll = -1
 
+    /// §767 — последнее отправленное `undoState` (шлётся только при смене).
+    private var sentCanUndo = false
+    private var sentCanRedo = false
+
     /// Последнее отправленное `layoutBusy`.
     private var sentLayoutBusy = false
 
@@ -436,6 +440,7 @@ class SoraEditorPlatformView(
             }
             // Перенос пересчитан после события — число строк догоняем.
             editor.post { if (!editor.isReleased && rows() != sentRows) sendChanged(withText = false) }
+            editor.post { sendUndoState() }
         }
         editor.subscribeAlways(SelectionChangeEvent::class.java) {
             sendCursor()
@@ -495,6 +500,7 @@ class SoraEditorPlatformView(
         }
         // Раскладка строк ещё не пересчитана — метрики после неё.
         editor.post { sendChanged(withText = false) }
+        editor.post { sendUndoState() }
     }
 
     private fun setLanguage(value: String?) {
@@ -599,6 +605,18 @@ class SoraEditorPlatformView(
         channel.invokeMethod("changed", args)
         // Текст, перенос, ширина — пределы прокрутки другие.
         sendScrollState()
+    }
+
+    /// §767 — есть ли что отменить / повторить: для кнопок Undo/Redo во
+    /// Flutter. Только при смене значений.
+    private fun sendUndoState() {
+        if (editor.isReleased) return
+        val u = editor.canUndo()
+        val r = editor.canRedo()
+        if (u == sentCanUndo && r == sentCanRedo) return
+        sentCanUndo = u
+        sentCanRedo = r
+        channel.invokeMethod("undoState", hashMapOf("canUndo" to u, "canRedo" to r))
     }
 
     /// Состояние прокрутки для решения «кому жест» во Flutter (§649):
@@ -708,6 +726,7 @@ class SoraEditorPlatformView(
                 editor.setSelection(0, 0)
                 sendChanged(withText = true)
                 editor.post { sendChanged(withText = false) }
+                editor.post { sendUndoState() }
                 result.success(null)
             }
             "getText" -> {
@@ -761,6 +780,34 @@ class SoraEditorPlatformView(
             }
             "searchPrevious" -> {
                 if (editor.searcher.hasQuery()) withoutFocusSteal { editor.searcher.gotoPrevious() }
+                result.success(null)
+            }
+            // §767 — кнопки Undo/Redo над полем: правка без фокуса и клавиатуры.
+            "undo", "redo" -> {
+                if (!readOnly) {
+                    withoutFocusSteal {
+                        if (call.method == "undo") editor.undo() else editor.redo()
+                    }
+                    editor.post { sendUndoState() }
+                }
+                result.success(null)
+            }
+            "goToLine" -> {
+                val count = editor.text.lineCount
+                val line = ((call.argument<Int>("line") ?: 1) - 1).coerceIn(0, maxOf(count - 1, 0))
+                withoutFocusSteal { editor.setSelection(line, 0) }
+                editor.ensurePositionVisible(line, 0)
+                result.success(null)
+            }
+            "setLineNumbers" -> {
+                editor.isLineNumberEnabled = call.argument<Boolean>("enabled") ?: true
+                editor.post { sendChanged(withText = false) }
+                result.success(null)
+            }
+            "setFontSize" -> {
+                val size = call.argument<Number>("fontSize")?.toFloat() ?: 12f
+                editor.setTextSizePx(size * density)
+                editor.post { sendChanged(withText = false) }
                 result.success(null)
             }
             "focus" -> {

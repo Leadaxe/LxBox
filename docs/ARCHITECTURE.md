@@ -2183,9 +2183,11 @@ cursor line stayed under the keyboard. The native view has a full
 | Not Android | `flutter test` and desktop draw a `TextField` stub with the same layout (gate `Platform.isAndroid`, not `defaultTargetPlatform`) |
 
 Channel: Dart → native `setText`, `getText`, `setReadOnly`, `setDark` (+ the
-`ColorScheme` colors), `setLanguage`, `search*`; native → Dart `changed`
-{text?, lines, rowHeight, textOffsetX}, `cursor` {y, rowHeight, focused},
-`searchResult`, `disposed`. Creation params also carry `wordWrap`, `language`,
+`ColorScheme` colors), `setLanguage`, `search*`, `undo` / `redo`,
+`goToLine` {line}, `setLineNumbers` {enabled}, `setFontSize` {fontSize};
+native → Dart `changed` {text?, lines, rowHeight, textOffsetX}, `cursor` {y,
+rowHeight, focused}, `searchResult`, `undoState` {canUndo, canRedo} (only
+when it changes), `disposed`. Creation params also carry `wordWrap`, `language`,
 `locale` (the app language — the native selection menu takes its strings from
 the view context), `autofocus`, `stickyHeaders`. sora-editor draws sticky
 headers only without line wrapping, so the fields that have them (Config, the

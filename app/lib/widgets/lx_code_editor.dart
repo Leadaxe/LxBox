@@ -232,8 +232,15 @@ class LxCodeEditor extends StatefulWidget {
   State<LxCodeEditor> createState() => LxCodeEditorState();
 }
 
-/// Пункты меню ⋮ редактора (§660).
-enum _LxEditorMenu { format, magnifier }
+/// Пункты меню ⋮ редактора (§660, §767).
+enum _LxEditorMenu {
+  format,
+  goToLine,
+  replaceWithClipboard,
+  lineNumbers,
+  magnifier,
+  lock,
+}
 
 /// Индикатор «занят» вместо иконки кнопки (§660), размер иконки 18.
 class _LxBusyIcon extends StatelessWidget {
@@ -250,6 +257,74 @@ class _LxBusyIcon extends StatelessWidget {
 /// Держатель канала view. Живёт дольше `State`: натив в `dispose` сбрасывает
 /// задержанную правку длинного текста уже после того, как `State` ушёл, и
 /// финальный `changed` должен лечь в контроллер, а не потеряться.
+/// Строка Text size в меню ⋮ (§767): − и + не закрывают меню.
+class _LxTextSizeEntry extends PopupMenuEntry<_LxEditorMenu> {
+  const _LxTextSizeEntry({
+    super.key,
+    required this.size,
+    required this.canStep,
+    required this.onStep,
+  });
+
+  final double Function() size;
+  final bool Function(int step) canStep;
+  final void Function(int step) onStep;
+
+  @override
+  double get height => kMinInteractiveDimension;
+
+  @override
+  bool represents(_LxEditorMenu? value) => false;
+
+  @override
+  State<_LxTextSizeEntry> createState() => _LxTextSizeEntryState();
+}
+
+class _LxTextSizeEntryState extends State<_LxTextSizeEntry> {
+  void _step(int step) {
+    widget.onStep(step);
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style =
+        theme.popupMenuTheme.labelTextStyle?.resolve(<WidgetState>{}) ??
+        theme.textTheme.labelLarge;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          Expanded(child: Text(getLocalText.s("Text size"), style: style)),
+          IconButton(
+            key: const ValueKey('lx-code-editor-text-smaller'),
+            icon: const Icon(Icons.remove, size: 18),
+            tooltip: getLocalText.s("Smaller text"),
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.canStep(-1) ? () => _step(-1) : null,
+          ),
+          SizedBox(
+            width: 28,
+            child: Text(
+              widget.size().round().toString(),
+              textAlign: TextAlign.center,
+              style: style,
+            ),
+          ),
+          IconButton(
+            key: const ValueKey('lx-code-editor-text-larger'),
+            icon: const Icon(Icons.add, size: 18),
+            tooltip: getLocalText.s("Larger text"),
+            visualDensity: VisualDensity.compact,
+            onPressed: widget.canStep(1) ? () => _step(1) : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SoraLink {
   _SoraLink(int viewId, this.controller)
     : channel = MethodChannel('${PlatformChannels.soraEditorChannelPrefix}$viewId') {
@@ -401,6 +476,39 @@ class LxCodeEditorState extends State<LxCodeEditor>
   /// Значение лупы, ушедшее в creation params.
   bool _creationMagnifier = true;
 
+  /// §767 — поправка размера текста (логические пиксели), одна на
+  /// приложение и сохраняется; кэш на процесс, `null` — ещё не читали.
+  static int? _sizeDelta;
+  static int get _sizeDeltaValue => _sizeDelta ?? 0;
+  static const _minSizeDelta = -4;
+  static const _maxSizeDelta = 8;
+  static const _minFontSize = 8.0;
+
+  /// Размер текста с поправкой пользователя.
+  double get _fontSize {
+    final v = widget.fontSize + _sizeDeltaValue;
+    return v < _minFontSize ? _minFontSize : v;
+  }
+
+  /// §767 — номера строк: из [LxCodeEditor.showLineNumbers], галочка в ⋮
+  /// переключает; живёт в `State`, не хранится.
+  bool _lineNumbers = false;
+
+  /// §767 — Lock editing: редактируемое поле временно только для чтения.
+  bool _locked = false;
+
+  /// Поле только для чтения: по параметру экрана или по Lock editing.
+  bool get _readOnly => widget.readOnly || _locked;
+
+  /// §767 — есть что отменить / повторить (`undoState` натива).
+  bool _canUndo = false;
+  bool _canRedo = false;
+
+  /// Значения, ушедшие в creation params (догоняются в [_attach]).
+  double _creationFontSize = 12;
+  bool _creationLineNumbers = false;
+  bool _creationReadOnly = false;
+
   /// Текст в редакторе: отформатированный показ или контроллер.
   String get _shownText => _formattedView ?? widget.controller.text;
 
@@ -411,6 +519,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
   MethodChannel? get _channel => _link?.channel;
 
   bool _computeCanFormat() =>
+      !_locked &&
       (widget.readOnly || widget.format) &&
       detectCodeLanguage(widget.controller.text) == LxCodeLanguage.json;
 
@@ -427,6 +536,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     _rows = _countLines(_nativeText);
     _canFormat = _computeCanFormat();
     _wordWrap = widget.wordWrap;
+    _lineNumbers = widget.showLineNumbers;
     widget.controller.addListener(_onController);
     if (_nativeEditor && _magnifier == null) unawaited(_warmMagnifier());
   }
@@ -440,11 +550,21 @@ class LxCodeEditorState extends State<LxCodeEditor>
       } catch (_) {
         // Хранилище недоступно — лупа как по умолчанию.
       }
+      try {
+        final d = await SettingsStorage.getEditorTextSize();
+        _sizeDelta ??= d.clamp(_minSizeDelta, _maxSizeDelta);
+      } catch (_) {
+        // Хранилище недоступно — размер как задан экраном.
+      }
     }());
     if (!mounted) return;
     if (_channel != null && _magnifierOn != _creationMagnifier) {
       _creationMagnifier = _magnifierOn;
       unawaited(_invoke('setMagnifier', {'enabled': _magnifierOn}));
+    }
+    if (_channel != null && _fontSize != _creationFontSize) {
+      _creationFontSize = _fontSize;
+      unawaited(_invoke('setFontSize', {'fontSize': _fontSize}));
     }
     setState(() {});
   }
@@ -462,10 +582,97 @@ class LxCodeEditorState extends State<LxCodeEditor>
     }
   }
 
-  /// Сброс кэша лупы между тестами.
+  /// Text size −/+ (§767): сразу в этом редакторе, остальные — при создании.
+  bool _canStepTextSize(int step) {
+    final next = _sizeDeltaValue + step;
+    if (next < _minSizeDelta || next > _maxSizeDelta) return false;
+    return step > 0 || widget.fontSize + next >= _minFontSize;
+  }
+
+  Future<void> _stepTextSize(int step) async {
+    if (!_canStepTextSize(step)) return;
+    final next = _sizeDeltaValue + step;
+    setState(() => _sizeDelta = next);
+    _creationFontSize = _fontSize;
+    unawaited(_invoke('setFontSize', {'fontSize': _fontSize}));
+    try {
+      await SettingsStorage.setEditorTextSize(next);
+    } catch (_) {
+      // Не записалось — значение живёт до перезапуска.
+    }
+  }
+
+  /// Пункт Line numbers (§767): только этот редактор, не хранится.
+  void _toggleLineNumbers() {
+    setState(() => _lineNumbers = !_lineNumbers);
+    _creationLineNumbers = _lineNumbers;
+    unawaited(_invoke('setLineNumbers', {'enabled': _lineNumbers}));
+  }
+
+  /// Пункт Lock editing (§767): только этот редактор, не хранится.
+  void _toggleLock() {
+    setState(() {
+      _locked = !_locked;
+      _canFormat = _computeCanFormat();
+    });
+    _creationReadOnly = _readOnly;
+    unawaited(_invoke('setReadOnly', {'readOnly': _readOnly}));
+  }
+
+  /// Go to line (§767): номер с 1; вне диапазона — к краю.
+  Future<void> _goToLine() async {
+    final total = _countLines(_shownText);
+    final ctrl = TextEditingController();
+    final line = await showDialog<int>(
+      context: context,
+      builder: (ctx) {
+        void submit() => Navigator.pop(ctx, int.tryParse(ctrl.text.trim()));
+        return AlertDialog(
+          title: Text(getLocalText.s("Go to line")),
+          content: TextField(
+            key: const ValueKey('lx-code-editor-goto-field'),
+            controller: ctrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(hintText: '1–$total'),
+            onSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(getLocalText.s("Cancel")),
+            ),
+            FilledButton(onPressed: submit, child: Text(getLocalText.s("Go"))),
+          ],
+        );
+      },
+    );
+    if (line == null || !mounted) return;
+    await _invoke('goToLine', {'line': line.clamp(1, total)});
+  }
+
+  /// Replace with clipboard (§767): весь текст — одной правкой, в undo.
+  Future<void> _replaceWithClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted) return;
+    final text = data?.text ?? '';
+    if (text.isEmpty) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text(getLocalText.s("Clipboard is empty"))),
+      );
+      return;
+    }
+    await flush();
+    if (!mounted || _channel == null) return;
+    await _whileBusy(() => _invoke('replaceAll', {'text': text}));
+  }
+
+  /// Сброс кэша лупы и размера текста между тестами.
   @visibleForTesting
   static void debugResetMagnifier() {
     _magnifier = null;
+    _sizeDelta = null;
     _magnifierWarm = null;
   }
 
@@ -495,7 +702,8 @@ class LxCodeEditorState extends State<LxCodeEditor>
       _onController();
     }
     if (oldWidget.readOnly != widget.readOnly) {
-      unawaited(_invoke('setReadOnly', {'readOnly': widget.readOnly}));
+      _creationReadOnly = _readOnly;
+      unawaited(_invoke('setReadOnly', {'readOnly': _readOnly}));
     }
     if (oldWidget.language != widget.language) {
       unawaited(_invoke('setLanguage', {'language': widget.language?.name}));
@@ -774,6 +982,15 @@ class LxCodeEditorState extends State<LxCodeEditor>
           _matchIndex = (args['index'] as num?)?.toInt() ?? -1;
           _matchCount = (args['count'] as num?)?.toInt() ?? 0;
         });
+      case 'undoState':
+        final u = args['canUndo'] as bool? ?? false;
+        final r = args['canRedo'] as bool? ?? false;
+        if (u != _canUndo || r != _canRedo) {
+          setState(() {
+            _canUndo = u;
+            _canRedo = r;
+          });
+        }
       case 'disposed':
         _link?.channel.setMethodCallHandler(null);
         _onLayoutBusy(false);
@@ -814,6 +1031,18 @@ class LxCodeEditorState extends State<LxCodeEditor>
     if (_magnifierOn != _creationMagnifier) {
       _creationMagnifier = _magnifierOn;
       unawaited(_invoke('setMagnifier', {'enabled': _magnifierOn}));
+    }
+    if (_fontSize != _creationFontSize) {
+      _creationFontSize = _fontSize;
+      unawaited(_invoke('setFontSize', {'fontSize': _fontSize}));
+    }
+    if (_lineNumbers != _creationLineNumbers) {
+      _creationLineNumbers = _lineNumbers;
+      unawaited(_invoke('setLineNumbers', {'enabled': _lineNumbers}));
+    }
+    if (_readOnly != _creationReadOnly) {
+      _creationReadOnly = _readOnly;
+      unawaited(_invoke('setReadOnly', {'readOnly': _readOnly}));
     }
   }
 
@@ -861,7 +1090,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     return found;
   }
 
-  double get _rowHeight => _rowH > 0 ? _rowH : widget.fontSize * 1.4;
+  double get _rowHeight => _rowH > 0 ? _rowH : _fontSize * 1.4;
 
   void _toggleFind(bool open) {
     setState(() => _findOpen = open);
@@ -966,7 +1195,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
                     textScaler: TextScaler.noScaling,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontFamily: 'monospace',
-                      fontSize: w.fontSize,
+                      fontSize: _fontSize,
                       color: cs.onSurfaceVariant,
                     ),
                   ),
@@ -985,6 +1214,23 @@ class LxCodeEditorState extends State<LxCodeEditor>
     // Внутри рамки кнопок нет: текст с обычного отступа.
     final header = w.header;
     final buttons = <Widget>[
+      // §767 — отмена и повтор правки: только редактируемое нативное поле.
+      if (_nativeEditor && !_readOnly) ...[
+        IconButton(
+          key: const ValueKey('lx-code-editor-undo'),
+          icon: const Icon(Icons.undo, size: 18),
+          tooltip: getLocalText.s("Undo"),
+          visualDensity: VisualDensity.compact,
+          onPressed: _canUndo ? () => unawaited(_invoke('undo')) : null,
+        ),
+        IconButton(
+          key: const ValueKey('lx-code-editor-redo'),
+          icon: const Icon(Icons.redo, size: 18),
+          tooltip: getLocalText.s("Redo"),
+          visualDensity: VisualDensity.compact,
+          onPressed: _canRedo ? () => unawaited(_invoke('redo')) : null,
+        ),
+      ],
       if (w._find)
         IconButton(
           key: const ValueKey('lx-code-editor-find'),
@@ -1079,6 +1325,14 @@ class LxCodeEditorState extends State<LxCodeEditor>
             );
           case _LxEditorMenu.magnifier:
             unawaited(_toggleMagnifier());
+          case _LxEditorMenu.goToLine:
+            unawaited(_goToLine());
+          case _LxEditorMenu.replaceWithClipboard:
+            unawaited(_replaceWithClipboard());
+          case _LxEditorMenu.lineNumbers:
+            _toggleLineNumbers();
+          case _LxEditorMenu.lock:
+            _toggleLock();
         }
       },
       itemBuilder: (context) => [
@@ -1092,12 +1346,44 @@ class LxCodeEditorState extends State<LxCodeEditor>
                   : getLocalText.s("Format"),
             ),
           ),
+        if (_nativeEditor && _countLines(_shownText) > 1)
+          PopupMenuItem(
+            key: const ValueKey('lx-code-editor-goto'),
+            value: _LxEditorMenu.goToLine,
+            child: Text(getLocalText.s("Go to line")),
+          ),
+        if (_nativeEditor && !_readOnly)
+          PopupMenuItem(
+            key: const ValueKey('lx-code-editor-replace-clipboard'),
+            value: _LxEditorMenu.replaceWithClipboard,
+            child: Text(getLocalText.s("Replace with clipboard")),
+          ),
+        if (_nativeEditor)
+          CheckedPopupMenuItem(
+            key: const ValueKey('lx-code-editor-line-numbers'),
+            value: _LxEditorMenu.lineNumbers,
+            checked: _lineNumbers,
+            child: Text(getLocalText.s("Line numbers")),
+          ),
+        _LxTextSizeEntry(
+          key: const ValueKey('lx-code-editor-text-size'),
+          size: () => _fontSize,
+          canStep: _canStepTextSize,
+          onStep: (step) => unawaited(_stepTextSize(step)),
+        ),
         CheckedPopupMenuItem(
           key: const ValueKey('lx-code-editor-magnifier'),
           value: _LxEditorMenu.magnifier,
           checked: _magnifierOn,
           child: Text(getLocalText.s("Magnifier")),
         ),
+        if (_nativeEditor && !widget.readOnly)
+          CheckedPopupMenuItem(
+            key: const ValueKey('lx-code-editor-lock'),
+            value: _LxEditorMenu.lock,
+            checked: _locked,
+            child: Text(getLocalText.s("Lock editing")),
+          ),
       ],
     );
   }
@@ -1108,7 +1394,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
     // Высоту задаёт обёртка (родитель, фиксированная или по строкам).
     return TextField(
       controller: _formattedView != null ? _stubView : w.controller,
-      readOnly: w.readOnly,
+      readOnly: _readOnly,
       autofocus: w.autofocus,
       expands: true,
       maxLines: null,
@@ -1119,7 +1405,7 @@ class LxCodeEditorState extends State<LxCodeEditor>
         w._onEdited?.call(t);
       },
       textAlignVertical: TextAlignVertical.top,
-      style: TextStyle(fontFamily: 'monospace', fontSize: w.fontSize),
+      style: TextStyle(fontFamily: 'monospace', fontSize: _fontSize),
       decoration: InputDecoration(
         hintText: w.hint,
         border: const OutlineInputBorder(),
@@ -1186,17 +1472,23 @@ class LxCodeEditorState extends State<LxCodeEditor>
         _creationText = _shownText;
         _nativeText = _creationText;
         _creationMagnifier = _magnifierOn;
+        _creationFontSize = _fontSize;
+        _creationLineNumbers = _lineNumbers;
+        _creationReadOnly = _readOnly;
+        // Новый view — история отмены начинается заново (§767).
+        _canUndo = false;
+        _canRedo = false;
         final c = PlatformViewsService.initExpensiveAndroidView(
           id: params.id,
           viewType: _viewType,
           layoutDirection: TextDirection.ltr,
           creationParams: <String, Object?>{
             'text': _creationText,
-            'readOnly': w.readOnly,
+            'readOnly': _creationReadOnly,
             'dark': _dark,
             'colors': _colors,
-            'lineNumbers': w.showLineNumbers,
-            'fontSize': w.fontSize,
+            'lineNumbers': _creationLineNumbers,
+            'fontSize': _creationFontSize,
             'wordWrap': _wordWrap,
             'language': w.language?.name,
             'locale': LocaleController.I.effectiveTag,
@@ -1221,6 +1513,9 @@ class LxCodeEditorState extends State<LxCodeEditor>
   void debugAttachChannel(int viewId) {
     _creationText = _shownText;
     _creationMagnifier = _magnifierOn;
+    _creationFontSize = _fontSize;
+    _creationLineNumbers = _lineNumbers;
+    _creationReadOnly = _readOnly;
     _attach(viewId);
   }
 

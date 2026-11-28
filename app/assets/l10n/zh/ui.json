@@ -2427,6 +2427,36 @@
   "Magnifier": {
     "value": "放大镜"
   },
+  "Undo": {
+    "value": "撤销"
+  },
+  "Redo": {
+    "value": "重做"
+  },
+  "Go to line": {
+    "value": "转到行"
+  },
+  "Go": {
+    "value": "转到"
+  },
+  "Replace with clipboard": {
+    "value": "用剪贴板替换"
+  },
+  "Line numbers": {
+    "value": "行号"
+  },
+  "Text size": {
+    "value": "文字大小"
+  },
+  "Smaller text": {
+    "value": "缩小文字"
+  },
+  "Larger text": {
+    "value": "放大文字"
+  },
+  "Lock editing": {
+    "value": "锁定编辑"
+  },
   "Imported: %s": {
     "value": "已导入：%s"
   },
