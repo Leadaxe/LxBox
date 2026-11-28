@@ -1,6 +1,6 @@
 {
   "note": "эталон §525; обновлять только с объявленной причиной, см. docs/testing/PUBLIC_SUBSCRIPTIONS_CORPUS.md",
-  "contract_version": "1.1.170",
+  "contract_version": "1.1.187",
   "subscriptions": {
     "01-github-vless-universal": {
       "nodes_total": 95,
@@ -102,15 +102,13 @@
       }
     },
     "11-github-blacklist": {
-      "nodes_total": 2865,
-      "dropped": {
-        "form_unrecognized": 12
-      },
+      "nodes_total": 2874,
+      "dropped": {},
       "warnings": {
-        "duplicates_collapsed": 183,
+        "duplicates_collapsed": 186,
         "ech_ignored": 3,
         "reality_fp_random_pinned": 119,
-        "tls_insecure": 27,
+        "tls_insecure": 28,
         "tls_not_applicable_quic": 6
       }
     },
@@ -229,10 +227,8 @@
       }
     },
     "22-github-bypass-3": {
-      "nodes_total": 277,
-      "dropped": {
-        "form_unrecognized": 1
-      },
+      "nodes_total": 278,
+      "dropped": {},
       "warnings": {
         "duplicates_collapsed": 19,
         "reality_fp_not_chrome": 31,
@@ -364,9 +360,8 @@
       }
     },
     "34-github-antinet": {
-      "nodes_total": 642,
+      "nodes_total": 644,
       "dropped": {
-        "form_unrecognized": 7,
         "scheme_unsupported": 14,
         "transport_header_unsupported": 1
       },
