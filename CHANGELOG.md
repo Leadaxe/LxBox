@@ -19,6 +19,16 @@
 
 ### Fixed
 
+- **Switching workspaces no longer lets one workspace overwrite another ([details](docs/spec/tasks/515-workspace-switch-stale-controller-persist.md)).**
+  Changes made by the previous workspace during a switch could land in the new
+  one, and an app killed in the middle of a switch could copy the new workspace
+  over the old one on the next start. Workspaces already overwritten are not
+  restored.
+  (RU: при смене рабочего пространства одно больше не затирает другое. Раньше
+  запись прежнего пространства во время смены могла попасть в новое, а
+  приложение, убитое посреди смены, на следующем старте копировало новое
+  пространство поверх прежнего. Уже затёртые пространства не восстанавливаются.)
+
 - **A `vmess://` link with `#` in the server name gives a node again ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
   With a name such as `node #1` inside the base64 part, the server was missing
   from the list.
