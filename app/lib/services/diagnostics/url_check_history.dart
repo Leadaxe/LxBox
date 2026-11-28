@@ -11,6 +11,9 @@ class UrlCheckRecord {
     required this.outcome,
     required this.summary,
     required this.at,
+    this.packageName = '',
+    this.fresh = false,
+    this.trace,
   });
 
   /// Нормализованный адрес — тот, что ушёл в ядро; ключ дедупа.
@@ -23,6 +26,13 @@ class UrlCheckRecord {
 
   /// Время окончания проверки.
   final DateTime at;
+
+  /// Приложение, от имени которого шла проверка; пусто — любое.
+  final String packageName;
+  final bool fresh;
+
+  /// Дерево стадий и находки — показываются из истории без нового запроса.
+  final ConnectionTestTrace? trace;
 }
 
 /// История проверок URL Check: последние [limit] адресов, новые первыми,

@@ -7094,5 +7094,11 @@
   },
   "Recent checks": {
     "value": "最近的检查"
+  },
+  "History": {
+    "value": "历史记录"
+  },
+  "Saved result from %s": {
+    "value": "%s 保存的结果"
   }
 }

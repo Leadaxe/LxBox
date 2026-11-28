@@ -55,13 +55,17 @@
   подключение к шлюзу: состояние и время, шлюз и вид протокола, транспорт,
   адрес и DNS-серверы от шлюза, MTU; при неудаче — текст ошибки ядра. Тап по
   строке копирует значение.)
-- **URL Check remembers recent checks ([details](docs/spec/tasks/765-url-check-history.md)).**
-  The ▾ at the end of the URL field lists the last 20 checked addresses with
-  their result and time. Tap one to check it again without typing it. The list
-  is kept in memory only and is empty after the app restarts.
-  (RU: URL Check помнит последние проверки — ▾ в конце поля URL показывает 20
-  последних адресов с итогом и временем; нажатие проверяет адрес снова без
-  ввода. Список только в памяти, после перезапуска приложения пуст.)
+- **URL Check keeps a history of checks ([details](docs/spec/tasks/765-url-check-history.md)).**
+  History at the bottom of the tab lists the last 20 checks with time and
+  result. Tap one to see its full saved result (steps and findings) without a
+  new request; Run checks it again. The ▾ at the end of the URL field puts a
+  recent address into the field. The history is kept in memory only and is
+  empty after the app restarts.
+  (RU: у URL Check есть история — блок History внизу вкладки показывает 20
+  последних проверок с временем и итогом; нажатие открывает сохранённый
+  результат целиком, без нового запроса, Run проверяет заново. ▾ в конце поля
+  URL подставляет недавний адрес. История только в памяти, после перезапуска
+  приложения пуста.)
 - **Delete in the text editor's selection menu ([details](docs/spec/tasks/766-editor-delete-selection.md)).**
   The bin icon before Cut erases the selected text without putting it on the
   clipboard, so long fields such as `i1` of an AmneziaWG node go away while

@@ -7382,5 +7382,11 @@
   },
   "Recent checks": {
     "value": "Последние проверки"
+  },
+  "History": {
+    "value": "История"
+  },
+  "Saved result from %s": {
+    "value": "Сохранённый результат от %s"
   }
 }

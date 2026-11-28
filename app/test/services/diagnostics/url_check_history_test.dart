@@ -58,4 +58,24 @@ void main() {
     final h = UrlCheckHistory()..add(rec('https://a.com'));
     expect(() => h.items.clear(), throwsUnsupportedError);
   });
+
+  test('запись держит параметры и дерево прогона для показа без запроса', () {
+    final t = ConnectionTestTrace();
+    final h = UrlCheckHistory()
+      ..add(UrlCheckRecord(
+        link: 'https://a.com',
+        depth: ConnectionTestDepth.dns,
+        outcome: UrlCheckOutcome.error,
+        summary: 'x',
+        at: DateTime(2026, 11, 28, 15, 16),
+        packageName: 'org.example',
+        fresh: true,
+        trace: t,
+      ));
+    final r = h.items.single;
+    expect(identical(r.trace, t), isTrue);
+    expect(r.packageName, 'org.example');
+    expect(r.fresh, isTrue);
+    expect(r.depth, ConnectionTestDepth.dns);
+  });
 }

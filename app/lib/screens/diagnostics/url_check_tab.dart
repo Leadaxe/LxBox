@@ -40,7 +40,13 @@ class _UrlCheckTabState extends State<UrlCheckTab>
   String _runLink = '';
   ConnectionTestDepth _runDepth = ConnectionTestDepth.http;
   String _runApp = '';
+  bool _runFresh = false;
   bool _running = false;
+
+  /// Показан сохранённый результат из истории: время той проверки.
+  DateTime? _savedAt;
+
+  final _scroll = ScrollController();
 
   /// Стадии, которые пользователь переключил против умолчания [_autoOpen].
   final Set<int> _toggled = {};
@@ -64,6 +70,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     widget.homeController.removeListener(_onHome);
     _stop();
     _urlCtrl.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -89,7 +96,9 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       _runLink = link;
       _runDepth = _depth;
       _runApp = _packageName;
+      _runFresh = _fresh;
       _running = true;
+      _savedAt = null;
       _toggled.clear();
       _focus = const {};
     });
@@ -145,24 +154,55 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       },
       summary: text,
       at: DateTime.now(),
+      packageName: _runApp,
+      fresh: _runFresh,
+      trace: t,
     ));
   }
 
-  /// Адрес из истории: в поле и сразу в проверку с текущими параметрами.
-  void _rerun(String link) {
+  /// Адрес из ▾: только в поле, проверку запускает Run.
+  void _pickLink(String link) {
     setState(() {
       _urlCtrl.text = link;
       _urlCtrl.selection = TextSelection.collapsed(offset: link.length);
       _urlError = null;
       _resetResult();
     });
-    if (_tunnelUp && !_running) _run();
     // Закрытие меню возвращает фокус полю и поднимает клавиатуру; печатать
     // нечего — снимаем фокус следующим кадром (как у полей с подсказками).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) FocusScope.of(context).unfocus();
     });
   }
+
+  /// Строка истории: её результат и параметры наверху, без нового запроса.
+  void _showSaved(UrlCheckRecord r) {
+    FocusScope.of(context).unfocus();
+    _stop();
+    setState(() {
+      _urlCtrl.text = r.link;
+      _urlCtrl.selection = TextSelection.collapsed(offset: r.link.length);
+      _urlError = null;
+      _depth = r.depth;
+      _packageName = r.packageName;
+      _fresh = r.fresh;
+      _trace = r.trace;
+      _runLink = r.link;
+      _runDepth = r.depth;
+      _runApp = r.packageName;
+      _runFresh = r.fresh;
+      _toggled.clear();
+      _focus = const {};
+      _savedAt = r.at;
+    });
+    if (_scroll.hasClients) {
+      _scroll.animateTo(0,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    }
+  }
+
+  static String _hhmm(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Widget? _urlSuffix() {
     final clear = _urlCtrl.text.isEmpty
@@ -182,9 +222,18 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       icon: const Icon(Icons.arrow_drop_down),
       enabled: !_running,
       position: PopupMenuPosition.under,
-      onSelected: _rerun,
+      onSelected: _pickLink,
       itemBuilder: (ctx) => [
-        for (final r in history.items) _historyItem(ctx, r),
+        for (final r in history.items)
+          PopupMenuItem<String>(
+            value: r.link,
+            child: Text(
+              r.link,
+              style: const TextStyle(fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
       ],
     );
     return Row(
@@ -193,7 +242,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     );
   }
 
-  PopupMenuItem<String> _historyItem(BuildContext context, UrlCheckRecord r) {
+  Widget _historyRow(BuildContext context, UrlCheckRecord r) {
     final sev = switch (r.outcome) {
       UrlCheckOutcome.success => BannerSeverity.success,
       UrlCheckOutcome.warning => BannerSeverity.warning,
@@ -201,46 +250,47 @@ class _UrlCheckTabState extends State<UrlCheckTab>
       UrlCheckOutcome.stopped => BannerSeverity.info,
     };
     final color = bannerIconColor(context, sev);
-    final hh = r.at.hour.toString().padLeft(2, '0');
-    final mm = r.at.minute.toString().padLeft(2, '0');
     final theme = Theme.of(context);
-    return PopupMenuItem<String>(
-      value: r.link,
-      child: Row(
-        children: [
-          Icon(
-            switch (r.outcome) {
-              UrlCheckOutcome.success => Icons.check_circle,
-              UrlCheckOutcome.warning => Icons.warning_amber_rounded,
-              UrlCheckOutcome.error => Icons.error,
-              UrlCheckOutcome.stopped => Icons.stop_circle_outlined,
-            },
-            size: 18,
-            color: color,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  r.link,
-                  style: const TextStyle(fontSize: 13),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-                Text(
-                  // Время первым: длинный текст ошибки режется с конца.
-                  '$hh:$mm · ${r.summary}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: color),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ],
+    return InkWell(
+      onTap: _running ? null : () => _showSaved(r),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(
+              switch (r.outcome) {
+                UrlCheckOutcome.success => Icons.check_circle,
+                UrlCheckOutcome.warning => Icons.warning_amber_rounded,
+                UrlCheckOutcome.error => Icons.error,
+                UrlCheckOutcome.stopped => Icons.stop_circle_outlined,
+              },
+              size: 20,
+              color: color,
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    r.link,
+                    style: theme.textTheme.bodyMedium,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  Text(
+                    // Время первым: длинный текст ошибки режется с конца.
+                    '${_hhmm(r.at)} · ${r.summary}',
+                    style: theme.textTheme.bodySmall?.copyWith(color: color),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -250,6 +300,7 @@ class _UrlCheckTabState extends State<UrlCheckTab>
   void _resetResult() {
     _stop();
     _trace = null;
+    _savedAt = null;
     _toggled.clear();
     _focus = const {};
   }
@@ -298,7 +349,10 @@ class _UrlCheckTabState extends State<UrlCheckTab>
     final cs = Theme.of(context).colorScheme;
     final trace = _trace;
     final rows = trace?.rows() ?? const <TraceRow>[];
+    final history = UrlCheckHistory.instance.items;
+    final savedAt = _savedAt;
     return ListView(
+      controller: _scroll,
       padding: const EdgeInsets.all(16).withSafeBottom(context),
       children: [
         TextField(
@@ -420,10 +474,30 @@ class _UrlCheckTabState extends State<UrlCheckTab>
         if (trace != null) ...[
           const SizedBox(height: 16),
           _summary(context, trace),
+          if (savedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, bottom: 4),
+              child: Text(
+                getLocalText.s("Saved result from %s", _hhmm(savedAt)),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
           for (final f in trace.result?.findings ?? const <TestFinding>[])
             _finding(context, f),
           const SizedBox(height: 8),
           for (final row in rows) _stageRow(context, trace, row),
+        ],
+        if (history.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            getLocalText.s("History"),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 4),
+          for (final r in history) _historyRow(context, r),
         ],
       ],
     );
