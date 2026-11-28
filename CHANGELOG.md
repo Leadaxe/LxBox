@@ -19,6 +19,12 @@
 
 ### Fixed
 
+- **A `vmess://` link with `#` in the server name gives a node again ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
+  With a name such as `node #1` inside the base64 part, the server was missing
+  from the list.
+  (RU: ссылка `vmess://` с `#` в имени сервера внутри base64, например
+  `node #1`, не давала узла — сервер пропадал из списка.)
+
 - **Tailscale switches on the node view screen keep their value ([details](docs/spec/tasks/581-tailscale-network-tab.md)).**
   On "View details", Allow Taildrop and Advertise this device as exit node
   showed what the running core had, so a switch turned on looked off again

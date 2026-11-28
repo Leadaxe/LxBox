@@ -1054,10 +1054,10 @@ One node per line; the whole body may additionally be base64-encoded. Two forms
 work for AmneziaWG. The keys below are placeholders of the right shape —
 replace them with real ones.
 
-**A whole `.conf` in base64** — every key is written as in the file. Strip
-`#` comment lines from the file first and put the name after `#` in the link: the
-desktop launcher currently gives no node for such a link when there is a `#`
-comment under `[Peer]`.
+**A whole `.conf` in base64** — every key is written as in the file, `#`
+comments included. Released versions of the desktop launcher (up to 2.4.5) give
+no node for such a link when there is a `#` comment under `[Peer]`; to serve
+them, strip the comment lines and put the name after `#` in the link.
 
 ```
 awg://<base64 of the whole .conf>#My%20node

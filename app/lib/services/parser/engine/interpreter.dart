@@ -526,13 +526,13 @@ SourceSpace? _selectForm(MapperSection section, String text) {
         final Map<String, dynamic>? doc =
             tlv != null && form.decode.contains(kTlvDecoder)
                 ? decodeTlvText(tlv, unwrapped, unwrap: _RunDecode.bytes)
-                : _decodeFormJson(form, unwrapped);
+                : _decodeFormJson(form, unwrapped, fragment: _fragmentOf(text));
         if (doc == null) continue;
         if (!detectMatchesJson(form.detect, doc)) continue;
         return SourceSpace(
           formId: form.id,
           scheme: _splitScheme(decoded)?.scheme ?? '',
-          fragment: _fragmentOf(decoded),
+          fragment: _fragmentOf(text),
           json: doc,
           jsonBase: form.base,
           // ПЛОСКИЙ СЛОЙ контейнера (§0.10 НОРМЫ: «json — разбор объекта в
@@ -555,8 +555,9 @@ SourceSpace? _selectForm(MapperSection section, String text) {
   return null;
 }
 
-/// Метка после `#` у текста формы-контейнера: в пейлоад она не входит и
-/// остаётся источником `fragment`.
+/// Метка после `#` у ИСХОДНОГО (до декода) текста формы-контейнера: в пейлоад
+/// она не входит и остаётся источником `fragment`. По раскрытому тексту её не
+/// ищут: `#` законен и внутри документа (`"ps": "node #1"`).
 String _fragmentOf(String text) {
   final hash = text.indexOf('#');
   return hash < 0 ? '' : text.substring(hash + 1);
@@ -830,17 +831,20 @@ QueryPairs _flattenContainer(Map<String, dynamic> doc) => QueryPairs([
 ///
 /// `null` — шаг `json` формой не объявлен, текст не JSON либо это не объект.
 /// Во всех трёх случаях форма просто не отвечает.
-Map<String, dynamic>? _decodeFormJson(MapperForm form, String decoded) {
+Map<String, dynamic>? _decodeFormJson(MapperForm form, String decoded,
+    {required String fragment}) {
   if (!form.decode.contains('json')) return null;
   var payload = _splitScheme(decoded)?.payload ?? decoded;
-  // ФРАГМЕНТ отрезается: `_applyFormDecode` снял его перед декодером и вернул
+  // ФРАГМЕНТ отрезается как СУФФИКС (метка исходной ссылки): `_applyFormDecode` снял его перед декодером и вернул
   // на место (имя узла пишется СНАРУЖИ оболочки), но документу он чужой —
   // `{...}#MyNodeName` не JSON, и форма молча уступила бы место следующей.
   //
   // Значения он не теряет: у формы-контейнера имя узла лежит в самом объекте,
   // и `label.source` этой формы фрагмент не читает.
-  final hash = payload.indexOf('#');
-  if (hash >= 0) payload = payload.substring(0, hash);
+  final tail = '#$fragment';
+  if (payload.endsWith(tail)) {
+    payload = payload.substring(0, payload.length - tail.length);
+  }
   try {
     final parsed = jsonDecode(payload.trim());
     if (parsed is Map) return parsed.cast<String, dynamic>();
