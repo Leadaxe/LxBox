@@ -6861,6 +6861,9 @@
   "Applies when the node is online.": {
     "value": "Применится, когда узел будет в сети."
   },
+  "Applies after VPN restart.": {
+    "value": "Применится после перезапуска VPN."
+  },
   "Signing in with the new key…": {
     "value": "Вход с новым ключом…"
   },

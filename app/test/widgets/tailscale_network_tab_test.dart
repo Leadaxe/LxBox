@@ -148,6 +148,16 @@ class _DropActions extends TailscaleNetworkActions {
 /// §707 итер. 4 — тело узла с включённым Taildrop.
 const _dropOn = <String, dynamic>{'disable_taildrop': false};
 
+/// §581 (28.11) — тело узла в конфиге, с которым работает ядро ([running]).
+class _RunningActions extends TailscaleNetworkActions {
+  const _RunningActions(this.running);
+
+  final Map<String, dynamic>? running;
+
+  @override
+  Map<String, dynamic>? runningBody(String tag) => running;
+}
+
 /// §707 итер. 9 — Android 10+ на фейке ([supported]).
 class _AutoSaveActions extends TailscaleNetworkActions {
   _AutoSaveActions({this.supported = true});
@@ -606,6 +616,65 @@ void main() {
           find.byKey(const ValueKey('tailscale-advertise-exit')), findsNothing);
       expect(find.byKey(const ValueKey('tailscale-taildrop-autosave')),
           findsNothing);
+    });
+
+    group('§581 (28.11) — «Applies after VPN restart.»', () {
+      const hint = 'Applies after VPN restart.';
+      Future<void> pumpSettings(WidgetTester tester,
+          {required Map<String, dynamic> body,
+          Map<String, dynamic>? running}) async {
+        await tester.binding.setSurfaceSize(const Size(800, 2400));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await pump(tester,
+            data: [_status()],
+            body: body,
+            actions: _RunningActions(running),
+            onSaveFields: (f) async => true);
+      }
+
+      testWidgets('Taildrop записан, ядро работает без него — подпись',
+          (tester) async {
+        await pumpSettings(tester,
+            body: _dropOn, running: const {'disable_taildrop': true});
+        expect(tile(tester, 'tailscale-allow-taildrop').value, isTrue);
+        expect(find.text(hint), findsOneWidget);
+      });
+
+      testWidgets('Taildrop снят, ядро работает с ним — подпись',
+          (tester) async {
+        await pumpSettings(tester,
+            body: const {}, running: const {'disable_taildrop': false});
+        expect(tile(tester, 'tailscale-allow-taildrop').value, isFalse);
+        expect(find.text(hint), findsOneWidget);
+      });
+
+      testWidgets('запись и работающий конфиг совпадают — подписи нет',
+          (tester) async {
+        await pumpSettings(tester,
+            body: _dropOn, running: const {'disable_taildrop': false});
+        expect(find.text(hint), findsNothing);
+      });
+
+      testWidgets('VPN не поднят или узла в работающем конфиге нет — подписи нет',
+          (tester) async {
+        await pumpSettings(tester, body: _dropOn, running: null);
+        expect(find.text(hint), findsNothing);
+      });
+
+      testWidgets('ядро ниже min_core: ключа disable_taildrop нет — подписи нет',
+          (tester) async {
+        await pumpSettings(tester, body: _dropOn, running: const {});
+        expect(find.text(hint), findsNothing);
+      });
+
+      testWidgets('Advertise записан, ядро работает без него — подпись',
+          (tester) async {
+        await pumpSettings(tester,
+            body: const {'advertise_exit_node': true},
+            running: const {'disable_taildrop': true});
+        expect(tile(tester, 'tailscale-advertise-exit').value, isTrue);
+        expect(find.text(hint), findsOneWidget);
+      });
     });
 
     testWidgets(

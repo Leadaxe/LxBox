@@ -99,6 +99,14 @@ class TailscaleNetworkActions {
     return st.isEmpty ? null : st;
   }
 
+  /// §581 (28.11) — тело узла [tag] в конфиге, с которым работает ядро;
+  /// `null` — туннель не поднят или узла в этом конфиге нет.
+  Map<String, dynamic>? runningBody(String tag) {
+    final hs = DebugRegistry.I.home?.state;
+    if (hs == null || !hs.tunnelUp) return null;
+    return hs.runningModel?.rawOf(tag);
+  }
+
   /// §706 — выключатель узла тем же путём, что Turn off / Turn on списка
   /// узлов: `null` — успех, иначе код отказа ([HomeController.setEndpointEnabled]).
   Future<String?> setEndpointEnabled(String tag, bool enabled) async {
@@ -1009,7 +1017,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
               ? Text(
                   getLocalText.s("Not available while an exit node is used."),
                 )
-              : null,
+              : _advertisePending
+                  ? Text(getLocalText.s("Applies after VPN restart."))
+                  : null,
           value: advertise,
           onChanged: _busy || (hasExit && !advertise)
               ? null
@@ -1023,6 +1033,9 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
           key: const ValueKey('tailscale-allow-taildrop'),
           dense: true,
           title: Text(getLocalText.s("Allow Taildrop (send and receive files)")),
+          subtitle: _taildropPending
+              ? Text(getLocalText.s("Applies after VPN restart."))
+              : null,
           value: _taildropOn,
           onChanged: _busy
               ? null
@@ -1093,6 +1106,25 @@ class _TailscaleNetworkTabState extends State<TailscaleNetworkTab>
   /// §707 итер. 4 — Taildrop узла включён: явное `disable_taildrop: false`
   /// в теле (нет поля — выключен, контракт 1.1.150).
   bool get _taildropOn => taildropAllowedByBody(widget.body);
+
+  /// §581 (28.11) — ядро меняет `disable_taildrop` и `advertise_exit_node`
+  /// только при запуске VPN: записанное значение расходится с работающим
+  /// конфигом — подпись «Applies after VPN restart.». VPN не поднят или узла в
+  /// работающем конфиге нет — подписи нет; `disable_taildrop` сравнивается,
+  /// только если сборка его написала (на ядре ниже `min_core` — нет).
+  bool get _taildropPending {
+    final running = widget.actions.runningBody(widget.liveTag);
+    return running != null &&
+        running.containsKey('disable_taildrop') &&
+        taildropAllowedByBody(running) != _taildropOn;
+  }
+
+  bool get _advertisePending {
+    final running = widget.actions.runningBody(widget.liveTag);
+    return running != null &&
+        (running['advertise_exit_node'] == true) !=
+            (widget.body['advertise_exit_node'] == true);
+  }
 
   /// Вкл — `false` в тело, выкл — поле снимается.
   Future<void> _saveTaildrop(bool allow) async {

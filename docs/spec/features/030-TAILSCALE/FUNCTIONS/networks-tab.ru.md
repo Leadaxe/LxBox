@@ -156,6 +156,13 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
   живёт по потоку, в UI и логе ничего; тег не найден или endpoint не
   запущен — тик пропускается; вызов ещё идёт — следующий тик пропускается.
 - **Перерисовка** не чаще раза в секунду; список ленивый.
+- **Settings** (у своего сервера и члена папки): Advertise this device as
+  exit node и Allow Taildrop показывают значение из записи узла на любом
+  экране, где есть вкладка, — и на экране узла, и на экране просмотра. Ядро
+  берёт их только при запуске VPN: пока VPN поднят и значение в записи
+  отличается от того, с которым работает ядро, под переключателем подпись
+  «Applies after VPN restart.». У Advertise при записанном `exit_node` вместо
+  неё «Not available while an exit node is used.».
 - **Diagnostics** (P23): действующего выхода нет — проверка запросом к
   внешнему адресу скрыта и заменена строкой; при поднятом VPN решает выход
   ядра, иначе записанный `exit_node`.
@@ -188,3 +195,4 @@ Diagnostics «This node has no exit. Check devices on the Network tab.»
 | 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Вне сети: записанный выход строкой вместо списка и Save choice (больше не стирается), чип ключа только в Running, Replace key, Name `—` |
 | 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md), итерация 2 | Implemented, DEVICE-PENDING | Replace key входит без перезапуска VPN (ядро SPEC 149), переключатель Node enabled и Restart node в Status |
 | 6 | [707](../../../tasks/707-taildrop-send-receive-files.md), итерация 6 | Implemented, проверено на эмуляторе | 2026-11-03: нажатие на устройство открывает страницу устройства (сводка, Ping и Send file… с причиной, Addresses с копированием по нажатию, разрешения Taildrop) вместо меню строки; долгое нажатие копирует первый адрес |
+| 7 | [581](../../../tasks/581-tailscale-network-tab.md), доработка 28.11 | Implemented | Settings на экране просмотра — из записи узла (раньше из работающего конфига, переключатели «сбрасывались»); подпись «Applies after VPN restart.» при расхождении с работающим конфигом |

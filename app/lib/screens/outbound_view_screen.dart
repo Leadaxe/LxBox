@@ -147,12 +147,21 @@ class _OutboundViewScreenState extends State<OutboundViewScreen> {
   /// Задача 581 — узел Tailscale: у экрана вкладка Network.
   bool get _isTailscale => widget.config[widget.tag]?.type == 'tailscale';
 
-  /// Задача 581 — тело узла для вкладки Network: из собранного конфига, после
-  /// Save choice — с записанным `exit_node` (конфиг экрана — снимок).
+  /// Задача 581 — тело узла для вкладки Network после записи с этого экрана.
   Map<String, dynamic>? _tailscaleBody;
 
+  /// §581 (28.11) — тело вкладки Network: у своего сервера и члена папки —
+  /// из записи узла, как на экране узла (конфиг экрана — то, с чем работает
+  /// ядро; `disable_taildrop` / `advertise_exit_node` оно берёт только при
+  /// запуске VPN, и переключатели «сбрасывались» при повторном открытии).
+  /// Узел подписки — из конфига экрана.
   Map<String, dynamic> get _networkBody =>
-      _tailscaleBody ?? widget.config[widget.tag]?.raw ?? const {};
+      _tailscaleBody ??
+      exitNodeTargetForTag(widget.tag, widget.subController.entries)
+          ?.node
+          .body ??
+      widget.config[widget.tag]?.raw ??
+      const {};
 
   /// Задача 581 — Save choice: только когда по тегу нашлась запись своего
   /// сервера или члена папки ([exitNodeTargetForTag]); подписка и узел без

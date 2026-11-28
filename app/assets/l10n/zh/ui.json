@@ -6573,6 +6573,9 @@
   "Applies when the node is online.": {
     "value": "节点在线时生效。"
   },
+  "Applies after VPN restart.": {
+    "value": "重启 VPN 后生效。"
+  },
   "Signing in with the new key…": {
     "value": "正在使用新密钥登录…"
   },

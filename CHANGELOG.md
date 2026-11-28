@@ -19,6 +19,16 @@
 
 ### Fixed
 
+- **Tailscale switches on the node view screen keep their value ([details](docs/spec/tasks/581-tailscale-network-tab.md)).**
+  On "View details", Allow Taildrop and Advertise this device as exit node
+  showed what the running core had, so a switch turned on looked off again
+  when the screen was reopened. They now show the saved value, like the node
+  screen, with "Applies after VPN restart." until the VPN is restarted.
+  (RU: на экране «View details» переключатели Allow Taildrop и Advertise
+  показывали значение работающего ядра и после повторного открытия выглядели
+  сброшенными. Теперь показывают записанное, как экран узла, с подписью
+  «Applies after VPN restart.» до перезапуска VPN.)
+
 - **A node added from a `vpn://` link can be saved and renamed ([details](docs/spec/tasks/456-wg-ini-as-source-tag-in-record.md)).**
   Save in the node editor answered "Could not parse server config", because the
   name was appended to the packed link. The name of your own server or folder

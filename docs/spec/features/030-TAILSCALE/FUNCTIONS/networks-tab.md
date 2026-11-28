@@ -161,6 +161,13 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
   logged; an unknown tag or an endpoint that is not running skips the tick; a
   call still running skips the next tick.
 - **Redraw** no more than once a second; the list is lazy.
+- **Settings** (own server and folder member): Advertise this device as exit
+  node and Allow Taildrop show the value from the node record on every screen
+  with the tab — the node screen and the view screen alike. The core reads them
+  only when the VPN starts: while the VPN is up and the recorded value differs
+  from the one the core runs with, the switch has the caption "Applies after
+  VPN restart.". Advertise with a recorded `exit_node` shows "Not available
+  while an exit node is used." instead.
 - **Diagnostics** (P23): no active exit — the external-URL check is hidden
   and replaced by the line; with the VPN up the core's exit decides,
   otherwise the recorded `exit_node`.
@@ -193,3 +200,4 @@ Diagnostics line "This node has no exit. Check devices on the Network tab."
 | 4 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) | Implemented, DEVICE-PENDING | Offline: the recorded exit as a line instead of the list and Save choice (it is no longer erased), the key chip only in Running, Replace key, Name `—` |
 | 5 | [706](../../../tasks/706-tailscale-network-tab-logged-out.md) iteration 2 | Implemented, DEVICE-PENDING | Replace key signs in without restarting the VPN (core SPEC 149), Node enabled switch and Restart node in Status |
 | 6 | [707](../../../tasks/707-taildrop-send-receive-files.md) iteration 6 | Implemented, emulator-verified | 2026-11-03: a tap on a device opens the device page (summary, Ping and Send file… with the reason, Addresses with copy on tap, Taildrop permissions) instead of the row menu; a long press copies the first address |
+| 7 | [581](../../../tasks/581-tailscale-network-tab.md), follow-up 2026-11-28 | Implemented | Settings on the view screen come from the node record (they came from the running config, and the switches "reset"); caption "Applies after VPN restart." when the running config differs |
