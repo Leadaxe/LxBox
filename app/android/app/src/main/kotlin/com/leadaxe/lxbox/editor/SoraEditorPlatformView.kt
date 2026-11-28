@@ -154,7 +154,7 @@ private fun localized(context: Context, tag: String?): Context {
 }
 
 /// §766 — меню над выделением (панель sora `EditorTextActionWindow`, не
-/// системное `ActionMode`) с кнопкой Delete после Cut: стирает выделение без
+/// системное `ActionMode`) с кнопкой Delete перед Cut: стирает выделение без
 /// копирования в буфер обмена. Видна при тех же условиях, что Cut (есть
 /// выделение, редактор не только для чтения). Правка через `deleteText()`
 /// идёт в undo-историю и отдаёт `changed`, как Cut. Если макет библиотеки
@@ -180,7 +180,7 @@ private class LxTextActionWindow(editor: CodeEditor) : EditorTextActionWindow(ed
             btn.contentDescription = "Delete"
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) btn.tooltipText = "Delete"
             btn.setOnClickListener(this)
-            row.addView(btn, row.indexOfChild(cut) + 1)
+            row.addView(btn, row.indexOfChild(cut))
             deleteBtn = btn
             applyColorScheme()
         }

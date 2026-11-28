@@ -2178,7 +2178,7 @@ cursor line stayed under the keyboard. The native view has a full
 |---|---|
 | Kotlin | [`SoraEditorPlatformView.kt`](../app/android/app/src/main/kotlin/com/leadaxe/lxbox/editor/SoraEditorPlatformView.kt): view type `lxbox/sora_editor`, a `MethodChannel` per view `com.leadaxe.lxbox/sora_editor_<id>` |
 | Assets | `app/android/app/src/main/assets/sora/`: TextMate grammars JSON, INI (VS Code, MIT) and URI (own), token themes `lx-light/lx-dark.json`; TextMate registries are process singletons |
-| Selection menu | sora's own panel `EditorTextActionWindow` (icons, not the system `ActionMode`), replaced by `LxTextActionWindow`: adds Delete after Cut, which erases the selection without the clipboard; the edit goes to undo |
+| Selection menu | sora's own panel `EditorTextActionWindow` (icons, not the system `ActionMode`), replaced by `LxTextActionWindow`: adds Delete before Cut, which erases the selection without the clipboard; the edit goes to undo |
 | R8 | [`proguard-sora.pro`](../app/android/app/proguard-sora.pro): keep for jcodings/joni/tm4e/sora — the TextMate engine loads classes by name |
 | Not Android | `flutter test` and desktop draw a `TextField` stub with the same layout (gate `Platform.isAndroid`, not `defaultTargetPlatform`) |
 

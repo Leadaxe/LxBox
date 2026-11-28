@@ -53,10 +53,10 @@
   последних адресов с итогом и временем; нажатие проверяет адрес снова без
   ввода. Список только в памяти, после перезапуска приложения пуст.)
 - **Delete in the text editor's selection menu ([details](docs/spec/tasks/766-editor-delete-selection.md)).**
-  The bin icon after Cut erases the selected text without putting it on the
+  The bin icon before Cut erases the selected text without putting it on the
   clipboard, so long fields such as `i1` of an AmneziaWG node go away while
   the clipboard keeps what you copied. Undo brings the text back.
-  (RU: в меню выделения редактора текста есть Delete — значок корзины после
+  (RU: в меню выделения редактора текста есть Delete — значок корзины перед
   Cut стирает выделенное, не кладя его в буфер обмена; отмена правки
   возвращает текст.)
 
