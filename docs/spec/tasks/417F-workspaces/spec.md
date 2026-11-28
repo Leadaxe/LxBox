@@ -119,9 +119,14 @@ files/
 1. `ProbeLifecycle.I.haltAll()` — пробы держат `cache.db` (§286, #1406).
 2. `wasUp = _controller.state.tunnelUp`; если поднят —
    `await _controller.stop()` (блокирующий `stopVPN()` до `Stopped`, §387).
-3. `await SettingsStorage.flushToDisk()` — сцена на диске актуальна.
+3. `WorkspaceController.switching = true` — контроллеры прежнего
+   `HomeScreen` с этого момента `stale` и не пишут (§515).
+   `await SettingsStorage.flushToDisk()` — сцена на диске актуальна;
+   `holdWritesForSceneSwap()` — до конца шага 7 `_save()` не пишет, начатые
+   записи дождались.
 4. Журнал: `pending = {op: "load", target: X}` → записать `workspaces.json`.
-5. **Save current**: копия позиций 1–3 в `workspaces/<current>/` (§2.5).
+5. **Save current**: копия позиций 1–3 в `workspaces/<current>/` (§2.5),
+   затем журнал `pending.scene_saved = true` (§515).
 6. **Load X**: копия позиций 1–3 из `workspaces/<X>/` на сцену (§2.5).
 7. `current = X`, `pending = null` → записать `workspaces.json`.
 8. `File(lxbox_settings.json).setLastModified(now)` — страховка на убийство
@@ -148,7 +153,8 @@ Save as = шаги 3 → копия сцены в `workspaces/<Y>/` → `current
 идемпотентно, поэтому при старте (в `main()`, после
 `AppLog.I.initPersistent` и до первого чтения `SettingsStorage`, включая
 `SubscriptionIdentity.init`) `WorkspaceStore.recover()` читает `pending` и
-**повторяет шаги 5–7 целиком**. Чтение настроек раньше оставит в кэше
+**повторяет шаги 5–7**; при `pending.scene_saved` шаг 5 пропускается — на
+сцене уже могут лежать файлы X, и копия ушла бы в папку `current` (§515). Чтение настроек раньше оставит в кэше
 старую сцену (и `_load` мигрирует и запишет её, §439) — первое сохранение
 ляжет поверх доведённого слота. Порядок держит
 `test/contract/startup_order_contract_test.dart`. Слот `current` при повторе

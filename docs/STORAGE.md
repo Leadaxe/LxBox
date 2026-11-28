@@ -186,7 +186,7 @@ Android SharedPreferences (shared_prefs/):  # three Kotlin files, boxvpn_boot, l
 
 | File / directory | Written by | What is inside | Spec |
 |---|---|---|---|
-| `workspaces.json` | `WorkspaceStore` (Dart) | The workspace manifest: `current` (the name of the workspace on the working paths), `slots[]` (`name`, `saved_at`), `pending` (a journal of an unfinished load — replayed on the next start). Absent until the first Save as. | [§417] |
+| `workspaces.json` | `WorkspaceStore` (Dart) | The workspace manifest: `current` (the name of the workspace on the working paths), `slots[]` (`name`, `saved_at`), `pending` (a journal of an unfinished load — replayed on the next start; `scene_saved: true` once the working files are saved into `current`, so the replay does not copy them again). Absent until the first Save as. | [§417] |
 | `workspaces/<name>/` | `WorkspaceStore` (Dart) | A saved workspace: a copy of `lxbox_settings.json`, `rule_sets/` and `sub_cache/`. Not `singbox_config.json` (rebuilt after a load) and not `cache.db` (open under a running core; the core rebuilds it). | [§417] |
 | `lxbox_settings.json` | `SettingsStorage` (Dart) | App settings, vars, sources, rules, DNS, ping. **The main subject of this document.** | — |
 | `lxbox_settings.json.v0.bak` | `SettingsStorage` (Dart) | §439 — the bytes of the 2.23.2-form file as they were before the storage migration. Written once (never overwritten), kept while the app is installed, not part of a workspace or a backup. `GET /backup/export?include=storage&from=v0_bak` returns it for downgrade tests. | [§439] |
